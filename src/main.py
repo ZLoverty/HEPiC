@@ -1,68 +1,203 @@
 import sys
+import serial
 from PySide6.QtWidgets import (
-    QApplication,
-    QMainWindow,
-    QWidget,
-    QVBoxLayout,
-    QLabel,
-    QLineEdit,
-    QPushButton
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QLineEdit, QPushButton, QPlainTextEdit, QLabel, QGridLayout,
 )
+from PySide6.QtCore import QThread, Signal, Slot
 
-# 1. 定义你的主窗口类，继承自 QMainWindow
+# ====================================================================
+# 1. 创建一个工作线程类来处理所有串口通信
+# ====================================================================
+class SerialWorker(QThread):
+    """
+    将所有耗时的串口操作放在这个独立线程中，避免GUI卡顿
+    """
+    # 定义信号：
+    # data_received信号在收到新数据时发射，附带一个字符串
+    data_received = Signal(str)
+    # connection_status信号在连接状态改变时发射
+    connection_status = Signal(str)
+
+    def __init__(self, port, baudrate):
+        super().__init__()
+        self.port = port
+        self.baudrate = baudrate
+        self.is_running = True
+        self.ser = None
+
+    def run(self):
+        """线程启动时会自动执行这个函数"""
+        try:
+            # 尝试打开串口
+            self.ser = serial.Serial(self.port, self.baudrate, timeout=1)
+            self.connection_status.emit(f"成功连接到 {self.port}")
+            
+            # 循环读取数据，直到is_running变为False
+            while self.is_running and self.ser:
+                if self.ser.in_waiting > 0:
+                    line = self.ser.readline().decode('utf-8').strip()
+                    if line:
+                        # 发射信号，将数据传递给主线程
+                        self.data_received.emit(line)
+        except serial.SerialException as e:
+            self.connection_status.emit(f"连接失败: {e}")
+        finally:
+            if self.ser and self.ser.is_open:
+                self.ser.close()
+            self.connection_status.emit("连接已断开")
+
+    def stop(self):
+        """停止线程的运行"""
+        self.is_running = False
+        if self.ser and self.ser.is_open:
+            self.ser.close()
+        self.quit()  # 请求线程退出事件循环
+        self.wait()  # 等待线程完全终止
+
+# ====================================================================
+# 2. 创建主窗口类
+# ====================================================================
 class MainWindow(QMainWindow):
     def __init__(self):
-        super().__init__() # 调用父类的构造函数
+        super().__init__()
+        self.setWindowTitle("串口数据显示与控制程序")
+        self.setGeometry(100, 100, 700, 500)
 
-        # --- 窗口基础设置 ---
-        self.setWindowTitle("我的第一个PySide6应用")
-        self.setGeometry(300, 300, 400, 200) # 设置窗口初始位置和大小 (x, y, width, height)
+        self.worker = None
+        self.initUI()
 
-        # --- 创建UI组件 (Widgets) ---
-        # 标签
-        self.greeting_label = QLabel("请在下方输入你的名字：")
-        
-        # 单行输入框
-        self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("在这里输入...") # 设置提示文本
+    def initUI(self):
+        # --- 创建控件 ---
+        # 连接部分
+        self.port_label = QLabel("串口地址:")
+        self.port_input = QLineEdit("/dev/ttys007")
+        self.connect_button = QPushButton("连接")
+        self.disconnect_button = QPushButton("断开")
+        self.disconnect_button.setEnabled(False)
 
-        # 按钮
-        self.greet_button = QPushButton("点击这里")
+        # 数据接收显示部分
+        self.log_display = QPlainTextEdit()
+        self.log_display.setReadOnly(True)
+        self.log_display.setPlaceholderText("这里会显示所有从串口接收到的原始数据...")
+
+        # 解析数据显示部分
+        self.temp_label = QLabel("当前温度:")
+        self.temp_value_label = QLabel("N/A")
+        # self.temp_value_label.setStyleSheet("font-size: 18px; font-weight: bold;")
         
-        # --- 核心：连接信号与槽 ---
-        # 当按钮被点击(clicked信号)时，执行 self.update_greeting 方法(槽)
-        self.greet_button.clicked.connect(self.update_greeting)
-        
-        # --- 设置布局 (Layout) ---
-        # 布局是组织窗口内组件的方式，QVBoxLayout是垂直布局
-        layout = QVBoxLayout()
-        layout.addWidget(self.greeting_label) # 按顺序添加组件
-        layout.addWidget(self.name_input)
-        layout.addWidget(self.greet_button)
-        
-        # QMainWindow 需要一个中心小部件(central widget)来承载布局
+        # 指令发送部分
+        self.command_input = QLineEdit()
+        self.command_input.setPlaceholderText("在此输入指令 (如 LED_ON)")
+        self.send_button = QPushButton("发送指令")
+        self.send_button.setEnabled(False)
+
+        # --- 设置布局 ---
+        # 顶部连接区域
+        connection_layout = QHBoxLayout()
+        connection_layout.addWidget(self.port_label)
+        connection_layout.addWidget(self.port_input)
+        connection_layout.addWidget(self.connect_button)
+        connection_layout.addWidget(self.disconnect_button)
+
+        # 中间数据显示区域
+        data_layout = QGridLayout()
+        data_layout.addWidget(QLabel("原始数据日志:"), 0, 0)
+        data_layout.addWidget(self.log_display, 1, 0, 1, 2) # 占据多行多列
+        data_layout.addWidget(self.temp_label, 2, 0)
+        data_layout.addWidget(self.temp_value_label, 2, 1)
+
+        # 底部指令发送区域
+        command_layout = QHBoxLayout()
+        command_layout.addWidget(self.command_input)
+        command_layout.addWidget(self.send_button)
+
+        # 主布局
+        main_layout = QVBoxLayout()
+        main_layout.addLayout(connection_layout)
+        main_layout.addLayout(data_layout)
+        main_layout.addLayout(command_layout)
+
         central_widget = QWidget()
-        central_widget.setLayout(layout)
+        central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
 
-    # 2. 定义槽(Slot)函数，处理按钮点击事件
-    def update_greeting(self):
-        """当按钮被点击时，这个函数会被调用"""
-        name = self.name_input.text() # 获取输入框中的文本
-        if name:
-            self.greeting_label.setText(f"你好, {name}!")
-        else:
-            self.greeting_label.setText("请输入你的名字！")
+        # 设置状态栏
+        self.statusBar().showMessage("准备就绪")
 
+        # --- 连接信号与槽 ---
+        self.connect_button.clicked.connect(self.connect_to_serial)
+        self.disconnect_button.clicked.connect(self.disconnect_from_serial)
+        self.send_button.clicked.connect(self.send_command)
+        
+    @Slot()
+    def connect_to_serial(self):
+        port = self.port_input.text()
+        baudrate = 9600 # 波特率可以根据需要修改
+        
+        # 创建并启动工作线程
+        self.worker = SerialWorker(port, baudrate)
+        self.worker.data_received.connect(self.update_display)
+        self.worker.connection_status.connect(self.update_status)
+        self.worker.start()
 
+    @Slot()
+    def disconnect_from_serial(self):
+        if self.worker:
+            self.worker.stop()
+
+    @Slot()
+    def send_command(self):
+        if self.worker and self.worker.ser and self.worker.ser.is_open:
+            command = self.command_input.text()
+            if command:
+                self.log_display.appendPlainText(f"--> [发送]: {command}")
+                # 串口发送需要字节串，并在末尾添加换行符
+                self.worker.ser.write((command + '\n').encode('utf-8'))
+                self.command_input.clear()
+
+    @Slot(str)
+    def update_display(self, data):
+        """处理从工作线程传来的数据"""
+        # 在日志中显示原始数据
+        self.log_display.appendPlainText(f"<-- [接收]: {data}")
+        
+        # 解析特定数据
+        if data.startswith("DATA,TEMP,"):
+            try:
+                parts = data.split(',')
+                temperature = float(parts[2])
+                self.temp_value_label.setText(f"{temperature:.2f} °C")
+            except (IndexError, ValueError):
+                self.temp_value_label.setText("解析错误")
+
+    @Slot(str)
+    def update_status(self, status):
+        """更新UI状态和状态栏信息"""
+        self.statusBar().showMessage(status)
+        if "成功连接" in status:
+            self.connect_button.setEnabled(False)
+            self.disconnect_button.setEnabled(True)
+            self.send_button.setEnabled(True)
+            self.port_input.setEnabled(False)
+        else: # "连接已断开" 或 "连接失败"
+            self.connect_button.setEnabled(True)
+            self.disconnect_button.setEnabled(False)
+            self.send_button.setEnabled(False)
+            self.port_input.setEnabled(True)
+            self.worker = None # 清理工作线程
+
+    def closeEvent(self, event):
+        """重写窗口关闭事件，确保线程被正确关闭"""
+        if self.worker:
+            self.worker.stop()
+        event.accept()
+
+# ====================================================================
 # 3. 应用程序入口
+# ====================================================================
 if __name__ == "__main__":
-    # 每个PySide应用都需要一个QApplication实例
     app = QApplication(sys.argv)
-    
-    # 创建并显示主窗口
     window = MainWindow()
     window.show()
-    
-    # 启动应用的事件循环
     sys.exit(app.exec())
