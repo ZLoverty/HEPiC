@@ -16,7 +16,7 @@ import random
 # Windows示例: PORT_NAME = 'COM11'
 # Linux/macOS示例: PORT_NAME = '/dev/pts/6'
 # ====================================================================
-PORT_NAME = '/dev/ttys006'  
+PORT_NAME = '/dev/pts/5'  
 
 try:
     # 初始化串口
@@ -73,7 +73,7 @@ while True:
         print(f"发送数据: {data_to_send.strip()}")
         
         # 等待1秒
-        time.sleep(1)
+        time.sleep(0.001)
 
     except KeyboardInterrupt:
         print("程序被用户中断")

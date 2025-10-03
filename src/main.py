@@ -6,6 +6,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 import pyqtgraph as pg
+import time
+from collections import deque
 pg.setConfigOption("background", "w")
 pg.setConfigOption("foreground", "k")
 
@@ -43,6 +45,7 @@ class SerialWorker(QObject):
                     if line:
                         # 发射信号，将数据传递给主线程
                         self.data_received.emit(line)
+                time.sleep(0.01)
         except serial.SerialException as e:
             self.connection_status.emit(f"连接失败: {e}")
         finally:
@@ -65,13 +68,18 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("串口数据显示与控制程序")
         self.setGeometry(100, 100, 700, 500)
         self.worker = None
+        
+        # initialize variables
+        self.max_len = 1000
+        self.time = deque(maxlen=self.max_len)
+        self.temperature = deque(maxlen=self.max_len)
         self.initUI()
 
     def initUI(self):
         # --- 创建控件 ---
         # 连接部分
         self.port_label = QLabel("串口地址:")
-        self.port_input = QLineEdit("/dev/ttys007")
+        self.port_input = QLineEdit("/dev/pts/6")
         self.connect_button = QPushButton("连接")
         self.disconnect_button = QPushButton("断开")
         self.disconnect_button.setEnabled(False)
@@ -81,6 +89,9 @@ class MainWindow(QMainWindow):
         self.log_display.setReadOnly(True)
         self.log_display.setPlaceholderText("这里会显示所有从串口接收到的原始数据...")
         self.temp_plot = pg.PlotWidget(title="温度实时曲线")
+        
+        pen = pg.mkPen(color=(0, 120, 215), width=2)
+        self.temp_curve = self.temp_plot.plot(pen=pen) # 在图表上添加一条曲线
         
 
         # 解析数据显示部分
@@ -143,11 +154,12 @@ class MainWindow(QMainWindow):
         self.thread = QThread()
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
-
         self.worker.data_received.connect(self.update_display)
         self.worker.connection_status.connect(self.update_status)
-        
         self.thread.start()
+
+        # set time 0
+        self.t0 = time.time()
 
     @Slot()
     def disconnect_from_serial(self):
@@ -179,6 +191,7 @@ class MainWindow(QMainWindow):
                 parts = data.split(',')
                 temperature = float(parts[2])
                 self.temp_value_label.setText(f"{temperature:.2f} °C")
+                self.update_temperature_plot(temperature)
             except (IndexError, ValueError):
                 self.temp_value_label.setText("解析错误")
 
@@ -196,6 +209,15 @@ class MainWindow(QMainWindow):
             self.disconnect_button.setEnabled(False)
             self.send_button.setEnabled(False)
             self.port_input.setEnabled(True)
+
+    @Slot(float)
+    def update_temperature_plot(self, temperature):
+        """Update temperature plot."""
+        t = time.time() - self.t0
+        self.time.append(t)
+        self.temperature.append(temperature)
+        self.temp_curve.setData(list(self.time), list(self.temperature))
+
 
     def closeEvent(self, event):
         """重写窗口关闭事件，确保线程被正确关闭"""
