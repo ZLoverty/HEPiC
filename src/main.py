@@ -2,14 +2,17 @@ import sys
 import serial
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QPushButton, QPlainTextEdit, QLabel, QGridLayout,
+    QLineEdit, QPushButton, QPlainTextEdit, QLabel, QGridLayout, 
 )
-from PySide6.QtCore import QThread, Signal, Slot
+from PySide6.QtCore import QObject, QThread, Signal, Slot
+import pyqtgraph as pg
+pg.setConfigOption("background", "w")
+pg.setConfigOption("foreground", "k")
 
 # ====================================================================
 # 1. 创建一个工作线程类来处理所有串口通信
 # ====================================================================
-class SerialWorker(QThread):
+class SerialWorker(QObject):
     """
     将所有耗时的串口操作放在这个独立线程中，避免GUI卡顿
     """
@@ -52,9 +55,7 @@ class SerialWorker(QThread):
         self.is_running = False
         if self.ser and self.ser.is_open:
             self.ser.close()
-        self.quit()  # 请求线程退出事件循环
-        self.wait()  # 等待线程完全终止
-
+    
 # ====================================================================
 # 2. 创建主窗口类
 # ====================================================================
@@ -63,7 +64,6 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("串口数据显示与控制程序")
         self.setGeometry(100, 100, 700, 500)
-
         self.worker = None
         self.initUI()
 
@@ -80,6 +80,8 @@ class MainWindow(QMainWindow):
         self.log_display = QPlainTextEdit()
         self.log_display.setReadOnly(True)
         self.log_display.setPlaceholderText("这里会显示所有从串口接收到的原始数据...")
+        self.temp_plot = pg.PlotWidget(title="温度实时曲线")
+        
 
         # 解析数据显示部分
         self.temp_label = QLabel("当前温度:")
@@ -103,7 +105,8 @@ class MainWindow(QMainWindow):
         # 中间数据显示区域
         data_layout = QGridLayout()
         data_layout.addWidget(QLabel("原始数据日志:"), 0, 0)
-        data_layout.addWidget(self.log_display, 1, 0, 1, 2) # 占据多行多列
+        data_layout.addWidget(self.log_display, 1, 0) # 占据多行多列
+        data_layout.addWidget(self.temp_plot, 1, 1)
         data_layout.addWidget(self.temp_label, 2, 0)
         data_layout.addWidget(self.temp_value_label, 2, 1)
 
@@ -137,14 +140,22 @@ class MainWindow(QMainWindow):
         
         # 创建并启动工作线程
         self.worker = SerialWorker(port, baudrate)
+        self.thread = QThread()
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.run)
+
         self.worker.data_received.connect(self.update_display)
         self.worker.connection_status.connect(self.update_status)
-        self.worker.start()
+        
+        self.thread.start()
 
     @Slot()
     def disconnect_from_serial(self):
         if self.worker:
             self.worker.stop()
+        if self.thread:
+            self.thread.quit()
+            # self.thread.wait()
 
     @Slot()
     def send_command(self):
@@ -185,7 +196,6 @@ class MainWindow(QMainWindow):
             self.disconnect_button.setEnabled(False)
             self.send_button.setEnabled(False)
             self.port_input.setEnabled(True)
-            self.worker = None # 清理工作线程
 
     def closeEvent(self, event):
         """重写窗口关闭事件，确保线程被正确关闭"""
