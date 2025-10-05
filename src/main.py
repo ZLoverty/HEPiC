@@ -1,3 +1,7 @@
+"""
+etp_ctl: A PyQt6 GUI application for ETP experiment control, serial port data acquisition and visualization.
+"""
+
 import sys
 import serial
 from PySide6.QtWidgets import (
@@ -8,56 +12,11 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 import pyqtgraph as pg
 import time
 from collections import deque
+from communications import SerialWorker, IPWorker
 pg.setConfigOption("background", "w")
 pg.setConfigOption("foreground", "k")
 
-# ====================================================================
-# 1. 创建一个工作线程类来处理所有串口通信
-# ====================================================================
-class SerialWorker(QObject):
-    """
-    将所有耗时的串口操作放在这个独立线程中，避免GUI卡顿
-    """
-    # 定义信号：
-    # data_received信号在收到新数据时发射，附带一个字符串
-    data_received = Signal(str)
-    # connection_status信号在连接状态改变时发射
-    connection_status = Signal(str)
 
-    def __init__(self, port, baudrate):
-        super().__init__()
-        self.port = port
-        self.baudrate = baudrate
-        self.is_running = True
-        self.ser = None
-
-    def run(self):
-        """线程启动时会自动执行这个函数"""
-        try:
-            # 尝试打开串口
-            self.ser = serial.Serial(self.port, self.baudrate, timeout=1)
-            self.connection_status.emit(f"成功连接到 {self.port}")
-            
-            # 循环读取数据，直到is_running变为False
-            while self.is_running and self.ser:
-                if self.ser.in_waiting > 0:
-                    line = self.ser.readline().decode('utf-8').strip()
-                    if line:
-                        # 发射信号，将数据传递给主线程
-                        self.data_received.emit(line)
-                time.sleep(0.01)
-        except serial.SerialException as e:
-            self.connection_status.emit(f"连接失败: {e}")
-        finally:
-            if self.ser and self.ser.is_open:
-                self.ser.close()
-            self.connection_status.emit("连接已断开")
-
-    def stop(self):
-        """停止线程的运行"""
-        self.is_running = False
-        if self.ser and self.ser.is_open:
-            self.ser.close()
     
 # ====================================================================
 # 2. 创建主窗口类
@@ -78,8 +37,8 @@ class MainWindow(QMainWindow):
     def initUI(self):
         # --- 创建控件 ---
         # 连接部分
-        self.port_label = QLabel("串口地址:")
-        self.port_input = QLineEdit("/dev/pts/6")
+        self.ip_label = QLabel("IP 地址:")
+        self.ip_input = QLineEdit("192.168.0.104")
         self.connect_button = QPushButton("连接")
         self.disconnect_button = QPushButton("断开")
         self.disconnect_button.setEnabled(False)
@@ -108,8 +67,8 @@ class MainWindow(QMainWindow):
         # --- 设置布局 ---
         # 顶部连接区域
         connection_layout = QHBoxLayout()
-        connection_layout.addWidget(self.port_label)
-        connection_layout.addWidget(self.port_input)
+        connection_layout.addWidget(self.ip_label)
+        connection_layout.addWidget(self.ip_input)
         connection_layout.addWidget(self.connect_button)
         connection_layout.addWidget(self.disconnect_button)
 
@@ -146,11 +105,11 @@ class MainWindow(QMainWindow):
         
     @Slot()
     def connect_to_serial(self):
-        port = self.port_input.text()
-        baudrate = 9600 # 波特率可以根据需要修改
+        ip = self.ip_input.text()
+        port = 12345 # 波特率可以根据需要修改
         
         # 创建并启动工作线程
-        self.worker = SerialWorker(port, baudrate)
+        self.worker = IPWorker(ip, port)
         self.thread = QThread()
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
@@ -199,16 +158,16 @@ class MainWindow(QMainWindow):
     def update_status(self, status):
         """更新UI状态和状态栏信息"""
         self.statusBar().showMessage(status)
-        if "成功连接" in status:
+        if status is "接收数据":
             self.connect_button.setEnabled(False)
             self.disconnect_button.setEnabled(True)
             self.send_button.setEnabled(True)
-            self.port_input.setEnabled(False)
+            self.ip_input.setEnabled(False)
         else: # "连接已断开" 或 "连接失败"
             self.connect_button.setEnabled(True)
             self.disconnect_button.setEnabled(False)
             self.send_button.setEnabled(False)
-            self.port_input.setEnabled(True)
+            self.ip_input.setEnabled(True)
 
     @Slot(float)
     def update_temperature_plot(self, temperature):
