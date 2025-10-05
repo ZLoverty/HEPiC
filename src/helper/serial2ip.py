@@ -98,7 +98,7 @@ def main():
                             
                             # 将字符串编码回 bytes，然后通过 UDP 发送
                             s.sendto(data_str.encode('utf-8'), (TARGET_IP, TARGET_PORT))
-                            print(f" -> 已发送到 {TARGET_IP}:12345")
+                            print(f" -> 已发送到 {TARGET_IP}:{TARGET_PORT}")
                         
                         
 
