@@ -2,13 +2,38 @@
 virtual_mcu.py
 ==============
 
-Simulates a virtual microcontroller that communicates with host over a serial port. It writes data to the serial port and reads commands from it. 
+This script writes data to a serial port. Coupled with a virtual port pairing tool (e.g. socat), we can create a "virtual serial port", with constantly incoming data.
+
+The purpose is to simulates a virtual microcontroller that is communicating with a host through a serial port, so that we can test the main application without needing a physical microcontroller.  
+
+To make it work, we first need to create a pair of connected virtual serial ports using socat (Linux/macOS):
+
+```
+socat -d -d pty,raw,echo=0 pty,raw,echo=0
+```
+
+The following output will show the created virtual ports:
+
+```
+2025/10/05 11:58:00 socat[13436] N PTY is /dev/pts/1
+2025/10/05 11:58:00 socat[13436] N PTY is /dev/pts/7
+2025/10/05 11:58:00 socat[13436] N starting data transfer loop with FDs [5,5] and [7,7]
+```
+
+In this example, we can use 
+
+```
+python virtual_mcu.py /dev/pts/1
+```
+
+to run the virtual mcu, and use `/dev/pts/7` in the main application to read the data. 
 """
 
 
 import serial
 import time
 import random
+import sys
 
 # ====================================================================
 # !! 重要 !!
@@ -16,7 +41,11 @@ import random
 # Windows示例: PORT_NAME = 'COM11'
 # Linux/macOS示例: PORT_NAME = '/dev/pts/6'
 # ====================================================================
-PORT_NAME = '/dev/pts/5'  
+
+if len(sys.argv) > 1:
+    PORT_NAME = sys.argv[1] 
+else:
+    raise Exception("Please provide the port name to write to, e.g. /dev/pts/6 or COM11")
 
 try:
     # 初始化串口
