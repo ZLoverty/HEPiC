@@ -86,10 +86,12 @@ def main():
                 with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
                     # 从串口读取一行数据
                     # readline() 会读取直到遇到换行符 '\n'
+                    print("尝试从串口读取一行")
                     line = ser.readline()
 
                     # 如果读取到了数据
                     if line:
+                        print("成功读取数据")
                         # 将读取到的 bytes 解码为 utf-8 字符串，并去除首尾的空白字符
                         data_str = line.decode('utf-8').strip()
                         
@@ -126,7 +128,7 @@ def main():
     # 清理资源
     if ser and ser.is_open:
         ser.close()
-    sock.close()
+
     print("程序已退出。")
 
 
