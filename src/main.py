@@ -28,13 +28,15 @@ class MainWindow(QMainWindow):
         self.setGeometry(900, 100, 700, 500)
         self.worker = None
         self.t0 = None
+        self.set_temperature = 200.0
         
         # initialize variables
         self.max_len = 100000
         self.time = deque(maxlen=self.max_len)
         self.temperature = deque(maxlen=self.max_len)
         self.extrusion_force = deque(maxlen=self.max_len)
-        self.die_swell_ratio = deque(maxlen=self.max_len)
+        self.die_swell = deque(maxlen=self.max_len)
+        self.die_temperature = deque(maxlen=self.max_len)
         self.initUI()
 
     def initUI(self):
@@ -109,8 +111,6 @@ class MainWindow(QMainWindow):
         command_layout.addWidget(self.command_input)
         command_layout.addWidget(self.send_button)
 
-        
-
         # 右边视觉区域
         vision_layout = QHBoxLayout()
 
@@ -137,6 +137,8 @@ class MainWindow(QMainWindow):
         # setup data reading worker
         ip = self.ip_input.text().strip()
         port = 10001
+
+        
 
         # 创建并启动工作线程
         self.worker = IPWorker(ip, port)
@@ -165,8 +167,12 @@ class MainWindow(QMainWindow):
             self.thread.wait()
         if self.time:
             self.time.clear()
-        if self.temperature:
-            self.temperature.clear()
+        if self.extrusion_force:
+            self.extrusion_force.clear()
+        if self.die_temperature:
+            self.die_temperature.clear()
+        if self.die_swell:
+            self.die_swell.clear()
         self.t0 = None
 
     @Slot()
@@ -191,11 +197,16 @@ class MainWindow(QMainWindow):
                 t = 0.0
             else:
                 t = time.time() - self.t0
-            temperature = json_data["temperature"]
-            self.temp_value_label.setText(f"{temperature:.2f} °C")
+
+            self.temp_value_label.setText(f"{json_data["hotend_temperature"]:.1f} / {self.set_temperature:.1f} °C")
             self.time.append(t)
-            self.temperature.append(temperature)
-            self.temp_curve.setData(list(self.time), list(self.temperature))
+            self.die_temperature.append(json_data["die_temperature"])
+            self.extrusion_force.append(json_data["extrusion_force"])
+            self.die_swell.append(json_data["die_swell"])
+            self.force_curve.setData(list(self.time), list(self.extrusion_force))
+            self.dietemp_curve.setData(list(self.time), list(self.die_temperature))
+            self.dieswell_curve.setData(list(self.time), list(self.die_swell))
+
         except (IndexError, ValueError):
             self.temp_value_label.setText("解析错误")
 

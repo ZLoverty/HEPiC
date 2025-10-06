@@ -56,8 +56,14 @@ while True:
         pass
 
     if is_running:
-        temperature = 200.0 + random.uniform(-10, 10)
-        message = {"temperature": temperature}
+        extrusion_force = 2 + random.uniform(-.2, .2)
+        die_temperature = 200.0 + random.uniform(-10, 10)
+        hotend_temperature = 200.0 + random.uniform(-10, 10)
+        die_swell = 1.4 + random.uniform(-.1, .1)
+        message = {"extrusion_force": extrusion_force,
+                   "die_temperature": die_temperature,
+                   "die_swell": die_swell,
+                   "hotend_temperature": hotend_temperature}
         print(f"发送 -> {message}")
         
         # 将消息发送到刚刚记录的客户端地址
