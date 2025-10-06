@@ -5,7 +5,7 @@ Handles serial port / IP communications.
 """
 
 import serial
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, QTimer, Slot
 import time
 import socket
 
@@ -34,7 +34,7 @@ class SerialWorker(QObject):
         try:
             # 尝试打开串口
             self.ser = serial.Serial(self.port, self.baudrate, timeout=1)
-            self.connection_status.emit(f"成功连接到 {self.port}")
+            self.connection_status.emit(f"接收数据")
             
             # 循环读取数据，直到is_running变为False
             while self.is_running and self.ser:
@@ -57,48 +57,48 @@ class SerialWorker(QObject):
         if self.ser and self.ser.is_open:
             self.ser.close()
 
+# communications.py
+
 class IPWorker(QObject):
-    """
-    Serial port operations.
-    """
+    """处理PC和树莓派间通过网络端口的通讯"""
     # 定义信号：
     # data_received信号在收到新数据时发射，附带一个字符串
     data_received = Signal(str)
     # connection_status信号在连接状态改变时发射
     connection_status = Signal(str)
+    # ip_address error信号，在主窗口显示一个错误提示对话框
+    ip_addr_err = Signal(str)
 
-    def __init__(self, host, port):
+    def __init__(self, ip, port):
         super().__init__()
-        self.host = host
+        self.ip = ip
         self.port = port
-        self.is_running = True
-
+        self.is_running = False
+        
+    @Slot()
     def run(self):
-        """线程启动时会自动执行这个函数"""
-        self.connection_status.emit(f"接收数据")
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        # 向已知的远程地址发送指令
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            self.socket.sendto(b"start", (self.ip, self.port))
+        except Exception as e:
+            print(f"连接服务器出错：{e}")
+            self.ip_addr_err.emit(f"{e}")
+            return
 
-            # 2. Bind the socket to the address and port
+        self.connection_status.emit(f"接收数据")
+        while True:
             try:
-                s.bind((self.host, self.port))
+                data, server_address = self.socket.recvfrom(1024)
+                message = data.decode('utf-8')
+                self.data_received.emit(message)         
             except Exception as e:
-                self.connection_status.emit(f"绑定失败: {e}")
-            
-            # 3. Wait to receive data
-            #    recvfrom() blocks until a packet is received.
-            #    It returns the data (bytes) and the address of the sender.
-            while self.is_running:
-                data_bytes, address = s.recvfrom(1024) # Buffer size is 1024 bytes
-                
-                # 4. Decode the bytes into a string
-                line = data_bytes.decode('utf-8')
-                
-                if line:
-                    # 发射信号，将数据传递给主线程
-                    self.data_received.emit(line)
-                time.sleep(0.01)
+                print(f"接收消息出错：{e}")
+                break
+            time.sleep(.1)
 
     def stop(self):
-        """停止线程的运行"""
-        self.is_running = False
-        self.connection_status.emit("停止接收数据")
+        self.connection_status.emit("连接断开")
+        self.socket.close()
+        self.deleteLater()
+        
