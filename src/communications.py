@@ -74,12 +74,13 @@ class IPWorker(QObject):
         self.ip = ip
         self.port = port
         self.is_running = False
-        
+        self.socket = None
+
     @Slot()
     def run(self):
-        # 向已知的远程地址发送指令
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            # 向已知的远程地址发送指令
             self.socket.sendto(b"start", (self.ip, self.port))
         except Exception as e:
             print(f"连接服务器出错：{e}")
@@ -87,15 +88,32 @@ class IPWorker(QObject):
             return
 
         self.connection_status.emit(f"接收数据")
-        while True:
-            try:
+
+        # Create the QTimer
+        self.timer = QTimer(self)
+        self.timer.setInterval(100)  # 5 seconds timeout
+        # Connect the timer's timeout signal to a slot
+        self.timer.timeout.connect(self.receive_data)
+        self.timer.start()  # Start the timer
+
+    def receive_data(self):
+        """周期性接收数据"""
+        try:
+            # 4. Try to receive data. A while loop ensures we drain the buffer
+            #    if multiple packets arrive between timer ticks.
+            while True:
                 data, server_address = self.socket.recvfrom(1024)
                 message = data.decode('utf-8')
-                self.data_received.emit(message)         
-            except Exception as e:
-                print(f"接收消息出错：{e}")
-                break
-            time.sleep(.1)
+                self.data_received.emit(message)
+        except BlockingIOError:
+            # This is the expected error when no data is available on a non-blocking socket.
+            # We simply ignore it and wait for the next timer tick.
+            pass
+        except Exception as e:
+            print(f"接收消息出错：{e}")
+            self.timer.stop() # Stop the timer on error
+            self.socket.close()
+            self.connection_status.emit("连接断开")
 
     def stop(self):
         self.connection_status.emit("连接断开")
