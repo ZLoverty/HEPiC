@@ -1,11 +1,11 @@
 """
-etp_ctl: A PyQt6 GUI application for ETP experiment control, serial port data acquisition and visualization.
+etp_ctl: A PySide6 GUI application for the Extrusion Test Platform experiment control, serial port data acquisition and visualization.
 """
 
 import sys
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QPushButton, QPlainTextEdit, QLabel, QGridLayout, QMessageBox
+    QLineEdit, QPushButton, QPlainTextEdit, QLabel, QGridLayout, QMessageBox, QTabWidget
 )
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 import pyqtgraph as pg
@@ -48,6 +48,11 @@ class MainWindow(QMainWindow):
         self.disconnect_button = QPushButton("断开")
         self.disconnect_button.setEnabled(False)
 
+        # 标签栏部分
+        self.tabs = QTabWidget()
+        self.tabs.setTabPosition(QTabWidget.TabPosition.West) # 关键！把标签放到左边
+        self.tabs.setMovable(True) # 让标签页可以拖动排序
+
         # 数据接收显示部分
         self.log_display = QPlainTextEdit()
         self.log_display.setReadOnly(True)
@@ -83,30 +88,42 @@ class MainWindow(QMainWindow):
         # 视觉部分
 
         # --- 设置布局 ---
-        # 顶部连接区域
-        connection_layout = QHBoxLayout()
+        # 网络连接标签页
+        connection_widget = QWidget()      
+        connection_layout = QHBoxLayout(connection_widget)
         connection_layout.addWidget(self.ip_label)
         connection_layout.addWidget(self.ip_input)
         connection_layout.addWidget(self.connect_button)
         connection_layout.addWidget(self.disconnect_button)
 
-        # 中间数据显示区域
-        data_layout = QGridLayout()
-        data_layout.addWidget(self.temp_label, 0, 0)
-        data_layout.addWidget(self.temp_value_label, 0, 1)
-        data_layout.addWidget(self.force_label, 1, 0)
-        data_layout.addWidget(self.force_value_label, 1, 1)
-        data_layout.addWidget(self.meter_label, 2, 0)
-        data_layout.addWidget(self.meter_value_label, 2, 1)
-        data_layout.addWidget(self.velocity_label, 3, 0)
-        data_layout.addWidget(self.velocity_value_label, 3, 1)
-        data_layout.addWidget(QLabel("原始数据日志:"), 4, 0, 1, 2)
-        data_layout.addWidget(self.log_display, 5, 0, 4, 2) # 占据多行多列
-        data_layout.addWidget(self.force_plot, 0, 3, 3, 1)
-        data_layout.addWidget(self.dietemp_plot, 3, 3, 3, 1)
-        data_layout.addWidget(self.dieswell_plot, 6, 3, 3, 1)
+        # 平台状态标签页
+        status_widget = QWidget()
+        status_layout = QVBoxLayout(status_widget)
+        status_layout.addWidget(self.temp_label)
+        status_layout.addWidget(self.temp_value_label)
+        status_layout.addWidget(self.force_label)
+        status_layout.addWidget(self.force_value_label)
+        status_layout.addWidget(self.meter_label)
+        status_layout.addWidget(self.meter_value_label)
+        status_layout.addWidget(self.velocity_label)
+        status_layout.addWidget(self.velocity_value_label)
+
+        # 曲线图标签页
+        data_widget = QWidget()
+        data_layout = QVBoxLayout(data_widget)
+        data_layout.addWidget(self.force_plot)
+        data_layout.addWidget(self.dietemp_plot)
+        data_layout.addWidget(self.dieswell_plot)
+
+        # 日志标签页
+        log_widget = QWidget()
+        log_layout = QVBoxLayout(log_widget)
+        log_layout.addWidget(QLabel("原始数据日志:"))
+        log_layout.addWidget(self.log_display) # 占据多行多列
 
         # 底部指令发送区域
+        command_widget = QWidget()
+        command_layout = QVBoxLayout(command_widget)
         command_layout = QHBoxLayout()
         command_layout.addWidget(self.command_input)
         command_layout.addWidget(self.send_button)
@@ -115,14 +132,20 @@ class MainWindow(QMainWindow):
         vision_layout = QHBoxLayout()
 
         # 主布局
-        main_layout = QVBoxLayout()
-        main_layout.addLayout(connection_layout)
-        main_layout.addLayout(data_layout)
-        main_layout.addLayout(command_layout)
+        # main_layout = QVBoxLayout()
+        # main_layout.addLayout(connection_layout)
+        # main_layout.addLayout(data_layout)
+        # main_layout.addLayout(command_layout)
 
-        central_widget = QWidget()
-        central_widget.setLayout(main_layout)
-        self.setCentralWidget(central_widget)
+        # central_widget = QWidget()
+        # central_widget.setLayout(main_layout)
+        self.tabs.addTab(connection_widget, "连接")
+        self.tabs.addTab(status_widget, "状态")
+        self.tabs.addTab(data_widget, "数据")
+        self.tabs.addTab(log_widget, "日志")
+        self.tabs.addTab(command_widget, "指令")
+
+        self.setCentralWidget(self.tabs)
 
         # 设置状态栏
         self.statusBar().showMessage("准备就绪")
@@ -137,9 +160,8 @@ class MainWindow(QMainWindow):
         # setup data reading worker
         ip = self.ip_input.text().strip()
         port = 10001
-
+        self._reset()  # 重置数据
         
-
         # 创建并启动工作线程
         self.worker = IPWorker(ip, port)
         self.thread = QThread()
@@ -147,11 +169,20 @@ class MainWindow(QMainWindow):
         self.thread.started.connect(self.worker.run)
         self.worker.data_received.connect(self.update_display)
         self.worker.connection_status.connect(self.update_status)
-        self.worker.ip_addr_err.connect(self.ip_err)
-        
+        self.worker.ip_addr_err.connect(self.ip_err)       
         self.thread.start()
         
-        
+    def _reset(self):
+        if self.time:
+            self.time.clear()
+        if self.extrusion_force:
+            self.extrusion_force.clear()
+        if self.die_temperature:
+            self.die_temperature.clear()
+        if self.die_swell:
+            self.die_swell.clear()
+        self.t0 = None
+
     @Slot(str)
     def ip_err(self, err_msg):
         QMessageBox.critical(self, "Error", f"连接服务器出错：{err_msg}")
@@ -165,15 +196,6 @@ class MainWindow(QMainWindow):
         if self.thread:
             self.thread.quit()
             self.thread.wait()
-        if self.time:
-            self.time.clear()
-        if self.extrusion_force:
-            self.extrusion_force.clear()
-        if self.die_temperature:
-            self.die_temperature.clear()
-        if self.die_swell:
-            self.die_swell.clear()
-        self.t0 = None
 
     @Slot()
     def send_command(self):
