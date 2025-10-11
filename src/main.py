@@ -14,6 +14,8 @@ from collections import deque
 from communications import TCPClient, KlipperWorker
 import json
 from tab_widgets import ConnectionWidget, PlatformStatusWidget, DataPlotWidget, CommandWidget, LogWidget, VisionWidget
+import asyncio
+from qasync import QEventLoop, asyncSlot
 pg.setConfigOption("background", "w")
 pg.setConfigOption("foreground", "k")
     
@@ -79,36 +81,26 @@ class MainWindow(QMainWindow):
         port = 10001
         self._reset()  # 重置数据
 
-        # 启动数据接收线程
+        # 创建 TCP 连接以接收数据
+        
         self.worker = TCPClient(ip, port)
-        self.thread = QThread()
-        self.worker.moveToThread(self.thread)
+
         # 连接信号槽
-        self.thread.started.connect(self.worker.run)
-        self.thread.finished.connect(self.worker.close)
-        # self.connection_widget.disconnect_button_clicked.connect(self.disconnect_from_ip)
-        self.connection_widget.disconnect_button.clicked.connect(self.worker.close)
+        self.connection_widget.disconnect_button.clicked.connect(self.worker.stop)
         # self.worker.data_received.connect(self.data_widget.update_display)
         self.worker.connection_status.connect(self.update_status)
         self.worker.connection_status.connect(self.connection_widget.update_button_status)
-        # 启动线程      
-        self.thread.start()
-
+        self.worker.run()
+        
         # 创建 klipper 线程（用于查询平台状态和发送动作指令）
         klipper_port = 7125
         self.klipper_worker = KlipperWorker(ip, klipper_port)
-        self.klipper_thread = QThread()
-        self.klipper_worker.moveToThread(self.klipper_thread)
-        # 连接信号槽
-        # self.command_to_send.connect(self.klipper_worker.send_gcode)
-        self.klipper_thread.started.connect(self.klipper_worker.run)
-        self.klipper_thread.finished.connect(self.klipper_worker.stop)
-        # self.klipper_thread.finished.connect(self.klipper_thread.deleteLater)
+        # # 连接信号槽
+        self.command_to_send.connect(self.klipper_worker.send_gcode)
         self.klipper_worker.connection_status.connect(self.command_widget.update_button_status)
-        # self.klipper_worker.response_received.connect(self.update_command_display)
-        # 启动线程
-        self.klipper_thread.start()
-        
+        self.klipper_worker.response_received.connect(self.update_command_display)
+        self.klipper_worker.run()
+
     def _reset(self):
         if self.time:
             self.time.clear()
@@ -221,4 +213,7 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
-    sys.exit(app.exec())
+    loop = QEventLoop(app)
+    asyncio.set_event_loop(loop)
+    with loop:
+        loop.run_forever()

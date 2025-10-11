@@ -11,8 +11,7 @@ import asyncio
 import websockets
 import json
 from queue import Queue
-import socket
-import threading
+from qasync import QEventLoop, asyncSlot
 
 class TCPClient(QObject):
     # --- 信号 ---
@@ -25,143 +24,104 @@ class TCPClient(QObject):
         super().__init__()
         self.host = host
         self.port = port
-        self.sock = None
-        self._is_running = False
-        self._receive_thread = None
-     
-    def run(self):
-        if self.connect():
+        self.is_running = False
+    
+    @asyncSlot()
+    async def run(self):
+        if await self.connect():
             try:
-                while self._is_running:
-                    time.sleep(1)
-                
+                await self._receive_task
             finally:
                 print("\n--- 准备关闭客户端 ---")
-                self.close()
+                self.stop()
+        else:
+            self.stop()
 
-    def connect(self):
+    async def connect(self):
         """
         连接到TCP服务器并启动接收线程。
         这是一个阻塞操作，直到连接成功或失败。
         """
         try:
-            # 1. 创建一个新的socket对象
+            # 创建异步 TCP 连接
             print(f"正在连接到 {self.host}:{self.port}...")
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            # 设置一个超时，避免connect()无限期阻塞
-            self.sock.settimeout(5.0)
-            # 2. 连接服务器
-            self.sock.connect((self.host, self.port))
-            # 连接成功后，可以取消超时或设置为None，让recv()阻塞
-            self.sock.settimeout(None)
-
-            self._is_running = True
+            self.connection_status.emit(f"正在尝试连接 {self.host}:{self.port}...")
+            self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.host, self.port), timeout=5.0)
+            # 直到连接成功，更改状态为 running
+            self.is_running = True
             print("连接成功！")
             self.connection_status.emit("连接成功")
 
-            # 3. 创建并启动一个专门用于接收数据的后台线程
-            self._receive_thread = threading.Thread(target=self._receive_loop, daemon=True)
-            self._receive_thread.start()
+            # 3. 启动一个专门用于接收数据的任务
+            self._receive_task = asyncio.create_task(self._receive_loop())
             return True
 
-        except socket.timeout:
-            print("连接超时。")
-            self.connection_status.emit("连接失败: 超时")
-            self.sock = None
+        except (asyncio.TimeoutError, OSError) as e:
+            print(f"连接超时")
+            self.connection_status.emit(f"连接超时，请检查设备是否开启，IP 地址是否正确")
             return False
+        
         except Exception as e:
             print(f"连接失败: {e}")
             self.connection_status.emit(f"连接失败: {e}")
-            self.sock = None
             return False
 
-    def _receive_loop(self):
+    async def _receive_loop(self):
         """
         这个函数在后台线程中运行，持续接收数据。
         """
         print("数据接收循环已启动...")
-        buffer = b""
-        while self._is_running:
+        while self.is_running:
             try:
-                # 4. recv() 是一个阻塞操作。线程会在这里暂停，直到有数据到达。
-                #    这不会阻塞主线程或GUI线程。
-                data = self.sock.recv(1024)
+                # 读取一行数据
+                data = await self.reader.readline()
                 if not data:
-                    # 当recv()返回空字节串时，表示对方已关闭连接
-                    print("连接被服务器关闭。")
+                    print("数据为空，连接被服务器关闭。")
                     self.connection_status.emit("连接已断开")
                     break
-
-                buffer += data
-                # 5. 处理粘包问题：按换行符分割消息
-                while b'\n' in buffer:
-                    message_part, buffer = buffer.split(b'\n', 1)
-                    message_str = message_part.decode('utf-8').strip()
-                    if message_str:
-                        try:
-                            message_dict = json.loads(message_str)
-                            # print(f"收到 -> {message_dict}") # 调试用
-                            self.data_received.emit(message_dict)
-                        except json.JSONDecodeError:
-                            print(f"错误：收到无法解析的JSON数据: {message_str}")
-
+                message_str = data.decode('utf-8').strip()
+                print(f"{message_str}")
+                try:
+                    message_dict = json.loads(message_str)
+                    self.data_received.emit(message_dict)
+                except json.JSONDecodeError:
+                    print(f"收到非JSON数据: {message_str}")
+    
             except (ConnectionResetError, ConnectionAbortedError):
                 print("连接被重置或中止。")
                 self.connection_status.emit("连接已断开")
                 break
             except Exception as e:
                 # 如果_is_running是False，说明是主动关闭，这个错误是预期的
-                if self._is_running:
+                if self.is_running:
                     print(f"接收数据时出错: {e}")
                     self.connection_status.emit(f"连接错误: {e}")
                 break
         
         # 循环结束后，确保状态被更新
-        self._is_running = False
+        self.is_running = False
         print("数据接收循环已停止。")
 
-
-    def send_data(self, message):
-        """
-        从任何线程向服务器发送一条消息。这是一个线程安全的方法。
-        """
-        if not self._is_running or not self.sock:
-            print("连接未建立，无法发送消息。")
-            return
-
-        try:
-            # 6. 为消息添加换行符，并编码
-            data_to_send = (message + '\n').encode('utf-8')
-            # sendall() 会确保所有数据都被发送出去
-            self.sock.sendall(data_to_send)
-            # print(f"已发送 -> {message}") # 调试用
-        except Exception as e:
-            print(f"发送消息时出错: {e}")
-            # 发送失败通常意味着连接已断开
-            self.close()
-
-    def close(self):
+    @asyncSlot()
+    async def stop(self):
         """
         关闭连接并停止接收线程。
         """
-        if not self._is_running:
+        if not self.is_running:
             return
 
         print("正在关闭连接...")
-        self._is_running = False
+        self.is_running = False
 
-        if self.sock:
-            # 7. 关闭socket。这会让正在阻塞的 self.sock.recv() 抛出异常，
-            #    从而使 _receive_loop 循环退出。
-            self.sock.close()
-            self.sock = None
+        if self.writer:
+            self.writer.close()
+            await self.writer.wait_closed()
+        
+        if self._receive_task:
+            self._receive_task.cancel()
 
-        if self._receive_thread and self._receive_thread.is_alive():
-            # 等待接收线程完全终止
-            self._receive_thread.join()
-
-        self.connection_status.emit("连接已关闭")
-        print("连接已关闭。")
+        self.connection_status.emit("连接已断开")
+        print("连接已断开")
 
 class KlipperWorker(QObject):
     """
@@ -206,16 +166,10 @@ class KlipperWorker(QObject):
                     # 并发处理接收消息和发送消息
                     consumer_task = asyncio.create_task(self.message_consumer(websocket))
                     producer_task = asyncio.create_task(self.message_producer(websocket))
-                    stop_task = asyncio.create_task(self._stop_event.wait())
 
-                    tasks = [consumer_task, producer_task, stop_task]
-                    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                    tasks = [consumer_task, producer_task]
+                    await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
 
-                    # 如果停止事件被触发，取消其他任务
-                    if stop_task in done:
-                        for task in pending:
-                            task.cancel()
-                        return
             except (websockets.exceptions.ConnectionClosed, ConnectionRefusedError, OSError) as e:
                 # 捕获已知的连接错误
                 self.connection_status.emit(f"连接失败: {e}")
