@@ -1,0 +1,61 @@
+from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtCore import QThread, Signal, Slot, QObject, QTimer
+import sys
+import asyncio
+import time
+from qasync import QEventLoop, asyncSlot
+
+class MainWindow(QMainWindow):
+
+    start_work = Signal()
+    stop_work = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+    
+    def initUI(self):
+        self.start_button = QPushButton("start")
+        self.stop_button = QPushButton("stop")
+
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.addWidget(self.start_button)
+        layout.addWidget(self.stop_button)
+        self.setCentralWidget(widget)
+        self.start_button.clicked.connect(self.start_task)
+        self.stop_button.clicked.connect(self.stop_task)
+    
+    @Slot()
+    def start_task(self):
+        self.worker = Worker()
+        self.worker.run()
+
+    @Slot()
+    def stop_task(self):
+        if self.worker:
+            self.worker.stop()
+
+class Worker(QObject):
+    def __init__(self):
+        super().__init__()
+        self.is_running = True
+    @asyncSlot()
+    async def run(self):
+        while self.is_running:
+            print(f"{time.asctime()} working")
+            await asyncio.sleep(1)
+        print("stopped")
+    @asyncSlot()
+    async def stop(self):
+        self.is_running = False
+        
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    loop = QEventLoop(app)
+    asyncio.set_event_loop(loop)
+    with loop:
+        loop.run_forever()
+    sys.exit(app.exec())
