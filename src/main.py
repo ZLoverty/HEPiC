@@ -11,8 +11,9 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 import pyqtgraph as pg
 import time
 from collections import deque
-from communications import SerialWorker, IPWorker, KlipperWorker
+from communications import TCPClient, KlipperWorker
 import json
+from tab_widgets import ConnectionWidget, PlatformStatusWidget, DataPlotWidget, CommandWidget, LogWidget, VisionWidget
 pg.setConfigOption("background", "w")
 pg.setConfigOption("foreground", "k")
     
@@ -20,8 +21,6 @@ pg.setConfigOption("foreground", "k")
 # 2. 创建主窗口类
 # ====================================================================
 class MainWindow(QMainWindow):
-
-    command_to_send = Signal(str)  # 定义一个信号，用于发送指令
 
     def __init__(self):
         super().__init__()
@@ -46,149 +45,68 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.setTabPosition(QTabWidget.TabPosition.West) # 关键！把标签放到左边
         self.tabs.setMovable(True) # 让标签页可以拖动排序
-
-        # 网络连接组件
-        self.ip_label = QLabel("IP 地址:")
-        self.ip_input = QLineEdit("192.168.114.48")
-        self.connect_button = QPushButton("连接")
-        self.disconnect_button = QPushButton("断开")
-        self.disconnect_button.setEnabled(False)
-
-        # 日志组件
-        self.log_display = QPlainTextEdit()
-        self.log_display.setReadOnly(True)
-        self.log_display.setPlaceholderText("这里会显示所有从串口接收到的原始数据...")
-        
-        # 平台状态组件
-        self.temp_label = QLabel("温度:")
-        self.temp_value_label = QLabel("N/A")
-        # self.temp_value_label.setStyleSheet("font-size: 18px; font-weight: bold;")
-        self.force_label = QLabel("挤出力:")
-        self.force_value_label = QLabel("N/A")
-        self.meter_label = QLabel("当前进料量:")
-        self.meter_value_label = QLabel("N/A")
-        self.velocity_label = QLabel("进线速度:")
-        self.velocity_value_label = QLabel("N/A")
-        
-        # 指令发送组件
-        self.command_display = QPlainTextEdit()
-        self.command_display.setReadOnly(True)
-        self.command_display.setStyleSheet("background-color: #2b2b2b; color: #a9b7c6; font-family: Consolas, monaco, monospace;")
-        self.command_input = QLineEdit()
-        self.command_input.setPlaceholderText("在此输入指令 (如 G1 E10 F300)")
-        self.send_button = QPushButton("发送指令")
-        self.send_button.setEnabled(False)
-
-        # 曲线图组件
-        self.force_plot = pg.PlotWidget(title="挤出力")
-        self.dietemp_plot = pg.PlotWidget(title="出口温度")
-        self.dieswell_plot = pg.PlotWidget(title="胀大比")
-        pen = pg.mkPen(color=(0, 120, 215), width=2)
-        self.force_curve = self.force_plot.plot(pen=pen) # 在图表上添加一条曲线
-        self.dietemp_curve = self.dietemp_plot.plot(pen=pen) # 在图表上添加一条曲线
-        self.dieswell_curve = self.dieswell_plot.plot(pen=pen) # 在图表上添加一条曲线
-
-        # 视觉组件
-
-        # --- 设置布局 ---
-        # 网络连接标签页
-        connection_widget = QWidget()      
-        connection_layout = QHBoxLayout(connection_widget)
-        connection_layout.addWidget(self.ip_label)
-        connection_layout.addWidget(self.ip_input)
-        connection_layout.addWidget(self.connect_button)
-        connection_layout.addWidget(self.disconnect_button)
-
-        # 平台状态标签页
-        status_widget = QWidget()
-        status_layout = QVBoxLayout(status_widget)
-        status_layout.addWidget(self.temp_label)
-        status_layout.addWidget(self.temp_value_label)
-        status_layout.addWidget(self.force_label)
-        status_layout.addWidget(self.force_value_label)
-        status_layout.addWidget(self.meter_label)
-        status_layout.addWidget(self.meter_value_label)
-        status_layout.addWidget(self.velocity_label)
-        status_layout.addWidget(self.velocity_value_label)
-
-        # 曲线图标签页
-        data_widget = QWidget()
-        data_layout = QVBoxLayout(data_widget)
-        data_layout.addWidget(self.force_plot)
-        data_layout.addWidget(self.dietemp_plot)
-        data_layout.addWidget(self.dieswell_plot)
-
-        # 日志标签页
-        log_widget = QWidget()
-        log_layout = QVBoxLayout(log_widget)
-        log_layout.addWidget(QLabel("原始数据日志:"))
-        log_layout.addWidget(self.log_display) # 占据多行多列
-
-        # 底部指令发送区域
-        command_widget = QWidget()
-        command_layout = QVBoxLayout(command_widget)
-        input_layout = QHBoxLayout()
-        input_layout.addWidget(self.command_input)
-        input_layout.addWidget(self.send_button)
-        command_layout.addWidget(self.command_display)
-        command_layout.addLayout(input_layout)
-
-        # 右边视觉区域
-        vision_layout = QHBoxLayout()
-
-        # 主布局
-        # main_layout = QVBoxLayout()
-        # main_layout.addLayout(connection_layout)
-        # main_layout.addLayout(data_layout)
-        # main_layout.addLayout(command_layout)
-
-        # central_widget = QWidget()
-        # central_widget.setLayout(main_layout)
-        self.tabs.addTab(connection_widget, "连接")
-        self.tabs.addTab(status_widget, "状态")
-        self.tabs.addTab(data_widget, "数据")
-        self.tabs.addTab(log_widget, "日志")
-        self.tabs.addTab(command_widget, "指令")
-
+        # 标签页们
+        self.connection_widget = ConnectionWidget()      
+        self.status_widget = PlatformStatusWidget()
+        self.data_widget = DataPlotWidget()
+        self.command_widget = CommandWidget()
+        self.log_widget = LogWidget()
+        self.vision_layout = VisionWidget()
+        # 添加标签页到标签栏
+        self.tabs.addTab(self.connection_widget, "连接")
+        self.tabs.addTab(self.status_widget, "状态")
+        self.tabs.addTab(self.data_widget, "数据")
+        self.tabs.addTab(self.log_widget, "日志")
+        self.tabs.addTab(self.command_widget, "指令")
+        self.tabs.addTab(self.vision_layout, "视觉")
         self.setCentralWidget(self.tabs)
 
         # 设置状态栏
         self.statusBar().showMessage("准备就绪")
 
         # --- 连接信号与槽 ---
-        self.connect_button.clicked.connect(self.connect_to_ip)
-        self.disconnect_button.clicked.connect(self.disconnect_from_ip)
-        self.send_button.clicked.connect(self.send_command)
-        self.command_input.returnPressed.connect(self.send_command)
+        # self.connect_button.clicked.connect(self.connect_to_ip)
+        # self.disconnect_button.clicked.connect(self.disconnect_from_ip)
+        # self.send_button.clicked.connect(self.send_command)
+        # self.command_input.returnPressed.connect(self.send_command)
         
+        self.connection_widget.ip.connect(self.connect_to_ip)
         
-    @Slot()
-    def connect_to_ip(self):
+    @Slot(str)
+    def connect_to_ip(self, ip):
         # setup data reading worker
-        ip = self.ip_input.text().strip()
+        self.ip = ip
         port = 10001
         self._reset()  # 重置数据
 
-        # 创建并启动工作线程
-        self.worker = IPWorker(ip, port)
+        # 启动数据接收线程
+        self.worker = TCPClient(ip, port)
         self.thread = QThread()
         self.worker.moveToThread(self.thread)
+        # 连接信号槽
         self.thread.started.connect(self.worker.run)
-        self.worker.data_received.connect(self.update_display)
+        self.thread.finished.connect(self.worker.close)
+        # self.connection_widget.disconnect_button_clicked.connect(self.disconnect_from_ip)
+        self.connection_widget.disconnect_button.clicked.connect(self.worker.close)
+        # self.worker.data_received.connect(self.data_widget.update_display)
         self.worker.connection_status.connect(self.update_status)
-        self.worker.ip_addr_err.connect(self.ip_err)       
+        self.worker.connection_status.connect(self.connection_widget.update_button_status)
+        # 启动线程      
         self.thread.start()
 
-        # 创建 klipper 线程
+        # 创建 klipper 线程（用于查询平台状态和发送动作指令）
         klipper_port = 7125
         self.klipper_worker = KlipperWorker(ip, klipper_port)
         self.klipper_thread = QThread()
         self.klipper_worker.moveToThread(self.klipper_thread)
-        connection_result = self.command_to_send.connect(self.klipper_worker.send_gcode)
-        print(f"--- [DEBUG] 'command_to_send' to 'send_gcode' Connection Result: {connection_result} ---")
+        # 连接信号槽
+        # self.command_to_send.connect(self.klipper_worker.send_gcode)
         self.klipper_thread.started.connect(self.klipper_worker.run)
-        self.klipper_worker.connection_status.connect(self.update_status_klipper)
+        self.klipper_thread.finished.connect(self.klipper_worker.stop)
+        # self.klipper_thread.finished.connect(self.klipper_thread.deleteLater)
+        self.klipper_worker.connection_status.connect(self.command_widget.update_button_status)
         # self.klipper_worker.response_received.connect(self.update_command_display)
+        # 启动线程
         self.klipper_thread.start()
         
     def _reset(self):
@@ -202,25 +120,20 @@ class MainWindow(QMainWindow):
             self.die_swell.clear()
         self.t0 = None
 
-    @Slot(str)
-    def ip_err(self, err_msg):
-        QMessageBox.critical(self, "Error", f"连接服务器出错：{err_msg}")
-        self.disconnect_from_ip()
-
     @Slot()
     def disconnect_from_ip(self):
-        """断开连接时，清理 worker 和线程，重置数据"""
-        if self.worker:
-            self.worker.stop()
+        """断开连接时，清理 worker 和线程"""
+        self.statusBar().showMessage("断开连接中...")
+        print("断开连接中...")
+        # 停止 IP worker
         if self.thread:
-            self.thread.quit()
+            print("尝试停止 IP 线程...")
+            self.thread.quit() # 请求事件循环退出
             self.thread.wait()
-        if self.klipper_worker:
-            self.klipper_worker.stop()
-        if self.klipper_thread:
-            self.klipper_thread.quit()
-            self.klipper_thread.wait()
-
+        # if self.klipper_thread:
+        #     self.klipper_thread.quit() # 请求事件循环退出
+        #     self.klipper_thread.wait()
+        
     @Slot()
     def send_command(self):
         command = self.command_input.text().strip()
@@ -262,16 +175,8 @@ class MainWindow(QMainWindow):
 
     @Slot(str)
     def update_status(self, status):
-        """更新UI状态和状态栏信息"""
+        """更新状态栏信息"""
         self.statusBar().showMessage(status)
-        if status == "接收数据":
-            self.connect_button.setEnabled(False)
-            self.disconnect_button.setEnabled(True)
-            self.ip_input.setEnabled(False)
-        else: # "连接已断开" 或 "连接失败"
-            self.connect_button.setEnabled(True)
-            self.disconnect_button.setEnabled(False)
-            self.ip_input.setEnabled(True)
 
     @Slot(str)
     def update_status_klipper(self, status):
@@ -281,7 +186,7 @@ class MainWindow(QMainWindow):
             print(f"--- [DEBUG] Klipper thread is running: {self.klipper_thread.isRunning()} ---")
         
         self.statusBar().showMessage(status)
-        
+
         if status == "Connection successful!":
             self.send_button.setEnabled(True)
             self.command_input.setEnabled(True)
