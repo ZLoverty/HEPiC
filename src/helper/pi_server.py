@@ -1,76 +1,95 @@
-import socket
-import time
-import random
+import asyncio
 import json
-import threading
-import queue
+import random
 
-# --- 配置 ---
-HOST = '0.0.0.0'  # 关键点：在树莓派上，使用 0.0.0.0 来监听所有网络接口
-PORT = 10001      # 监听端口
-
-# --- 程序 ---
-print("--- 树莓派服务器已启动 ---")
-print(f"正在监听 {HOST}:{PORT}")
-
-def udp_listener(q):
+async def handle_client(reader, writer):
     """
-    监听用户信号。
+    为每一个连接的客户端创建一个独立的处理器。
+    这个处理器内部包含一个发送循环和一个接收循环。
     """
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-        s.bind((HOST, PORT))
-        # 1. 等待客户端的第一个消息，以获取其地址
-        print("等待客户端连接...")
+    addr = writer.get_extra_info('peername')
+    print(f"接受来自 {addr} 的新连接")
 
-        while True:
-            # 这里的 recvfrom 是阻塞的，但它只会阻塞这个子线程
-            data, client_address = s.recvfrom(1024)
-            print(f"已连接到客户端: {client_address}")
-            command = data.decode()
-            print(f"收到来自 {client_address} 的指令: {command}")
-            q.put((command, client_address))
-            time.sleep(1)
+    # 创建一个 future，用于在任一循环结束后通知另一个循环停止
+    shutdown_signal = asyncio.Future()
 
-command_queue = queue.Queue()
-
-# 开启监听线程
-listener_thread = threading.Thread(target=udp_listener, args=(command_queue,))
-listener_thread.daemon = True
-listener_thread.start()
-is_running = False
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # 创建一个 UDP socket
-
-# 尝试读取指令队列
-while True:  
-    try:
-        command, client_address = command_queue.get_nowait() # 尝试读取指令，如果没有则抛出 queue.Empty 异常
-        
-        if command == "start":
-            is_running = True
-            send_address = client_address # 记录客户端地址，只给发送 start 的客户端发送数据，增加一些安全性
-        # if is_running and command == "stop":
-        #     is_running = False
-        #     sock.close()
-        # elif is_running == False and command == "start":
-        #     is_running = True
-        #     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    except queue.Empty:
-        pass
-
-    if is_running:
-        extrusion_force = 2 + random.uniform(-.2, .2)
-        die_temperature = 200.0 + random.uniform(-10, 10)
-        hotend_temperature = 200.0 + random.uniform(-10, 10)
-        die_swell = 1.4 + random.uniform(-.1, .1)
-        message = {"extrusion_force": extrusion_force,
+    async def send_loop(writer):
+        """周期性地生成并发送数据给这个客户端"""
+        while not shutdown_signal.done():
+            try:
+                # --- 这是您提供的代码，经过TCP适配 ---
+                extrusion_force = 2 + random.uniform(-.2, .2)
+                die_temperature = 200.0 + random.uniform(-10, 10)
+                hotend_temperature = 200.0 + random.uniform(-10, 10)
+                die_swell = 1.4 + random.uniform(-.1, .1)
+                message = {
+                    "extrusion_force": extrusion_force,
                     "die_temperature": die_temperature,
                     "die_swell": die_swell,
-                    "hotend_temperature": hotend_temperature}
-        print(f"发送 -> {message}")
+                    "hotend_temperature": hotend_temperature
+                }
+                
+                # 1. 序列化成 JSON 字符串，然后编码成 bytes
+                data_to_send = json.dumps(message).encode("utf-8") + b'\n' # 加一个换行符作为分隔符
+                
+                print(f"向 {addr} 发送 -> {message}")
+
+                # 2. 使用 writer 写入数据，不再需要地址
+                writer.write(data_to_send)
+                # 3. 关键：确保数据被发送出去
+                await writer.drain()
+                
+                # 4. 等待一段时间再发送下一次，避免刷屏和CPU 100%
+                await asyncio.sleep(1)
+
+            except Exception as e:
+                print(f"向 {addr} 发送数据时出错: {e}")
+                shutdown_signal.set_result(True) # 通知接收循环也停止
+
+    async def receive_loop(reader):
+        """接收来自这个客户端的数据"""
+        while not shutdown_signal.done():
+            try:
+                data = await reader.read(1024)
+                if not data:
+                    print(f"客户端 {addr} 已断开连接。")
+                    shutdown_signal.set_result(True) # 通知发送循环也停止
+                    break
+                
+                message = data.decode().strip()
+                print(f"从 {addr} 收到消息: {message!r}")
+
+            except Exception as e:
+                print(f"从 {addr} 接收数据时出错: {e}")
+                shutdown_signal.set_result(True)
+
+    # 并发运行发送和接收任务
+    send_task = asyncio.create_task(send_loop(writer))
+    receive_task = asyncio.create_task(receive_loop(reader))
+
+    # 等待任一任务结束
+    await shutdown_signal
     
-        # 将消息发送到刚刚记录的客户端地址
-        sock.sendto(json.dumps(message).encode("utf-8"), send_address)
+    # 清理任务
+    send_task.cancel()
+    receive_task.cancel()
+    
+    print(f"关闭与 {addr} 的连接。")
+    writer.close()
+    await writer.wait_closed()
 
-        # 由于 UDP 是无连接的协议，所以不需要检测连接状态，如果意外断开连接，在重连时会重新获取客户端地址，继续发送
 
-    time.sleep(0.5) # 每 0.5 秒发送一次
+async def main():
+    HOST, PORT = '127.0.0.1', 10001
+    server = await asyncio.start_server(handle_client, HOST, PORT)
+    addrs = ', '.join(str(sock.getsockname()) for sock in server.sockets)
+    print(f"服务器正在监听 {addrs}")
+
+    async with server:
+        await server.serve_forever()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n服务器正在关闭...")
