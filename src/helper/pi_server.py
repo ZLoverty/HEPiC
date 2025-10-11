@@ -80,7 +80,7 @@ async def handle_client(reader, writer):
 
 
 async def main():
-    HOST, PORT = '127.0.0.1', 10001
+    HOST, PORT = '0.0.0.0', 10001
     server = await asyncio.start_server(handle_client, HOST, PORT)
     addrs = ', '.join(str(sock.getsockname()) for sock in server.sockets)
     print(f"服务器正在监听 {addrs}")
