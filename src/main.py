@@ -28,17 +28,6 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("串口数据显示与控制程序")
         self.setGeometry(900, 100, 700, 500)
-        self.worker = None
-        self.t0 = None
-        self.set_temperature = 200.0
-        
-        # initialize variables
-        self.max_len = 100000
-        self.time = deque(maxlen=self.max_len)
-        self.temperature = deque(maxlen=self.max_len)
-        self.extrusion_force = deque(maxlen=self.max_len)
-        self.die_swell = deque(maxlen=self.max_len)
-        self.die_temperature = deque(maxlen=self.max_len)
         self.initUI()
 
     def initUI(self):
@@ -79,91 +68,43 @@ class MainWindow(QMainWindow):
         # setup data reading worker
         self.ip = ip
         port = 10001
-        self._reset()  # 重置数据
+        self.data_widget.reset()  # 重置数据
 
         # 创建 TCP 连接以接收数据
         
         self.worker = TCPClient(ip, port)
 
         # 连接信号槽
-        self.connection_widget.disconnect_button.clicked.connect(self.worker.stop)
-        # self.worker.data_received.connect(self.data_widget.update_display)
+        self.connection_widget.disconnect_button.clicked.connect(self.disconnect_from_ip)
+        self.worker.data_received.connect(self.data_widget.update_display)
+        self.worker.data_received.connect(self.log_widget.update_log)
         self.worker.connection_status.connect(self.update_status)
         self.worker.connection_status.connect(self.connection_widget.update_button_status)
+        self.worker.connection_status.connect(self.command_widget.update_button_status)
         self.worker.run()
         
         # 创建 klipper 线程（用于查询平台状态和发送动作指令）
         klipper_port = 7125
         self.klipper_worker = KlipperWorker(ip, klipper_port)
         # # 连接信号槽
-        self.command_to_send.connect(self.klipper_worker.send_gcode)
+        self.command_widget.command_to_send.connect(self.klipper_worker.send_gcode)
         self.klipper_worker.connection_status.connect(self.command_widget.update_button_status)
         self.klipper_worker.response_received.connect(self.update_command_display)
         self.klipper_worker.run()
 
-    def _reset(self):
-        if self.time:
-            self.time.clear()
-        if self.extrusion_force:
-            self.extrusion_force.clear()
-        if self.die_temperature:
-            self.die_temperature.clear()
-        if self.die_swell:
-            self.die_swell.clear()
-        self.t0 = None
-
     @Slot()
     def disconnect_from_ip(self):
-        """断开连接时，清理 worker 和线程"""
-        self.statusBar().showMessage("断开连接中...")
-        print("断开连接中...")
-        # 停止 IP worker
-        if self.thread:
-            print("尝试停止 IP 线程...")
-            self.thread.quit() # 请求事件循环退出
-            self.thread.wait()
-        # if self.klipper_thread:
-        #     self.klipper_thread.quit() # 请求事件循环退出
-        #     self.klipper_thread.wait()
+        """断开连接时，清理 worker"""
+        if self.worker:
+            self.worker.stop()
+            self.worker = None
+        if self.klipper_worker:
+            self.klipper_worker.stop()
+            self.klipper_worker = None
         
-    @Slot()
-    def send_command(self):
-        command = self.command_input.text().strip()
-        if command:
-            print("--- [DEBUG] 'send_command' method called.")
-            if self.klipper_worker:
-                print(f"--- [DEBUG] klipper_worker object exists. ID: {id(self.klipper_worker)}")
-            else:
-                print("--- [DEBUG] ERROR: klipper_worker object is None or has been destroyed!")
-            self.command_display.appendPlainText(f"{command}")
-            # 调用 signal 发送指令
-            self.command_to_send.emit(command)
-            self.command_input.clear()
+    
                 
-    @Slot(str)
-    def update_display(self, data):
-        """处理从工作线程传来的数据"""
-        # 在日志中显示原始数据
-        self.log_display.appendPlainText(f"<-- [接收]: {data}")
-        json_data = json.loads(data)
-        try:
-            if self.t0 is None:
-                self.t0 = time.time()
-                t = 0.0
-            else:
-                t = time.time() - self.t0
-
-            self.temp_value_label.setText(f"{json_data["hotend_temperature"]:.1f} / {self.set_temperature:.1f} °C")
-            self.time.append(t)
-            self.die_temperature.append(json_data["die_temperature"])
-            self.extrusion_force.append(json_data["extrusion_force"])
-            self.die_swell.append(json_data["die_swell"])
-            self.force_curve.setData(list(self.time), list(self.extrusion_force))
-            self.dietemp_curve.setData(list(self.time), list(self.die_temperature))
-            self.dieswell_curve.setData(list(self.time), list(self.die_swell))
-
-        except (IndexError, ValueError):
-            self.temp_value_label.setText("解析错误")
+    
 
     @Slot(str)
     def update_status(self, status):

@@ -14,11 +14,12 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 import pyqtgraph as pg
+import time
+from collections import deque
 
 class ConnectionWidget(QWidget):
 
     ip = Signal(str)
-    disconnect_button_clicked = Signal()
 
     def __init__(self):
 
@@ -26,7 +27,7 @@ class ConnectionWidget(QWidget):
 
         # 组件
         self.ip_label = QLabel("IP 地址:")
-        self.ip_input = QLineEdit("192.168.114.48")
+        self.ip_input = QLineEdit("192.168.0.107")
         self.connect_button = QPushButton("连接")
         self.disconnect_button = QPushButton("断开")
         self.disconnect_button.setEnabled(False)
@@ -96,6 +97,7 @@ class DataPlotWidget(QWidget):
 
         super().__init__()
 
+        # 创建 pyqtgraph widgets
         self.force_plot = pg.PlotWidget(title="挤出力")
         self.dietemp_plot = pg.PlotWidget(title="出口温度")
         self.dieswell_plot = pg.PlotWidget(title="胀大比")
@@ -104,13 +106,64 @@ class DataPlotWidget(QWidget):
         self.dietemp_curve = self.dietemp_plot.plot(pen=pen) # 在图表上添加一条曲线
         self.dieswell_curve = self.dieswell_plot.plot(pen=pen) # 在图表上添加一条曲线
 
+        # 布局
         layout = QVBoxLayout()
         layout.addWidget(self.force_plot)
         layout.addWidget(self.dietemp_plot)
         layout.addWidget(self.dieswell_plot)
         self.setLayout(layout)
 
+        # 初始化存储数据的变量
+        self.initialize_variables()
+
+    def initialize_variables(self):
+        # initialize variables
+        self.max_len = 100000
+        self.time = deque(maxlen=self.max_len)
+        self.temperature = deque(maxlen=self.max_len)
+        self.extrusion_force = deque(maxlen=self.max_len)
+        self.die_swell = deque(maxlen=self.max_len)
+        self.die_temperature = deque(maxlen=self.max_len)
+        self.t0 = None
+    
+    @Slot(dict)
+    def update_display(self, data):
+        """处理从工作线程传来的数据"""
+        # 在日志中显示原始数据
+        
+        try:
+            if self.t0 is None:
+                self.t0 = time.time()
+                t = 0.0
+            else:
+                t = time.time() - self.t0
+
+            # self.temp_value_label.setText(f"{json_data["hotend_temperature"]:.1f} / {self.set_temperature:.1f} °C")
+            self.time.append(t)
+            self.die_temperature.append(data["die_temperature"])
+            self.extrusion_force.append(data["extrusion_force"])
+            self.die_swell.append(data["die_swell"])
+            self.force_curve.setData(list(self.time), list(self.extrusion_force))
+            self.dietemp_curve.setData(list(self.time), list(self.die_temperature))
+            self.dieswell_curve.setData(list(self.time), list(self.die_swell))
+
+        except (IndexError, ValueError):
+            self.temp_value_label.setText("解析错误")
+
+    def reset(self):
+        if self.time:
+            self.time.clear()
+        if self.extrusion_force:
+            self.extrusion_force.clear()
+        if self.die_temperature:
+            self.die_temperature.clear()
+        if self.die_swell:
+            self.die_swell.clear()
+        self.t0 = None
+
 class CommandWidget(QWidget):
+
+    command_to_send = Signal(str)
 
     def __init__(self):
 
@@ -133,6 +186,8 @@ class CommandWidget(QWidget):
         self.setLayout(layout)
 
         # 信号槽连接
+        self.send_button.clicked.connect(self.send_command)
+        self.command_input.returnPressed.connect(self.send_command)
 
     @Slot(str)
     def update_button_status(self, status):
@@ -144,6 +199,20 @@ class CommandWidget(QWidget):
             self.send_button.setEnabled(False)
             self.command_input.setEnabled(False)
 
+    @Slot()
+    def send_command(self):
+        command = self.command_input.text().strip()
+        if command:
+            print("--- [DEBUG] 'send_command' method called.")
+            if self.klipper_worker:
+                print(f"--- [DEBUG] klipper_worker object exists. ID: {id(self.klipper_worker)}")
+            else:
+                print("--- [DEBUG] ERROR: klipper_worker object is None or has been destroyed!")
+            self.command_display.appendPlainText(f"{command}")
+            # 调用 signal 发送指令
+            self.command_to_send.emit(command)
+            self.command_input.clear()
+            
 class LogWidget(QWidget):
 
     def __init__(self):
@@ -158,6 +227,10 @@ class LogWidget(QWidget):
         layout.addWidget(QLabel("原始数据日志:"))
         layout.addWidget(self.log_display) # 占据多行多列
         self.setLayout(layout)
+
+    @Slot(str)
+    def update_log(self, message):
+        self.log_display.appendPlainText(f"<-- [接收]: {message}")
 
 class VisionWidget(QWidget):
 

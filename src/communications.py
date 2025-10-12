@@ -222,6 +222,7 @@ class KlipperWorker(QObject):
         print(f"[DIAG] 2. Worker received command: '{command}'")
         self.message_queue.put(command)
 
-    def stop(self):
+    @asyncSlot()
+    async def stop(self):
         """停止线程"""
         self._running = False
