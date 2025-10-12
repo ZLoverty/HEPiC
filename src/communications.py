@@ -12,6 +12,9 @@ import websockets
 import json
 from queue import Queue
 from qasync import QEventLoop, asyncSlot
+import numpy as np
+from vision import filament_diameter, convert_to_grayscale, draw_filament_contour, find_longest_branch, ImageStreamer
+from collections import deque
 
 class TCPClient(QObject):
     # --- 信号 ---
@@ -226,3 +229,76 @@ class KlipperWorker(QObject):
     async def stop(self):
         """停止线程"""
         self._running = False
+
+class VideoWorker(QObject):
+    """
+    运行 ImageStreamer 的工作线程，通过信号发送图像帧。
+    """
+    new_frame_signal = Signal(np.ndarray)
+    finished = Signal()
+
+    def __init__(self, image_folder, fps):
+        super().__init__()
+        self.image_folder = image_folder
+        self.fps = fps
+        self.running = True
+        self.cap = ImageStreamer(self.image_folder, fps=self.fps)
+        self.frame_delay = 1 / self.fps  
+
+    @asyncSlot()
+    async def run(self):
+        
+        while self.running:
+            ret, frame = self.cap.read()
+            if ret:
+                self.new_frame_signal.emit(frame)
+            else:
+                print("Failed to read frame.")
+            
+            await asyncio.sleep(self.frame_delay)
+
+    @Slot()
+    def stop(self):
+        print("Stopping video worker thread.")
+        self.running = False
+        self.cap.release()
+
+class ProcessingWorker(QObject):
+
+    die_diameter_signal = Signal(float)
+    proc_frame_signal = Signal(np.ndarray)
+
+    def __init__(self):
+        super().__init__()
+        self.image_buffer = deque(maxlen=1000)
+
+    @Slot(np.ndarray)
+    def cache_frame(self, frame):
+        self.image_buffer.append(frame)
+
+    @Slot(dict)
+    def process_frame(self, data):
+        """当收到数据时，将队列里最新的图像取出分析，然后清空队列"""
+        if self.image_buffer:
+            img = self.image_buffer[-1] # 取最后一张
+            gray = convert_to_grayscale(img) # only process gray images    
+            try:
+                diameter, skeleton, dist_transform = filament_diameter(gray)
+                longest_branch = find_longest_branch(skeleton)
+                diameter_refine = dist_transform[longest_branch].mean() * 2.0
+                proc_frame = draw_filament_contour(gray, longest_branch, diameter_refine)
+                self.proc_frame_signal.emit(proc_frame)                                         
+            except ValueError as e:
+                # 已知纯色图片会导致检测失败，在此情况下可以不必报错继续运行，将出口直径记为 np.nan 即可
+                print("ValueError: 纯色图片")
+                self.die_diameter_signal.emit(np.nan)
+            except Exception as e:
+                raise f"{e}"
+        else:
+            print("No image cached, check camera connection!")
+            self.die_diameter_signal.emit(np.nan)
+        
+        self.image_buffer.clear()
+    
+    def stop(self):
+        self.image_buffer.clear()

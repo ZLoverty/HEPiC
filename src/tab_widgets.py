@@ -12,10 +12,15 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QPlainTextEdit, QLabel, QGridLayout, QMessageBox, QTabWidget
 )
-from PySide6.QtCore import QObject, QThread, Signal, Slot
+from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt
 import pyqtgraph as pg
 import time
 from collections import deque
+import numpy as np
+import cv2
+from PySide6.QtGui import QImage, QPixmap
+import json
+
 
 class ConnectionWidget(QWidget):
 
@@ -212,6 +217,15 @@ class CommandWidget(QWidget):
             # 调用 signal 发送指令
             self.command_to_send.emit(command)
             self.command_input.clear()
+    
+    @Slot(str)
+    def update_command_display(self, message):
+        try:
+            data = json.loads(message)
+            pretty_message = json.dumps(data, indent=4)
+            self.command_display.appendPlainText(pretty_message)
+        except json.JSONDecodeError:
+            self.command_display.appendPlainText(message)
             
 class LogWidget(QWidget):
 
@@ -237,7 +251,35 @@ class VisionWidget(QWidget):
     def __init__(self):
 
         super().__init__()
-        # 视觉组件的初始化代码可以放在这里
+
+        # 组件
+        self.live_view_label = QLabel("Waiting for camera feed...")
+        self.live_view_label.setAlignment(Qt.AlignCenter)
+        self.live_view_label.setStyleSheet("border: 1px solid black;")
+        self.live_view_label.setMinimumSize(200, 200)  # 最小尺寸
+        self.live_view_label.setMaximumSize(1000, 1000)  # 最大尺寸可以根据需要调整
+        self.status_label = QLabel("Diameter: N/A")
+
+        # 布局
         layout = QVBoxLayout()
-        layout.addWidget(QLabel("视觉组件区域（施工中）"))
+        layout.addWidget(self.live_view_label)
+        layout.addWidget(self.status_label)
         self.setLayout(layout)
+
+    def convert_cv_to_qpixmap(self, cv_img):
+        """将OpenCV图像 (numpy array) 转换为 QPixmap"""
+        h, w, ch = cv_img.shape
+        bytes_per_line = ch * w
+        # OpenCV 是 BGR, Qt 是 RGB
+        rgb_image = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
+        qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
+        return QPixmap.fromImage(qt_image)
+    
+    @Slot(np.ndarray)
+    def update_live_display(self, frame):
+        pixmap = self.convert_cv_to_qpixmap(frame)
+        self.live_view_label.setPixmap(pixmap.scaled(
+            self.live_view_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
+        ))
+    
+

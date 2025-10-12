@@ -9,13 +9,12 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 import pyqtgraph as pg
-import time
 from collections import deque
-from communications import TCPClient, KlipperWorker
-import json
+from communications import TCPClient, KlipperWorker, VideoWorker, ProcessingWorker
 from tab_widgets import ConnectionWidget, PlatformStatusWidget, DataPlotWidget, CommandWidget, LogWidget, VisionWidget
 import asyncio
 from qasync import QEventLoop, asyncSlot
+
 pg.setConfigOption("background", "w")
 pg.setConfigOption("foreground", "k")
     
@@ -23,12 +22,13 @@ pg.setConfigOption("foreground", "k")
 # 2. 创建主窗口类
 # ====================================================================
 class MainWindow(QMainWindow):
-
+    
     def __init__(self):
         super().__init__()
         self.setWindowTitle("串口数据显示与控制程序")
         self.setGeometry(900, 100, 700, 500)
         self.initUI()
+        self.init_variables()
 
     def initUI(self):
         # --- 创建控件 ---
@@ -42,14 +42,14 @@ class MainWindow(QMainWindow):
         self.data_widget = DataPlotWidget()
         self.command_widget = CommandWidget()
         self.log_widget = LogWidget()
-        self.vision_layout = VisionWidget()
+        self.vision_widget = VisionWidget()
         # 添加标签页到标签栏
         self.tabs.addTab(self.connection_widget, "连接")
         self.tabs.addTab(self.status_widget, "状态")
         self.tabs.addTab(self.data_widget, "数据")
         self.tabs.addTab(self.log_widget, "日志")
         self.tabs.addTab(self.command_widget, "指令")
-        self.tabs.addTab(self.vision_layout, "视觉")
+        self.tabs.addTab(self.vision_widget, "视觉")
         self.setCentralWidget(self.tabs)
 
         # 设置状态栏
@@ -63,6 +63,10 @@ class MainWindow(QMainWindow):
         
         self.connection_widget.ip.connect(self.connect_to_ip)
         
+    
+    def init_variables(self):
+        self.image_buffer = deque(maxlen=1000)
+
     @Slot(str)
     def connect_to_ip(self, ip):
         # setup data reading worker
@@ -71,9 +75,7 @@ class MainWindow(QMainWindow):
         self.data_widget.reset()  # 重置数据
 
         # 创建 TCP 连接以接收数据
-        
         self.worker = TCPClient(ip, port)
-
         # 连接信号槽
         self.connection_widget.disconnect_button.clicked.connect(self.disconnect_from_ip)
         self.worker.data_received.connect(self.data_widget.update_display)
@@ -83,14 +85,31 @@ class MainWindow(QMainWindow):
         self.worker.connection_status.connect(self.command_widget.update_button_status)
         self.worker.run()
         
-        # 创建 klipper 线程（用于查询平台状态和发送动作指令）
+        # 创建 klipper worker（用于查询平台状态和发送动作指令）
         klipper_port = 7125
         self.klipper_worker = KlipperWorker(ip, klipper_port)
-        # # 连接信号槽
+        # 连接信号槽
         self.command_widget.command_to_send.connect(self.klipper_worker.send_gcode)
         self.klipper_worker.connection_status.connect(self.command_widget.update_button_status)
-        self.klipper_worker.response_received.connect(self.update_command_display)
+        self.klipper_worker.response_received.connect(self.command_widget.update_command_display) # show command in command display window
+        self.klipper_worker.response_received.connect(self.log_widget.update_log) # also show command in log
         self.klipper_worker.run()
+
+        # 创建 video worker （用于接收和处理视频信号）
+        folder = "/home/zhengyang/Documents/GitHub/etp_ctl/test/filament_images_simulated"
+        fps = 10
+        self.video_worker = VideoWorker(image_folder=folder, fps=fps)
+        # 连接信号槽
+        self.video_worker.run()
+
+        # 创建 image processing worker 用于处理图像，探测熔体直径
+        self.processing_worker = ProcessingWorker()
+
+        # 连接信号槽
+        self.video_worker.new_frame_signal.connect(self.processing_worker.cache_frame)
+        self.worker.data_received.connect(self.processing_worker.process_frame)
+        self.processing_worker.proc_frame_signal.connect(self.vision_widget.update_live_display)
+        self.processing_thread.finished.connect(self.processing_worker.stop)
 
     @Slot()
     def disconnect_from_ip(self):
@@ -101,40 +120,39 @@ class MainWindow(QMainWindow):
         if self.klipper_worker:
             self.klipper_worker.stop()
             self.klipper_worker = None
+        if self.video_worker:
+            self.thread.quit()
+            self.thread.wait()
+        if self.processing_worker:
+            self.processing_thread.quit()
+            self.processing_thread.wait()
         
-    
-                
-    
-
     @Slot(str)
     def update_status(self, status):
         """更新状态栏信息"""
         self.statusBar().showMessage(status)
 
-    @Slot(str)
-    def update_status_klipper(self, status):
-        """更新UI状态和状态栏信息"""
-        self.statusBar().showMessage(status)
-        if self.klipper_thread:
-            print(f"--- [DEBUG] Klipper thread is running: {self.klipper_thread.isRunning()} ---")
+    
+
+    
+
+    # @Slot(str)
+    # def update_status_klipper(self, status):
+    #     """更新UI状态和状态栏信息"""
+    #     self.statusBar().showMessage(status)
+    #     if self.klipper_thread:
+    #         print(f"--- [DEBUG] Klipper thread is running: {self.klipper_thread.isRunning()} ---")
         
-        self.statusBar().showMessage(status)
+    #     self.statusBar().showMessage(status)
 
-        if status == "Connection successful!":
-            self.send_button.setEnabled(True)
-            self.command_input.setEnabled(True)
-        else: # "连接已断开" 或 "连接失败"
-            self.send_button.setEnabled(False)
-            self.command_input.setEnabled(False)
+    #     if status == "Connection successful!":
+    #         self.send_button.setEnabled(True)
+    #         self.command_input.setEnabled(True)
+    #     else: # "连接已断开" 或 "连接失败"
+    #         self.send_button.setEnabled(False)
+    #         self.command_input.setEnabled(False)
 
-    @Slot(str)
-    def update_command_display(self, message):
-        try:
-            data = json.loads(message)
-            pretty_message = json.dumps(data, indent=4)
-            self.command_display.appendPlainText(pretty_message)
-        except json.JSONDecodeError:
-            self.command_display.appendPlainText(message)
+    
     
     def closeEvent(self, event):
         """关闭窗口时，优雅地停止后台线程"""
