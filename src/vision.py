@@ -151,9 +151,9 @@ def find_longest_branch(skeleton):
         print(f"ValueError: {e}")
         return None
     
-    branch_data = summarize(skel_obj) # analyze the branches in the skeleton
+    branch_data = summarize(skel_obj, separator="_") # analyze the branches in the skeleton
 
-    long_branch_id = branch_data["branch-distance"].argmax() + 1 # find the id of the longest branch (it's the data index + 1)
+    long_branch_id = branch_data["branch_distance"].argmax() + 1 # find the id of the longest branch (it's the data index + 1)
 
     branch_labels = skel_obj.path_label_image() # get path label image where locations of skeleton are labeled
 
