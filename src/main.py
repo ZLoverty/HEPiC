@@ -11,7 +11,7 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 import pyqtgraph as pg
 from collections import deque
 from communications import TCPClient, KlipperWorker, VideoWorker, ProcessingWorker
-from tab_widgets import ConnectionWidget, PlatformStatusWidget, DataPlotWidget, CommandWidget, LogWidget, VisionWidget
+from tab_widgets import ConnectionWidget, PlatformStatusWidget, DataPlotWidget, CommandWidget, LogWidget, VisionWidget, TestWidget
 import asyncio
 from qasync import QEventLoop, asyncSlot
 
@@ -42,6 +42,7 @@ class MainWindow(QMainWindow):
         self.command_widget = CommandWidget()
         self.log_widget = LogWidget()
         self.vision_widget = VisionWidget()
+        self.test_widget = TestWidget()
         # 添加标签页到标签栏
         self.tabs.addTab(self.connection_widget, "连接")
         self.tabs.addTab(self.status_widget, "状态")
@@ -49,6 +50,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.log_widget, "日志")
         self.tabs.addTab(self.command_widget, "指令")
         self.tabs.addTab(self.vision_widget, "视觉")
+        self.tabs.addTab(self.test_widget, "测试")
         self.setCentralWidget(self.tabs)
 
         # 设置状态栏
@@ -100,11 +102,13 @@ class MainWindow(QMainWindow):
 
         # 创建 image processing worker 用于处理图像，探测熔体直径
         self.processing_worker = ProcessingWorker()
-
         # 连接信号槽
         self.video_worker.new_frame_signal.connect(self.processing_worker.cache_frame)
         self.worker.data_received.connect(self.processing_worker.process_frame)
         self.processing_worker.proc_frame_signal.connect(self.vision_widget.update_live_display)
+
+        # 连接 gcode 文件运行和其运行槽函数
+        self.test_widget.run_button.clicked.connect(self.run_gcode_from_file)
 
     @Slot()
     def disconnect_from_ip(self):
@@ -125,28 +129,12 @@ class MainWindow(QMainWindow):
         """更新状态栏信息"""
         self.statusBar().showMessage(status)
 
-    
+    @Slot()
+    def run_gcode_from_file(self):
+        """运行从文件里来的 gcode """
+        if self.test_widget.gcode and self.klipper_worker:
+            self.klipper_worker.send_gcode(self.test_widget.gcode)
 
-    
-
-    # @Slot(str)
-    # def update_status_klipper(self, status):
-    #     """更新UI状态和状态栏信息"""
-    #     self.statusBar().showMessage(status)
-    #     if self.klipper_thread:
-    #         print(f"--- [DEBUG] Klipper thread is running: {self.klipper_thread.isRunning()} ---")
-        
-    #     self.statusBar().showMessage(status)
-
-    #     if status == "Connection successful!":
-    #         self.send_button.setEnabled(True)
-    #         self.command_input.setEnabled(True)
-    #     else: # "连接已断开" 或 "连接失败"
-    #         self.send_button.setEnabled(False)
-    #         self.command_input.setEnabled(False)
-
-    
-    
     def closeEvent(self, event):
         """关闭窗口时，优雅地停止后台线程"""
         self.log_display.appendPlainText("Closing application...")
