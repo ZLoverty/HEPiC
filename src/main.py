@@ -25,7 +25,7 @@ class MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("串口数据显示与控制程序")
+        self.setWindowTitle("挤出测试平台")
         self.setGeometry(900, 100, 700, 500)
         self.initUI()
 
@@ -92,7 +92,7 @@ class MainWindow(QMainWindow):
         self.klipper_worker.run()
 
         # 创建 video worker （用于接收和处理视频信号）
-        folder = "/home/zhengyang/Documents/GitHub/etp_ctl/test/filament_images_simulated"
+        folder = "/Users/zhengyang/Documents/GitHub/etp_ctl/test/filament_images_simulated"
         fps = 10
         self.video_worker = VideoWorker(image_folder=folder, fps=fps)
         # 连接信号槽
