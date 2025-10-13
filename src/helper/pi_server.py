@@ -1,6 +1,10 @@
 import asyncio
 import json
 import random
+import sys
+
+freq = float(sys.argv[1])
+delay = 1 / freq
 
 async def handle_client(reader, writer):
     """
@@ -40,7 +44,7 @@ async def handle_client(reader, writer):
                 await writer.drain()
                 
                 # 4. 等待一段时间再发送下一次，避免刷屏和CPU 100%
-                await asyncio.sleep(1)
+                await asyncio.sleep(delay)
 
             except Exception as e:
                 print(f"向 {addr} 发送数据时出错: {e}")
