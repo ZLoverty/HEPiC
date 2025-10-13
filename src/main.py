@@ -5,7 +5,7 @@ etp_ctl: A PySide6 GUI application for the Extrusion Test Platform experiment co
 import sys
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QPushButton, QPlainTextEdit, QLabel, QGridLayout, QMessageBox, QTabWidget
+    QLineEdit, QPushButton, QPlainTextEdit, QLabel, QGridLayout, QMessageBox, QTabWidget, QStackedWidget
 )
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 import pyqtgraph as pg
@@ -14,6 +14,7 @@ from communications import TCPClient, KlipperWorker, VideoWorker, ProcessingWork
 from tab_widgets import ConnectionWidget, PlatformStatusWidget, DataPlotWidget, CommandWidget, LogWidget, VisionWidget, TestWidget
 import asyncio
 from qasync import QEventLoop, asyncSlot
+from config import Config
 
 pg.setConfigOption("background", "w")
 pg.setConfigOption("foreground", "k")
@@ -23,15 +24,22 @@ pg.setConfigOption("foreground", "k")
 # ====================================================================
 class MainWindow(QMainWindow):
     
+    self_test_msg = Signal(str)
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("挤出测试平台")
         self.setGeometry(900, 100, 700, 500)
+        self.init_variables()
         self.initUI()
+        
 
     def initUI(self):
         # --- 创建控件 ---
         # 标签栏
+
+        self.stacked_widget = QStackedWidget()
+
         self.tabs = QTabWidget()
         self.tabs.setTabPosition(QTabWidget.TabPosition.West) # 关键！把标签放到左边
         self.tabs.setMovable(True) # 让标签页可以拖动排序
@@ -44,26 +52,41 @@ class MainWindow(QMainWindow):
         self.vision_widget = VisionWidget()
         self.test_widget = TestWidget()
         # 添加标签页到标签栏
-        self.tabs.addTab(self.connection_widget, "连接")
+        self.stacked_widget.addWidget(self.connection_widget)
+        self.stacked_widget.addWidget(self.tabs)
         self.tabs.addTab(self.status_widget, "状态")
         self.tabs.addTab(self.data_widget, "数据")
         self.tabs.addTab(self.log_widget, "日志")
         self.tabs.addTab(self.command_widget, "指令")
         self.tabs.addTab(self.vision_widget, "视觉")
         self.tabs.addTab(self.test_widget, "测试")
-        self.setCentralWidget(self.tabs)
+        self.setCentralWidget(self.stacked_widget)
 
         # 设置状态栏
-        self.statusBar().showMessage("准备就绪")
+        self.statusBar().showMessage(f"挤出测试平台 v{Config.version}")
 
         # --- 连接信号与槽 ---
         
         # self.command_input.returnPressed.connect(self.send_command)
         
         self.connection_widget.ip.connect(self.connect_to_ip)
-        self.connection_widget.disconnect_button.clicked.connect(self.disconnect_from_ip)
         self.command_widget.send_button.clicked.connect(self.command_widget.send_command)
         self.command_widget.command_input.returnPressed.connect(self.command_widget.send_command)
+        self.self_test_msg.connect(self.connection_widget.update_self_test)
+        
+    def init_variables(self):    
+        self.self_test_msg_list = deque(maxlen=5)
+
+    @Slot(str)
+    def add_new_message(self, new_msg):
+        self.self_test_msg_list.append(new_msg)
+        msg = "\n".join(self.self_test_msg_list)
+        self.self_test_msg.emit(msg)
+
+    @Slot(int)
+    def show_UI(self, UI_index):
+        """Show main UI"""
+        self.stacked_widget.setCurrentIndex(UI_index)
 
     @Slot(str)
     def connect_to_ip(self, ip):
@@ -77,8 +100,9 @@ class MainWindow(QMainWindow):
         # 连接信号槽
         
         self.worker.data_received.connect(self.data_widget.update_display)
-        self.worker.data_received.connect(self.log_widget.update_log)
-        self.worker.connection_status.connect(self.update_status)
+        # self.worker.data_received.connect(self.log_widget.update_log)
+        self.worker.connection_status.connect(self.connection_widget.update_self_test)
+        self.worker.connection_status.connect(self.add_new_message)
         self.worker.connection_status.connect(self.connection_widget.update_button_status)
         self.worker.connection_status.connect(self.command_widget.update_button_status)
         self.worker.run()
@@ -89,6 +113,7 @@ class MainWindow(QMainWindow):
         # 连接信号槽
         self.command_widget.command_to_send.connect(self.klipper_worker.send_gcode)
         self.klipper_worker.connection_status.connect(self.command_widget.update_button_status)
+        self.klipper_worker.connection_status.connect(self.add_new_message)
         self.klipper_worker.response_received.connect(self.command_widget.update_command_display) # show command in command display window
         self.klipper_worker.response_received.connect(self.log_widget.update_log) # also show command in log
         self.klipper_worker.run()

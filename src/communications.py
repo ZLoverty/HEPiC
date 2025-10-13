@@ -21,6 +21,7 @@ class TCPClient(QObject):
     connection_status = Signal(str)
     # 收到并解析完数据后发出
     data_received = Signal(dict)
+    connected = Signal(int)
 
     def __init__(self, host, port):
         super().__init__()
@@ -31,11 +32,9 @@ class TCPClient(QObject):
     @asyncSlot()
     async def run(self):
         if await self.connect():
-            try:
-                await self._receive_task
-            finally:
-                print("\n--- 准备关闭客户端 ---")
-                self.stop()
+            self.is_running = True
+            task = asyncio.create_task(self.receive_data())
+            asyncio.wait(task)
         else:
             self.stop()
 
@@ -46,33 +45,22 @@ class TCPClient(QObject):
         """
         try:
             # 创建异步 TCP 连接
-            print(f"正在连接到 {self.host}:{self.port}...")
-            self.connection_status.emit(f"正在尝试连接 {self.host}:{self.port}...")
-            self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.host, self.port), timeout=5.0)
-            # 直到连接成功，更改状态为 running
-            self.is_running = True
-            print("连接成功！")
-            self.connection_status.emit("连接成功")
-
-            # 3. 启动一个专门用于接收数据的任务
-            self._receive_task = asyncio.create_task(self._receive_loop())
+            print(f"正在连接树莓派 {self.host}: {self.port} ...")
+            self.connection_status.emit(f"正在连接挤出测试平台树莓派 {self.host}: {self.port} ...")
+            self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.host, self.port), timeout=2.0)
+            print("树莓派连接成功！")
+            self.connection_status.emit("树莓派连接成功！")
+            self.connected.emit(1)
             return True
-
         except (asyncio.TimeoutError, OSError) as e:
-            print(f"连接超时")
-            self.connection_status.emit(f"连接超时，请检查设备是否开启，IP 地址是否正确")
+            print(f"树莓派连接超时")
+            self.connection_status.emit(f"树莓派连接超时，请检查设备是否开启，IP 地址是否正确")
             return False
-        
-        except Exception as e:
-            print(f"连接失败: {e}")
-            self.connection_status.emit(f"连接失败: {e}")
-            return False
-
-    async def _receive_loop(self):
+    
+    async def receive_data(self):
         """
         这个函数在后台线程中运行，持续接收数据。
         """
-        print("数据接收循环已启动...")
         while self.is_running:
             try:
                 # 读取一行数据
@@ -93,16 +81,9 @@ class TCPClient(QObject):
                 print("连接被重置或中止。")
                 self.connection_status.emit("连接已断开")
                 break
-            except Exception as e:
-                # 如果_is_running是False，说明是主动关闭，这个错误是预期的
-                if self.is_running:
-                    print(f"接收数据时出错: {e}")
-                    self.connection_status.emit(f"连接错误: {e}")
-                break
         
         # 循环结束后，确保状态被更新
         self.is_running = False
-        print("数据接收循环已停止。")
 
     @asyncSlot()
     async def stop(self):
@@ -110,18 +91,11 @@ class TCPClient(QObject):
         关闭连接并停止接收线程。
         """
         if not self.is_running:
+            self.connection_status.emit("连接已断开")
             return
 
         print("正在关闭连接...")
         self.is_running = False
-
-        if self.writer:
-            self.writer.close()
-            await self.writer.wait_closed()
-        
-        if self._receive_task:
-            self._receive_task.cancel()
-
         self.connection_status.emit("连接已断开")
         print("连接已断开")
 
@@ -148,12 +122,13 @@ class KlipperWorker(QObject):
     @asyncSlot()
     async def run(self):
         """Asyncio 事件循环，处理 WebSocket 连接和通信"""
-
         try:
-            print(f"正在尝试连接到 {self.uri}...")
-            async with websockets.connect(self.uri) as websocket:
-                print("WebSocket连接成功！")
-
+            print(f"正在连接 Klipper {self.uri} ...")
+            self.connection_status.emit(f"正在连接 Klipper {self.uri} ...")
+            # async with asyncio.wait_for(websockets.connect(self.uri), timeout=2.0) as websocket:
+            async with websockets.connect(self.uri, open_timeout=2.0) as websocket:
+                print("Klipper 连接成功！")
+                self.connection_status.emit("Klipper 连接成功！")
                 subscribe_message = {
                     "jsonrpc": "2.0",
                     "method": "printer.objects.subscribe",
@@ -174,13 +149,11 @@ class KlipperWorker(QObject):
                     
                 await asyncio.gather(listener_task, sender_task)
 
-
         except (websockets.exceptions.ConnectionClosedError, ConnectionRefusedError) as e:
-            print(f"连接断开或失败: {e}")
-
-        except Exception as e:
-            print(f"发生未知错误: {e}")
-  
+            print(f"Klipper 连接失败")
+        except TimeoutError as e:
+            print("Klipper 连接超时，检查服务器是否开启")
+            self.connection_status.emit("Klipper 连接超时，检查服务器是否开启")
 
     async def message_listener(self, websocket):
         # 监听来自服务器的消息
