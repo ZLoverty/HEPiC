@@ -120,8 +120,9 @@ def draw_filament_contour(img, skeleton, diameter):
         try:
             cv2.circle(reconstructed_mask, center, int(round(diameter//2)), 255, thickness=-1)
         except ValueError as e:
-            print(f"Fail to process the image: {e}")
             return img
+        except Exception as e:
+            print(f"未知错误: {e}")
 
     contours, _ = cv2.findContours(reconstructed_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
