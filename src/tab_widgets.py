@@ -242,40 +242,21 @@ class LogWidget(QWidget):
     def update_log(self, message):
         self.log_display.appendPlainText(f"<-- [接收]: {message}")
 
-class VisionWidget(QWidget):
+class VisionWidget(pg.GraphicsLayoutWidget):
 
     def __init__(self):
 
         super().__init__()
 
         # 组件
-        self.live_view_label = QLabel("Waiting for camera feed...")
-        self.live_view_label.setAlignment(Qt.AlignCenter)
-        self.live_view_label.setStyleSheet("border: 1px solid black;")
-        self.live_view_label.setMinimumSize(200, 200)  # 最小尺寸
-        self.live_view_label.setMaximumSize(1000, 1000)  # 最大尺寸可以根据需要调整
-        self.status_label = QLabel("Diameter: N/A")
-
-        # 布局
-        layout = QVBoxLayout()
-        layout.addWidget(self.live_view_label)
-        layout.addWidget(self.status_label)
-        self.setLayout(layout)
-
-    def convert_cv_to_qpixmap(self, cv_img):
-        """将OpenCV图像 (numpy array) 转换为 QPixmap"""
-        h, w, ch = cv_img.shape
-        bytes_per_line = ch * w
-        # OpenCV 是 BGR, Qt 是 RGB
-        rgb_image = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
-        qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
-        return QPixmap.fromImage(qt_image)
+        self.view_box = self.addViewBox(row=0, col=0)
+        self.view_box.setAspectLocked(True) # 保持图像原始宽高比
+        self.view_box.invertY(True)
+        self.img_item = pg.ImageItem()
+        self.view_box.addItem(self.img_item)
     
     @Slot(np.ndarray)
     def update_live_display(self, frame):
-        pixmap = self.convert_cv_to_qpixmap(frame)
-        self.live_view_label.setPixmap(pixmap.scaled(
-            self.live_view_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
-        ))
+        self.img_item.setImage(frame, axisOrder="row-major")
     
 
