@@ -10,7 +10,6 @@ import time
 import asyncio
 import websockets
 import json
-from queue import Queue
 from qasync import QEventLoop, asyncSlot
 import numpy as np
 from vision import filament_diameter, convert_to_grayscale, draw_filament_contour, find_longest_branch, ImageStreamer
@@ -135,100 +134,124 @@ class KlipperWorker(QObject):
     # connection_status: 连接状态变化时发出
     response_received = Signal(str)
     connection_status = Signal(str)
+    hotend_temperature = Signal(float)
 
     def __init__(self, host, port):
         super().__init__()
         self.host = host
         self.port = port
-        self._running = True
-        self.message_queue = Queue() # 线程安全的消息队列
-        self.request_id = 1
-        self._stop_event = asyncio.Event()
+        self.is_running = True
+        self.message_queue = asyncio.Queue() # klipper 的消息队列
+        self.gcode_queue = asyncio.Queue() # gcode 的消息队列
+        self.uri = f"ws://{self.host}:{self.port}/websocket"
 
-    @Slot()
-    def run(self):
-        """线程主循环"""
-        # 使用 asyncio 运行 WebSocket 客户端
-        try:
-            asyncio.run(self.main_loop())
-        except Exception as e:
-            self.connection_status.emit(f"Klipper 连接失败: {e}")
-
-    async def main_loop(self):
+    @asyncSlot()
+    async def run(self):
         """Asyncio 事件循环，处理 WebSocket 连接和通信"""
-        uri = f"ws://{self.host}:{self.port}/websocket"
-        
-        while self._running:
-            try:
-                self.connection_status.emit(f"正在连接 Klipper 服务 {uri}...")
-                print(f"[DIAG] Attempting to connect to {uri}...")
-                async with websockets.connect(uri) as websocket:
-                    self.connection_status.emit("连接成功")
-                    print("[DIAG] WebSocket connection established.")
-                    
-                    # 并发处理接收消息和发送消息
-                    consumer_task = asyncio.create_task(self.message_consumer(websocket))
-                    producer_task = asyncio.create_task(self.message_producer(websocket))
 
-                    tasks = [consumer_task, producer_task]
-                    await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-
-            except (websockets.exceptions.ConnectionClosed, ConnectionRefusedError, OSError) as e:
-                # 捕获已知的连接错误
-                self.connection_status.emit(f"连接失败: {e}")
-            except Exception as e:
-                # 捕获其他未知错误
-                self.connection_status.emit(f"未知错误: {e}")
-        
-            if self._running:
-                self.connection_status.emit("5s 后尝试重连...")
-                try:
-                    # 等待5秒，但如果在这期间停止信号被触发，会立刻唤醒
-                    await asyncio.wait_for(self._stop_event.wait(), timeout=5.0)
-                    # 如果被唤醒，说明收到了停止信号，跳出 while 循环
-                    break 
-                except asyncio.TimeoutError:
-                    # 5秒正常结束，继续下一次重连尝试
-                    pass
-
-    async def message_consumer(self, websocket):
-        """持续从 WebSocket 接收消息"""
-        async for message in websocket:
-            # print(f"[DIAG] 4. Worker received raw response:\n{message}\n")
-            self.response_received.emit(str(message))
-
-    async def message_producer(self, websocket):
-        """从队列中获取消息并发送到 WebSocket"""
-        while self._running:
-            if not self.message_queue.empty():
-                command = self.message_queue.get()
+        try:
+            print(f"正在尝试连接到 {self.uri}...")
+            async with websockets.connect(self.uri) as websocket:
+                print("WebSocket连接成功！")
                 
-                # Moonraker 需要 JSON-RPC 格式
-                request = {
+                # 构造订阅请求
+                # 我们想获取挤出机温度、热床温度和打印状态
+                # subscribe_message = {
+                #     "jsonrpc": "2.0",
+                #     "id": 1234, # 一个随机的ID
+                #     "method": "printer.gcode.script",
+                #     "params": {
+                #         "script": "G91\nG1 E10 G300"
+                #     },
+                # }
+                
+                subscribe_message = {
                     "jsonrpc": "2.0",
-                    "method": "printer.gcode.script",
-                    "params": {"script": command},
-                    "id": self.request_id
+                    "method": "printer.objects.subscribe",
+                    "params": {
+                        "objects": {
+                            "extruder": ["temperature"]
+                        }
+                    },
+                    "id": 1 # 一个随机的ID
                 }
-                self.request_id += 1
 
-                json_request = json.dumps(request)
-                
-                print(f"[DIAG] 3. Worker sending JSON:\n{json_request}\n")
+                # 发送订阅请求
+                await websocket.send(json.dumps(subscribe_message))
+                print("已发送状态订阅请求...")
 
-                await websocket.send(json_request)
-            await asyncio.sleep(.1) # 避免忙循环
+                listener_task = asyncio.create_task(self.message_listener(websocket))
+                sender_task = asyncio.create_task(self.gcode_sender(websocket))
+                    
+                await asyncio.gather(listener_task, sender_task)
 
-    @Slot(str)
-    def send_gcode(self, command):
+
+        except (websockets.exceptions.ConnectionClosedError, ConnectionRefusedError) as e:
+            print(f"连接断开或失败: {e}")
+
+        except Exception as e:
+            print(f"发生未知错误: {e}")
+  
+
+    async def message_listener(self, websocket):
+        # 监听来自服务器的消息
+        async for message in websocket:
+            data = json.loads(message)
+            # 将收到的原始数据放入队列，交给消费者处理
+            await self.message_queue.put(data)
+
+    async def gcode_sender(self, websocket):
+        # 发送用户输入的gcode消息
+        while self.is_running:
+            gcode = await self.gcode_queue.get()
+            gcode_message = {
+                "jsonrpc": "2.0",
+                "id": 2, # 一个随机的ID
+                "method": "printer.gcode.script",
+                "params": {
+                    "script": gcode
+                },
+            }
+            await websocket.send(json.dumps(gcode_message)) 
+
+    @asyncSlot(str)
+    async def send_gcode(self, command):
         """接收来自主线程的命令，并放入队列"""
         print(f"[DIAG] 2. Worker received command: '{command}'")
-        self.message_queue.put(command)
+        await self.gcode_queue.put(command)
+
+    async def data_processor(self):
+        """
+        消费者：从队列中等待并获取数据，然后进行处理。本函数需要处理多种与 Klipper 的通讯信息，至少包含 i) 订阅回执，ii) gcode 发送。
+        """
+        print("数据处理器已启动，等待数据...")
+        while True:
+            # 核心：在这里await，等待队列中有新数据
+            data = await self.message_queue.get()
+
+            # Moonraker的数据有两种主要类型：
+            # 1. 对你请求的响应 (包含 "result" 键)
+            # 2. 服务器主动推送的状态更新 (方法为 "notify_status_update")
+            # print(data)
+            if "method" in data: 
+                if data["method"] == "notify_status_update": # 判断是否是状态回执
+                    try:
+                        temp = data["params"][0]["extruder"]["temperature"]
+                    except:
+                        temp = np.nan
+                    self.hotend_temperature.emit(temp)
+                elif data["method"] == "printer.gcode.script":
+                    async with websockets.connect(self.uri) as websocket:
+                        await websocket.send(json.dumps(data))
+            # 标记任务完成，这对于优雅退出很重要
+            self.message_queue.task_done()
+
+    
 
     @asyncSlot()
     async def stop(self):
         """停止线程"""
-        self._running = False
+        self.is_running = False
 
 class VideoWorker(QObject):
     """

@@ -28,7 +28,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("串口数据显示与控制程序")
         self.setGeometry(900, 100, 700, 500)
         self.initUI()
-        self.init_variables()
 
     def initUI(self):
         # --- 创建控件 ---
@@ -56,16 +55,13 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("准备就绪")
 
         # --- 连接信号与槽 ---
-        # self.connect_button.clicked.connect(self.connect_to_ip)
-        # self.disconnect_button.clicked.connect(self.disconnect_from_ip)
-        # self.send_button.clicked.connect(self.send_command)
+        
         # self.command_input.returnPressed.connect(self.send_command)
         
         self.connection_widget.ip.connect(self.connect_to_ip)
-        
-    
-    def init_variables(self):
-        self.image_buffer = deque(maxlen=1000)
+        self.connection_widget.disconnect_button.clicked.connect(self.disconnect_from_ip)
+        self.command_widget.send_button.clicked.connect(self.command_widget.send_command)
+        self.command_widget.command_input.returnPressed.connect(self.command_widget.send_command)
 
     @Slot(str)
     def connect_to_ip(self, ip):
@@ -77,7 +73,7 @@ class MainWindow(QMainWindow):
         # 创建 TCP 连接以接收数据
         self.worker = TCPClient(ip, port)
         # 连接信号槽
-        self.connection_widget.disconnect_button.clicked.connect(self.disconnect_from_ip)
+        
         self.worker.data_received.connect(self.data_widget.update_display)
         self.worker.data_received.connect(self.log_widget.update_log)
         self.worker.connection_status.connect(self.update_status)
@@ -109,7 +105,6 @@ class MainWindow(QMainWindow):
         self.video_worker.new_frame_signal.connect(self.processing_worker.cache_frame)
         self.worker.data_received.connect(self.processing_worker.process_frame)
         self.processing_worker.proc_frame_signal.connect(self.vision_widget.update_live_display)
-        self.processing_thread.finished.connect(self.processing_worker.stop)
 
     @Slot()
     def disconnect_from_ip(self):
@@ -121,11 +116,9 @@ class MainWindow(QMainWindow):
             self.klipper_worker.stop()
             self.klipper_worker = None
         if self.video_worker:
-            self.thread.quit()
-            self.thread.wait()
+            self.video_worker.stop()
         if self.processing_worker:
-            self.processing_thread.quit()
-            self.processing_thread.wait()
+            self.processing_worker.stop()
         
     @Slot(str)
     def update_status(self, status):

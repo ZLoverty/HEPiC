@@ -32,7 +32,7 @@ class ConnectionWidget(QWidget):
 
         # 组件
         self.ip_label = QLabel("IP 地址:")
-        self.ip_input = QLineEdit("192.168.0.107")
+        self.ip_input = QLineEdit("192.168.114.48")
         self.connect_button = QPushButton("连接")
         self.disconnect_button = QPushButton("断开")
         self.disconnect_button.setEnabled(False)
@@ -209,10 +209,6 @@ class CommandWidget(QWidget):
         command = self.command_input.text().strip()
         if command:
             print("--- [DEBUG] 'send_command' method called.")
-            if self.klipper_worker:
-                print(f"--- [DEBUG] klipper_worker object exists. ID: {id(self.klipper_worker)}")
-            else:
-                print("--- [DEBUG] ERROR: klipper_worker object is None or has been destroyed!")
             self.command_display.appendPlainText(f"{command}")
             # 调用 signal 发送指令
             self.command_to_send.emit(command)
