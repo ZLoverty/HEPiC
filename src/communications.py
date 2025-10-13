@@ -153,18 +153,7 @@ class KlipperWorker(QObject):
             print(f"正在尝试连接到 {self.uri}...")
             async with websockets.connect(self.uri) as websocket:
                 print("WebSocket连接成功！")
-                
-                # 构造订阅请求
-                # 我们想获取挤出机温度、热床温度和打印状态
-                # subscribe_message = {
-                #     "jsonrpc": "2.0",
-                #     "id": 1234, # 一个随机的ID
-                #     "method": "printer.gcode.script",
-                #     "params": {
-                #         "script": "G91\nG1 E10 G300"
-                #     },
-                # }
-                
+
                 subscribe_message = {
                     "jsonrpc": "2.0",
                     "method": "printer.objects.subscribe",

@@ -10,8 +10,9 @@ Tabs widgets for layout management. Contains
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QPushButton, QPlainTextEdit, QLabel, QGridLayout, QMessageBox, QTabWidget
+    QLineEdit, QPushButton, QPlainTextEdit, QLabel, QGridLayout, QMessageBox, QTabWidget, QFileDialog, QTextEdit, 
 )
+from PySide6.QtGui import QTextCursor, QTextCharFormat, QColor
 from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt
 import pyqtgraph as pg
 import time
@@ -260,3 +261,114 @@ class VisionWidget(pg.GraphicsLayoutWidget):
         self.img_item.setImage(frame, axisOrder="row-major")
     
 
+class TestWidget(QWidget):
+
+    gcode_save_signal = Signal()
+    run_signal = Signal()
+
+    def __init__(self):
+        super().__init__()
+
+        # 组件
+        self.gcode_display = QTextEdit()
+        self.gcode_display.setReadOnly(True)
+        self.open_button = QPushButton("打开")
+        self.clear_button = QPushButton("清除")
+        self.run_button = QPushButton("运行")
+
+        # 布局
+        layout = QVBoxLayout()
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(self.open_button)
+        button_layout.addWidget(self.clear_button)
+        button_layout.addWidget(self.run_button)
+        layout.addWidget(self.gcode_display)
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+
+        # 信号槽连接
+        self.open_button.clicked.connect(self.on_click_open)
+        self.clear_button.clicked.connect(self.on_click_clear)
+        self.gcode_save_signal.connect(self.update_display)
+
+        # 变量
+        self.gcode = None
+
+    def on_click_open(self):
+        """打开 gcode 文件，清理注释，显示在 display 窗口"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择一个文件",
+            "",
+            "G-code (*.gcode)"
+        )
+
+        if file_path:
+            print(f"选择的文件路径是: {file_path}")
+            with open(file_path, "r") as f:
+                gcode = f.read()
+            self.gcode = self.clean_gcode(gcode)
+            self.gcode_save_signal.emit()
+        else:
+            print("没有选择任何文件")
+            return
+        
+    def on_click_clear(self):
+        """清理 gcode 显示，重置 gcode 变量"""
+        self.gcode = None
+        self.update_display()
+
+    def clean_gcode(self, gcode):
+        """移除 gcode 注释，返回干净的 gcode
+        
+        Parameters
+        ----------
+        gcode : string
+            Original gcode text
+        
+        Returns
+        -------
+        string
+            cleaned gcode text
+        """
+        gcode_list = []
+        for line in gcode.split("\n"):
+            # 查找注释字符';'的位置
+            comment_index = line.find(';')
+
+            # 如果找到了注释
+            if comment_index != -1:
+                # 截取分号之前的部分
+                command_part = line[:comment_index]
+            else:
+                # 如果没有注释，则保留整行
+                command_part = line
+
+            # 去除处理后字符串两端的空白字符（如空格、换行符）
+            cleaned_line = command_part.strip()
+
+            if cleaned_line:
+                gcode_list.append(cleaned_line)
+        
+        return "\n".join(gcode_list)
+    
+    @Slot()
+    def update_display(self):
+        self.gcode_display.setPlainText(self.gcode)
+        self.highlight_current_line(1)
+
+    def highlight_current_line(self, line_number):
+        # 高亮当前行
+        cursor = self.gcode_display.textCursor()
+        cursor.movePosition(QTextCursor.StartOfBlock)
+        for i in range(line_number):
+            cursor.movePosition(QTextCursor.NextBlock)
+        cursor.movePosition(QTextCursor.NextBlock, QTextCursor.KeepAnchor)
+        
+        # 设置高亮样式
+        char_format = QTextCharFormat()
+        char_format.setBackground(QColor("yellow"))  # 设置背景为黄色
+        char_format.setForeground(QColor("black"))  # 设置字体颜色为黑色
+        cursor.setCharFormat(char_format)
+        
+        self.gcode_display.setTextCursor(cursor)
