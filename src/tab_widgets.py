@@ -10,10 +10,10 @@ Tabs widgets for layout management. Contains
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QPushButton, QPlainTextEdit, QLabel, QGridLayout, QMessageBox, QTabWidget, QFileDialog, QTextEdit, QLabel
+    QLineEdit, QPushButton, QPlainTextEdit, QLabel, QGridLayout, QMessageBox, QTabWidget, QFileDialog, QTextEdit, QLabel, QStyle
 )
 from PySide6.QtGui import QTextCursor, QTextCharFormat, QColor
-from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt
+from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt, QSize
 import pyqtgraph as pg
 import time
 from collections import deque
@@ -82,31 +82,54 @@ class ConnectionWidget(QWidget):
         
 class PlatformStatusWidget(QWidget):
 
+    set_temperature = Signal(float)
+
     def __init__(self):
         
         super().__init__()
-
+        placeholder = "***"
         # 组件
         self.temp_label = QLabel("温度:")
-        self.temp_value_label = QLabel("N/A")
+        self.temp_value_label = QLabel(f"{placeholder:5s} /")
+        self.temp_input = QLineEdit("")
+        self.temp_input.setMaximumWidth(60)
         self.force_label = QLabel("挤出力:")
-        self.force_value_label = QLabel("N/A")
+        self.force_value_label = QLabel(f"{placeholder}")
         self.meter_label = QLabel("当前进料量:")
-        self.meter_value_label = QLabel("N/A")
+        self.meter_value_label = QLabel(f"{placeholder}")
         self.velocity_label = QLabel("进线速度:")
-        self.velocity_value_label = QLabel("N/A")
+        self.velocity_value_label = QLabel(f"{placeholder}")
 
         # 布局
         layout = QVBoxLayout()
-        layout.addWidget(self.temp_label)
-        layout.addWidget(self.temp_value_label)
-        layout.addWidget(self.force_label)
-        layout.addWidget(self.force_value_label)
-        layout.addWidget(self.meter_label)
-        layout.addWidget(self.meter_value_label)
-        layout.addWidget(self.velocity_label)
-        layout.addWidget(self.velocity_value_label)
+        row_layout_1 = QHBoxLayout()
+        row_layout_2 = QHBoxLayout()
+        row_layout_3 = QHBoxLayout()
+        row_layout_4 = QHBoxLayout()
+
+        row_layout_1.addWidget(self.temp_label)
+        row_layout_1.addWidget(self.temp_value_label)
+        row_layout_1.addWidget(self.temp_input)
+        row_layout_1.addStretch(1)
+        row_layout_2.addWidget(self.force_label)
+        row_layout_2.addWidget(self.force_value_label)
+        row_layout_2.addStretch(1)
+        row_layout_3.addWidget(self.meter_label)
+        row_layout_3.addWidget(self.meter_value_label)
+        row_layout_3.addStretch(1)
+        row_layout_4.addWidget(self.velocity_label)
+        row_layout_4.addWidget(self.velocity_value_label)
+        row_layout_4.addStretch(1)
+        layout.addLayout(row_layout_1)
+        layout.addLayout(row_layout_2)
+        layout.addLayout(row_layout_3)
+        layout.addLayout(row_layout_4)
+        
         self.setLayout(layout)
+
+    @Slot(float)
+    def update_display_temperature(self, temperature):
+        self.temp_value_label.setText(f"{temperature:5.1f} /")
 
 class DataPlotWidget(QWidget):
 
@@ -271,7 +294,6 @@ class VisionWidget(pg.GraphicsLayoutWidget):
     def update_live_display(self, frame):
         self.img_item.setImage(frame, axisOrder="row-major")
     
-
 class GcodeWidget(QWidget):
 
     gcode_save_signal = Signal()
@@ -280,6 +302,17 @@ class GcodeWidget(QWidget):
         super().__init__()
 
         # 组件
+        self.gcode_title = QLabel("输入 G-code 或打开文件")
+        style = self.style()
+        warning_icon = style.standardIcon(QStyle.StandardPixmap.SP_MessageBoxWarning)
+        self.warning_label = QLabel()
+        icon_size = QSize(16, 16)
+        self.warning_label.setPixmap(warning_icon.pixmap(icon_size))
+        tooltip_text = """
+        <p>注意：点击运行后，下面的 G-code 会原封不动发给 Klipper。如果文本包含无效的 G-code，平台不会执行该行，并会报错。请留意最下方状态栏中的报错信息。本软件不会对文本进行任何检查，因为输入无效 G-code 导致的测试失败由测试者本人负责。<p>
+        """
+        self.warning_label.setToolTip(tooltip_text)
+        self.gcode_title.setMaximumWidth(300)
         self.gcode_display = QTextEdit()
         # self.gcode_display.setReadOnly(True)
         self.open_button = QPushButton("打开")
@@ -288,12 +321,20 @@ class GcodeWidget(QWidget):
 
         # 布局
         layout = QVBoxLayout()
-        button_layout = QHBoxLayout()
-        button_layout.addWidget(self.open_button)
-        button_layout.addWidget(self.clear_button)
-        button_layout.addWidget(self.run_button)
+        label_layout = QHBoxLayout()
+        label_layout.addWidget(self.gcode_title)
+        label_layout.addWidget(self.warning_label)
+        label_layout.addStretch(1)
+        button_layout1 = QHBoxLayout()
+        button_layout2 = QHBoxLayout()
+        button_layout1.addWidget(self.open_button)
+        button_layout1.addWidget(self.clear_button)
+        button_layout2.addWidget(self.run_button)
+
+        layout.addLayout(label_layout)
         layout.addWidget(self.gcode_display)
-        layout.addLayout(button_layout)
+        layout.addLayout(button_layout1)
+        layout.addLayout(button_layout2)
         self.setLayout(layout)
 
         # 信号槽连接
@@ -406,3 +447,22 @@ class GcodeWidget(QWidget):
             self.gcode_display.setTextCursor(cursor)
         else: # 如果这是第一行，则不执行恢复操作
             return
+        
+class HomeWidget(QWidget):
+    """主页控件，包含 G-code 控件和数据状态监视控件"""
+
+    def __init__(self):
+        super().__init__(self)
+        self.gcode_widget = GcodeWidget()
+        self.data_widget = DataPlotWidget()
+        self.status_widget = PlatformStatusWidget()
+
+        # 布局
+        layout = QHBoxLayout()
+        data_layout = QVBoxLayout()
+        data_layout.addWidget(self.status_widget)
+        data_layout.addWidget(self.data_widget)
+        layout.addWidget(self.gcode_widget)
+        layout.addLayout(data_layout)
+        self.setLayout(layout)
+        

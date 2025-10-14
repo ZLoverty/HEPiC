@@ -71,7 +71,7 @@ class TCPClient(QObject):
                     self.connection_status.emit("连接已断开")
                     break
                 message_str = data.decode('utf-8').strip()
-                print(f"{message_str}")
+                # print(f"{message_str}")
                 try:
                     message_dict = json.loads(message_str)
                     self.data_received.emit(message_dict)
@@ -104,13 +104,11 @@ class KlipperWorker(QObject):
     """
     处理与 Klipper (Moonraker) 的 WebSocket 通信
     """
-    # 定义信号：
-    # response_received: 收到打印机返回信息时发出
-    # connection_status: 连接状态变化时发出
-    response_received = Signal(str)
+
     connection_status = Signal(str)
     hotend_temperature = Signal(float)
     current_step_signal = Signal(int)
+    gcode_error = Signal(str)
 
     def __init__(self, host, port):
         super().__init__()
@@ -211,7 +209,6 @@ class KlipperWorker(QObject):
             # Moonraker的数据有两种主要类型：
             # 1. 对你请求的响应 (包含 "result" 键)
             # 2. 服务器主动推送的状态更新 (方法为 "notify_status_update")
-
             if "method" in data: 
                 if data["method"] == "notify_status_update": # 判断是否是状态回执
                     try:
@@ -219,15 +216,26 @@ class KlipperWorker(QObject):
                     except:
                         temp = np.nan
                     self.hotend_temperature.emit(temp)
-                elif data["method"] == "printer.gcode.script":
+                elif data["method"] == "printer.gcode.script": # 发送 G-code
                     async with websockets.connect(self.uri) as websocket:
                         await websocket.send(json.dumps(data))
-            elif "result" in data and "id" in data:
-                if data["result"] == "ok":
-                    print(f"--> Feedback: step {data["id"]}")
+                elif data["method"] == "notify_proc_stat_update":
+                    pass
+                elif data["method"] == "notify_gcode_response":
+                    self.gcode_error.emit(data["params"][0])
+                else:
+                    print(data)
+            elif "id" in data:
+                # print(data)
+                if "result" in data:
+                    # print(f"--> Feedback: step {data["id"]}")
                     # 高亮当前正在执行的 G-code
                     self.current_step_signal.emit(data["id"])
-
+                elif "error" in data:
+                    # print(data)
+                    self.gcode_error.emit(f"{data["error"]["code"]}: {data["error"]["message"]}")
+                else:
+                    pass
             else:
                 print(data)
 

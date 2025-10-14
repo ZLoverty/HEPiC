@@ -11,7 +11,7 @@ from PySide6.QtCore import Signal, Slot, QThread
 import pyqtgraph as pg
 from collections import deque
 from communications import TCPClient, KlipperWorker, VideoWorker, ProcessingWorker, ConnectionTester
-from tab_widgets import ConnectionWidget, PlatformStatusWidget, DataPlotWidget, CommandWidget, LogWidget, VisionWidget, GcodeWidget
+from tab_widgets import ConnectionWidget, PlatformStatusWidget, DataPlotWidget, CommandWidget, LogWidget, VisionWidget, GcodeWidget, HomeWidget
 import asyncio
 from qasync import QEventLoop, asyncSlot
 from config import Config
@@ -47,25 +47,32 @@ class MainWindow(QMainWindow):
         self.data_widget = DataPlotWidget()
         self.vision_widget = VisionWidget()
         self.gcode_widget = GcodeWidget()
+
+        # 主页布局
+        self.home_widget = QWidget()
+        layout = QHBoxLayout(self.home_widget)
+        data_layout = QVBoxLayout()
+        data_layout.addWidget(self.status_widget)
+        data_layout.addWidget(self.data_widget)
+        layout.addWidget(self.gcode_widget)
+        layout.addLayout(data_layout)
+
         # 添加标签页到标签栏
         self.stacked_widget.addWidget(self.connection_widget)
         self.stacked_widget.addWidget(self.tabs)
-        self.tabs.addTab(self.status_widget, "状态")
-        self.tabs.addTab(self.data_widget, "数据")
+        self.tabs.addTab(self.home_widget, "主页")
+        # self.tabs.addTab(self.data_widget, "数据")
         self.tabs.addTab(self.vision_widget, "视觉")
-        self.tabs.addTab(self.gcode_widget, "G-code")
+        # self.tabs.addTab(self.gcode_widget, "G-code")
         self.setCentralWidget(self.stacked_widget)
 
         # 设置状态栏
         self.statusBar().showMessage("准备就绪")
 
         # --- 连接信号与槽 ---
-        
-        # self.connected.connect(self.command_widget.update_button_status)
         self.connection_widget.ip.connect(self.connection_test)
-        # self.command_widget.send_button.clicked.connect(self.command_widget.send_command)
-        # self.command_widget.command_input.returnPressed.connect(self.command_widget.send_command)
         self.gcode_widget.run_button.clicked.connect(self.run_gcode)
+        self.status_widget.temp_input.returnPressed.connect(self.set_temperature)
     
 
     @Slot(int)
@@ -115,6 +122,8 @@ class MainWindow(QMainWindow):
         # 连接信号槽
         self.klipper_worker.connection_status.connect(self.update_status)
         self.klipper_worker.current_step_signal.connect(self.gcode_widget.highlight_current_line)
+        self.klipper_worker.gcode_error.connect(self.update_status)
+        self.klipper_worker.hotend_temperature.connect(self.status_widget.update_display_temperature)
         self.klipper_worker.run()
 
         # 创建 video worker （用于接收和处理视频信号）
@@ -159,6 +168,11 @@ class MainWindow(QMainWindow):
         if self.klipper_worker:
             self.gcode_widget.gcode = self.gcode_widget.gcode_display.toPlainText()
             self.klipper_worker.send_gcode(self.gcode_widget.gcode)
+
+    def set_temperature(self):
+        if self.klipper_worker:
+            target = self.status_widget.temp_input.text()
+            self.klipper_worker.send_gcode(f"M104 S{target}")
 
     def closeEvent(self, event):
         """关闭窗口时，优雅地停止后台线程"""
