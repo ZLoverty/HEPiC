@@ -116,10 +116,12 @@ class MainWindow(QMainWindow):
         self.klipper_worker.connection_status.connect(self.add_new_message)
         self.klipper_worker.response_received.connect(self.command_widget.update_command_display) # show command in command display window
         self.klipper_worker.response_received.connect(self.log_widget.update_log) # also show command in log
+        self.klipper_worker.current_step_signal.connect(self.test_widget.highlight_current_line)
+        # self.klipper_worker.current_step_signal.connect(self.test_widget.reset_line_highlight)
         self.klipper_worker.run()
 
         # 创建 video worker （用于接收和处理视频信号）
-        folder = "/Users/zhengyang/Documents/GitHub/etp_ctl/test/filament_images_simulated"
+        folder = "/home/zhengyang/Documents/GitHub/etp_ctl/test/filament_images_simulated"
         fps = 10
         self.video_worker = VideoWorker(image_folder=folder, fps=fps)
         # 连接信号槽
@@ -134,6 +136,8 @@ class MainWindow(QMainWindow):
 
         # 连接 gcode 文件运行和其运行槽函数
         self.test_widget.run_button.clicked.connect(self.run_gcode_from_file)
+        
+        self.show_UI(1)
 
     @Slot()
     def disconnect_from_ip(self):

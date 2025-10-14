@@ -109,6 +109,7 @@ class KlipperWorker(QObject):
     response_received = Signal(str)
     connection_status = Signal(str)
     hotend_temperature = Signal(float)
+    current_step_signal = Signal(int)
 
     def __init__(self, host, port):
         super().__init__()
@@ -118,6 +119,7 @@ class KlipperWorker(QObject):
         self.message_queue = asyncio.Queue() # klipper 的消息队列
         self.gcode_queue = asyncio.Queue() # gcode 的消息队列
         self.uri = f"ws://{self.host}:{self.port}/websocket"
+        
 
     @asyncSlot()
     async def run(self):
@@ -146,8 +148,9 @@ class KlipperWorker(QObject):
 
                 listener_task = asyncio.create_task(self.message_listener(websocket))
                 sender_task = asyncio.create_task(self.gcode_sender(websocket))
-                    
-                await asyncio.gather(listener_task, sender_task)
+                processor_task = asyncio.create_task(self.data_processor())
+
+                await asyncio.gather(listener_task, sender_task, processor_task)
 
         except (websockets.exceptions.ConnectionClosedError, ConnectionRefusedError) as e:
             print(f"Klipper 连接失败")
@@ -157,30 +160,42 @@ class KlipperWorker(QObject):
 
     async def message_listener(self, websocket):
         # 监听来自服务器的消息
-        async for message in websocket:
-            data = json.loads(message)
-            # 将收到的原始数据放入队列，交给消费者处理
-            await self.message_queue.put(data)
+        while self.is_running:
+            async for message in websocket:
+                data = json.loads(message)
+                # 将收到的原始数据放入队列，交给消费者处理
+                await self.message_queue.put(data)
 
     async def gcode_sender(self, websocket):
         # 发送用户输入的gcode消息
         while self.is_running:
             gcode = await self.gcode_queue.get()
+            self.current_step += 1
             gcode_message = {
                 "jsonrpc": "2.0",
-                "id": 2, # 一个随机的ID
+                "id": self.current_step, # 一个随机的ID
                 "method": "printer.gcode.script",
                 "params": {
-                    "script": gcode
+                    "script": gcode + "\nM400"
                 },
             }
+            # print(f"Step {self.current_step}: {gcode}")
             await websocket.send(json.dumps(gcode_message)) 
 
     @asyncSlot(str)
     async def send_gcode(self, command):
-        """接收来自主线程的命令，并放入队列"""
-        print(f"[DIAG] 2. Worker received command: '{command}'")
-        await self.gcode_queue.put(command)
+        """接收来自主线程的命令，并放入队列。command 可以是多行 gcode，行用换行符隔开，此函数会将多行命令分割为单行依次送入执行队列，以便追踪命令执行进度。
+        
+        Parameters
+        ----------
+        command : str
+            gcode string, can be one-liner or multi-liner
+        """
+        # print(f"[DIAG] 2. Worker received command: '{command}'")
+        self.current_step = 0 # 用于标记 gcode 回执
+        command_list = command.split("\n")
+        for cmd in command_list:
+            await self.gcode_queue.put(cmd)
 
     async def data_processor(self):
         """
@@ -194,7 +209,7 @@ class KlipperWorker(QObject):
             # Moonraker的数据有两种主要类型：
             # 1. 对你请求的响应 (包含 "result" 键)
             # 2. 服务器主动推送的状态更新 (方法为 "notify_status_update")
-            # print(data)
+
             if "method" in data: 
                 if data["method"] == "notify_status_update": # 判断是否是状态回执
                     try:
@@ -205,6 +220,15 @@ class KlipperWorker(QObject):
                 elif data["method"] == "printer.gcode.script":
                     async with websockets.connect(self.uri) as websocket:
                         await websocket.send(json.dumps(data))
+            elif "result" in data and "id" in data:
+                if data["result"] == "ok":
+                    print(f"--> Feedback: step {data["id"]}")
+                    # 高亮当前正在执行的 G-code
+                    self.current_step_signal.emit(data["id"])
+
+            else:
+                print(data)
+
             # 标记任务完成，这对于优雅退出很重要
             self.message_queue.task_done()
 

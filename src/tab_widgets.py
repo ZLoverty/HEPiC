@@ -368,18 +368,46 @@ class TestWidget(QWidget):
         self.gcode_display.setPlainText(self.gcode)
         self.highlight_current_line(1)
 
+    @Slot(int)
     def highlight_current_line(self, line_number):
-        # 高亮当前行
-        cursor = self.gcode_display.textCursor()
-        cursor.movePosition(QTextCursor.StartOfBlock)
-        for i in range(line_number):
-            cursor.movePosition(QTextCursor.NextBlock)
-        cursor.movePosition(QTextCursor.NextBlock, QTextCursor.KeepAnchor)
+
+        manual_selection = QTextEdit.ExtraSelection()
+            
+        # 设置高亮格式 (背景色)
+        manual_format = QTextCharFormat()
+        manual_format.setBackground(QColor("lightblue"))
+        # <<< 关键改动 1: 必须设置这个属性才能让高亮填满整行
+        manual_format.setProperty(QTextCharFormat.FullWidthSelection, True)
+        manual_selection.format = manual_format
+
+        # 定位到指定行
+        doc = self.gcode_display.document()
+        block = doc.findBlockByNumber(line_number)
         
-        # 设置高亮样式
-        char_format = QTextCharFormat()
-        char_format.setBackground(QColor("yellow"))  # 设置背景为黄色
-        char_format.setForeground(QColor("black"))  # 设置字体颜色为黑色
-        cursor.setCharFormat(char_format)
+        if block.isValid():
+            cursor = QTextCursor(block)
+            manual_selection.cursor = cursor
+            selections = [manual_selection]
+            self.gcode_display.setExtraSelections(selections)
         
-        self.gcode_display.setTextCursor(cursor)
+    @Slot(int)
+    def reset_line_highlight(self, line_number):
+        """将高亮 gcode 恢复为普通样式。注意，这里接收的 line_number 仍然是当前执行行，所以 cursor 需要选择到 line_number-1 行进行操作。"""
+
+        if line_number > 1:
+            cursor = self.gcode_display.textCursor()
+            cursor.movePosition(QTextCursor.StartOfBlock)
+            for i in range(line_number-1):
+                cursor.movePosition(QTextCursor.NextBlock)
+            cursor.movePosition(QTextCursor.NextBlock, QTextCursor.KeepAnchor)
+            
+            # 恢复普通样式
+            char_format = QTextCharFormat()
+            char_format.setBackground(QColor("white"))  # 恢复背景为白色
+            char_format.setForeground(QColor("black"))  # 恢复字体颜色为黑色
+            cursor.setCharFormat(char_format)
+            
+            # 这一句是什么作用？
+            self.gcode_display.setTextCursor(cursor)
+        else: # 如果这是第一行，则不执行恢复操作
+            return
