@@ -7,10 +7,10 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QPlainTextEdit, QLabel, QGridLayout, QMessageBox, QTabWidget, QStackedWidget
 )
-from PySide6.QtCore import QObject, QThread, Signal, Slot
+from PySide6.QtCore import Signal, Slot, QThread
 import pyqtgraph as pg
 from collections import deque
-from communications import TCPClient, KlipperWorker, VideoWorker, ProcessingWorker
+from communications import TCPClient, KlipperWorker, VideoWorker, ProcessingWorker, ConnectionTester
 from tab_widgets import ConnectionWidget, PlatformStatusWidget, DataPlotWidget, CommandWidget, LogWidget, VisionWidget, TestWidget
 import asyncio
 from qasync import QEventLoop, asyncSlot
@@ -37,7 +37,7 @@ class MainWindow(QMainWindow):
     def initUI(self):
         # --- 创建控件 ---
         # 标签栏
-
+        
         self.stacked_widget = QStackedWidget()
 
         self.tabs = QTabWidget()
@@ -69,13 +69,13 @@ class MainWindow(QMainWindow):
         
         # self.command_input.returnPressed.connect(self.send_command)
         
-        self.connection_widget.ip.connect(self.connect_to_ip)
+        self.connection_widget.ip.connect(self.connection_test)
         self.command_widget.send_button.clicked.connect(self.command_widget.send_command)
         self.command_widget.command_input.returnPressed.connect(self.command_widget.send_command)
-        self.self_test_msg.connect(self.connection_widget.update_self_test)
         
     def init_variables(self):    
         self.self_test_msg_list = deque(maxlen=5)
+        self.test_connection_thread = None
 
     @Slot(str)
     def add_new_message(self, new_msg):
@@ -89,14 +89,33 @@ class MainWindow(QMainWindow):
         self.stacked_widget.setCurrentIndex(UI_index)
 
     @Slot(str)
-    def connect_to_ip(self, ip):
-        # setup data reading worker
-        self.ip = ip
-        port = 10001
-        self.data_widget.reset()  # 重置数据
+    def connection_test(self, host):
+        # 树莓派服务器的 IP 地址和端口
+        # IP 地址随时可能变化，所以以后应加一块屏幕方便随时读取
+        # 数据端口暂定 10001
+        self.host = host
+        self.port = 10001
 
+        # 1. 创建异步 Worker 实例
+        self.connection_tester = ConnectionTester(host, self.port)
+
+        # 2. 连接信号和槽
+        self.connection_tester.test_msg.connect(self.connection_widget.update_self_test)
+        self.connection_tester.success.connect(self.connect_to_ip)
+
+        # 3. (推荐) 让 worker 在任务完成后自我销毁，避免内存泄漏
+        self.connection_tester.success.connect(self.connection_tester.deleteLater)
+        self.connection_tester.fail.connect(self.connection_tester.deleteLater)
+        
+        # 4. 直接调用 @asyncSlot 方法，qasync 会自动在事件循环中调度它
+        self.connection_tester.run()
+
+    @Slot()
+    def connect_to_ip(self):
+
+        self.data_widget.reset()  # 重置数据
         # 创建 TCP 连接以接收数据
-        self.worker = TCPClient(ip, port)
+        self.worker = TCPClient(self.host, self.port)
         # 连接信号槽
         
         self.worker.data_received.connect(self.data_widget.update_display)
@@ -109,7 +128,7 @@ class MainWindow(QMainWindow):
         
         # 创建 klipper worker（用于查询平台状态和发送动作指令）
         klipper_port = 7125
-        self.klipper_worker = KlipperWorker(ip, klipper_port)
+        self.klipper_worker = KlipperWorker(self.host, klipper_port)
         # 连接信号槽
         self.command_widget.command_to_send.connect(self.klipper_worker.send_gcode)
         self.klipper_worker.connection_status.connect(self.command_widget.update_button_status)

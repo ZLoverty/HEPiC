@@ -31,6 +31,8 @@ class ConnectionWidget(QWidget):
 
         super().__init__()
 
+        self.status_list = []
+
         # 组件
         self.ip_label = QLabel("树莓派 IP 地址 ")
         self.ip_input = QLineEdit("192.168.114.48")
@@ -41,16 +43,13 @@ class ConnectionWidget(QWidget):
 
         # 布局
         layout = QVBoxLayout()
-        # layout.addWidget(self.ip_label)
         ip_layout = QHBoxLayout()
         ip_layout.addWidget(self.ip_label)
         ip_layout.addWidget(self.ip_input)
         ip_layout.addWidget(self.connect_button)
         message_layout = QHBoxLayout()
         message_layout.addWidget(self.self_test)
-        # layout.addWidget(self.disconnect_button)
         layout.addLayout(ip_layout)
-        # layout.add
         layout.addStretch(1)
         layout.addLayout(message_layout)
         self.setLayout(layout)
@@ -78,7 +77,8 @@ class ConnectionWidget(QWidget):
             # self.disconnect_button.setEnabled(False)
     @Slot(str)
     def update_self_test(self, status):
-        self.self_test.setText(status)
+        self.status_list.append(status)
+        self.self_test.setText("\n".join(self.status_list))
         
 class PlatformStatusWidget(QWidget):
 
