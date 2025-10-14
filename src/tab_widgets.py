@@ -206,13 +206,13 @@ class CommandWidget(QWidget):
         self.send_button.clicked.connect(self.send_command)
         self.command_input.returnPressed.connect(self.send_command)
 
-    @Slot(str)
-    def update_button_status(self, status):
+    @Slot(bool)
+    def update_button_status(self, connected):
         """更新按钮状态"""
-        if status == "连接成功":
+        if connected:
             self.send_button.setEnabled(True)
             self.command_input.setEnabled(True)
-        else: # "连接已断开" 或 "连接失败"
+        else:
             self.send_button.setEnabled(False)
             self.command_input.setEnabled(False)
 
@@ -272,17 +272,16 @@ class VisionWidget(pg.GraphicsLayoutWidget):
         self.img_item.setImage(frame, axisOrder="row-major")
     
 
-class TestWidget(QWidget):
+class GcodeWidget(QWidget):
 
     gcode_save_signal = Signal()
-    run_signal = Signal()
 
     def __init__(self):
         super().__init__()
 
         # 组件
         self.gcode_display = QTextEdit()
-        self.gcode_display.setReadOnly(True)
+        # self.gcode_display.setReadOnly(True)
         self.open_button = QPushButton("打开")
         self.clear_button = QPushButton("清除")
         self.run_button = QPushButton("运行")
@@ -302,9 +301,6 @@ class TestWidget(QWidget):
         self.clear_button.clicked.connect(self.on_click_clear)
         self.gcode_save_signal.connect(self.update_display)
 
-        # 变量
-        self.gcode = None
-
     def on_click_open(self):
         """打开 gcode 文件，清理注释，显示在 display 窗口"""
         file_path, _ = QFileDialog.getOpenFileName(
@@ -319,7 +315,7 @@ class TestWidget(QWidget):
             with open(file_path, "r") as f:
                 gcode = f.read()
             self.gcode = self.clean_gcode(gcode)
-            self.gcode_save_signal.emit()
+            self.update_display()
         else:
             print("没有选择任何文件")
             return
@@ -366,7 +362,6 @@ class TestWidget(QWidget):
     @Slot()
     def update_display(self):
         self.gcode_display.setPlainText(self.gcode)
-        self.highlight_current_line(1)
 
     @Slot(int)
     def highlight_current_line(self, line_number):

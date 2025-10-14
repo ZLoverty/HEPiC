@@ -11,7 +11,7 @@ from PySide6.QtCore import Signal, Slot, QThread
 import pyqtgraph as pg
 from collections import deque
 from communications import TCPClient, KlipperWorker, VideoWorker, ProcessingWorker, ConnectionTester
-from tab_widgets import ConnectionWidget, PlatformStatusWidget, DataPlotWidget, CommandWidget, LogWidget, VisionWidget, TestWidget
+from tab_widgets import ConnectionWidget, PlatformStatusWidget, DataPlotWidget, CommandWidget, LogWidget, VisionWidget, GcodeWidget
 import asyncio
 from qasync import QEventLoop, asyncSlot
 from config import Config
@@ -24,16 +24,14 @@ pg.setConfigOption("foreground", "k")
 # ====================================================================
 class MainWindow(QMainWindow):
     
-    self_test_msg = Signal(str)
+    connected = Signal(bool)
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("挤出测试平台")
+        self.setWindowTitle(f"挤出测试平台 v{Config.version}")
         self.setGeometry(900, 100, 700, 500)
-        self.init_variables()
         self.initUI()
         
-
     def initUI(self):
         # --- 创建控件 ---
         # 标签栏
@@ -47,41 +45,28 @@ class MainWindow(QMainWindow):
         self.connection_widget = ConnectionWidget()      
         self.status_widget = PlatformStatusWidget()
         self.data_widget = DataPlotWidget()
-        self.command_widget = CommandWidget()
-        self.log_widget = LogWidget()
         self.vision_widget = VisionWidget()
-        self.test_widget = TestWidget()
+        self.gcode_widget = GcodeWidget()
         # 添加标签页到标签栏
         self.stacked_widget.addWidget(self.connection_widget)
         self.stacked_widget.addWidget(self.tabs)
         self.tabs.addTab(self.status_widget, "状态")
         self.tabs.addTab(self.data_widget, "数据")
-        self.tabs.addTab(self.log_widget, "日志")
-        self.tabs.addTab(self.command_widget, "指令")
         self.tabs.addTab(self.vision_widget, "视觉")
-        self.tabs.addTab(self.test_widget, "测试")
+        self.tabs.addTab(self.gcode_widget, "G-code")
         self.setCentralWidget(self.stacked_widget)
 
         # 设置状态栏
-        self.statusBar().showMessage(f"挤出测试平台 v{Config.version}")
+        self.statusBar().showMessage("准备就绪")
 
         # --- 连接信号与槽 ---
         
-        # self.command_input.returnPressed.connect(self.send_command)
-        
+        # self.connected.connect(self.command_widget.update_button_status)
         self.connection_widget.ip.connect(self.connection_test)
-        self.command_widget.send_button.clicked.connect(self.command_widget.send_command)
-        self.command_widget.command_input.returnPressed.connect(self.command_widget.send_command)
-        
-    def init_variables(self):    
-        self.self_test_msg_list = deque(maxlen=5)
-        self.test_connection_thread = None
-
-    @Slot(str)
-    def add_new_message(self, new_msg):
-        self.self_test_msg_list.append(new_msg)
-        msg = "\n".join(self.self_test_msg_list)
-        self.self_test_msg.emit(msg)
+        # self.command_widget.send_button.clicked.connect(self.command_widget.send_command)
+        # self.command_widget.command_input.returnPressed.connect(self.command_widget.send_command)
+        self.gcode_widget.run_button.clicked.connect(self.run_gcode)
+    
 
     @Slot(int)
     def show_UI(self, UI_index):
@@ -119,24 +104,17 @@ class MainWindow(QMainWindow):
         # 连接信号槽
         
         self.worker.data_received.connect(self.data_widget.update_display)
-        # self.worker.data_received.connect(self.log_widget.update_log)
         self.worker.connection_status.connect(self.connection_widget.update_self_test)
-        self.worker.connection_status.connect(self.add_new_message)
+        self.worker.connection_status.connect(self.update_status)
         self.worker.connection_status.connect(self.connection_widget.update_button_status)
-        self.worker.connection_status.connect(self.command_widget.update_button_status)
         self.worker.run()
         
         # 创建 klipper worker（用于查询平台状态和发送动作指令）
         klipper_port = 7125
         self.klipper_worker = KlipperWorker(self.host, klipper_port)
         # 连接信号槽
-        self.command_widget.command_to_send.connect(self.klipper_worker.send_gcode)
-        self.klipper_worker.connection_status.connect(self.command_widget.update_button_status)
-        self.klipper_worker.connection_status.connect(self.add_new_message)
-        self.klipper_worker.response_received.connect(self.command_widget.update_command_display) # show command in command display window
-        self.klipper_worker.response_received.connect(self.log_widget.update_log) # also show command in log
-        self.klipper_worker.current_step_signal.connect(self.test_widget.highlight_current_line)
-        # self.klipper_worker.current_step_signal.connect(self.test_widget.reset_line_highlight)
+        self.klipper_worker.connection_status.connect(self.update_status)
+        self.klipper_worker.current_step_signal.connect(self.gcode_widget.highlight_current_line)
         self.klipper_worker.run()
 
         # 创建 video worker （用于接收和处理视频信号）
@@ -152,10 +130,8 @@ class MainWindow(QMainWindow):
         self.video_worker.new_frame_signal.connect(self.processing_worker.cache_frame)
         self.worker.data_received.connect(self.processing_worker.process_frame)
         self.processing_worker.proc_frame_signal.connect(self.vision_widget.update_live_display)
-
-        # 连接 gcode 文件运行和其运行槽函数
-        self.test_widget.run_button.clicked.connect(self.run_gcode_from_file)
         
+        self.connected.emit(True)
         self.show_UI(1)
 
     @Slot()
@@ -178,14 +154,14 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(status)
 
     @Slot()
-    def run_gcode_from_file(self):
+    def run_gcode(self):
         """运行从文件里来的 gcode """
-        if self.test_widget.gcode and self.klipper_worker:
-            self.klipper_worker.send_gcode(self.test_widget.gcode)
+        if self.klipper_worker:
+            self.gcode_widget.gcode = self.gcode_widget.gcode_display.toPlainText()
+            self.klipper_worker.send_gcode(self.gcode_widget.gcode)
 
     def closeEvent(self, event):
         """关闭窗口时，优雅地停止后台线程"""
-        self.log_display.appendPlainText("Closing application...")
         self.disconnect_from_ip()
         event.accept()
 

@@ -174,7 +174,7 @@ class KlipperWorker(QObject):
             self.current_step += 1
             gcode_message = {
                 "jsonrpc": "2.0",
-                "id": self.current_step, # 一个随机的ID
+                "id": self.current_step, 
                 "method": "printer.gcode.script",
                 "params": {
                     "script": gcode + "\nM400"
@@ -192,8 +192,9 @@ class KlipperWorker(QObject):
         command : str
             gcode string, can be one-liner or multi-liner
         """
-        # print(f"[DIAG] 2. Worker received command: '{command}'")
+
         self.current_step = 0 # 用于标记 gcode 回执
+        self.current_step_signal.emit(self.current_step)
         command_list = command.split("\n")
         for cmd in command_list:
             await self.gcode_queue.put(cmd)
