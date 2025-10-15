@@ -31,7 +31,7 @@ class ConnectionWidget(QWidget):
 
         super().__init__()
 
-        self.status_list = []
+        self.status_list = deque(maxlen=10)
 
         # 组件
         self.ip_label = QLabel("树莓派 IP 地址 ")
