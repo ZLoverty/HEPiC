@@ -17,6 +17,7 @@ from video_capture import HikVideoCapture
 from collections import deque
 import platform
 import aiohttp
+from pathlib import Path
 
 class TCPClient(QObject):
     # --- 信号 ---
@@ -257,16 +258,21 @@ class VideoWorker(QObject):
     new_frame_signal = Signal(np.ndarray)
     finished = Signal()
 
-    def __init__(self):
+    def __init__(self, test_mode=False, image_folder="~/Documents/GitHub/etp_ctl/test/filament_images_simulated", fps=10):
+        """
+        Parameters
+        ----------
+        test_mode : bool
+            if true, enable test mode, which utilizes a sequence of local images to simulate a video stream from a camera.
+        """
         super().__init__()
-        # 调试用图片流
-        # self.image_folder = "/home/zhengyang/Documents/GitHub/etp_ctl/test/filament_images_simulated"
-        # self.fps = 10
-        # self.cap = ImageStreamer(self.image_folder, fps=self.fps)
-
-        # 真图片流
-        fps = 20
-        self.cap = HikVideoCapture(width=512, height=512, exposure_time=50000, center_roi=True)
+       
+        if test_mode:  # 调试用图片流
+            image_folder = Path(image_folder).expanduser().resolve()
+            self.cap = ImageStreamer(str(image_folder), fps=fps)
+        else: # 真图片流
+            self.cap = HikVideoCapture(width=512, height=512, exposure_time=50000, center_roi=True)
+            
         self.running = True
         self.frame_delay = 1 / fps  
 

@@ -2,7 +2,7 @@ import cv2
 import queue
 import time
 import numpy as np
-from hikrobotcamlib import Camera, DeviceList, Frame, DeviceTransport
+
 
 class HikVideoCapture:
     """
@@ -21,6 +21,7 @@ class HikVideoCapture:
     """
 
     def __init__(self, width: int | None = None, height: int | None = None, exposure_time: float | None = None, center_roi: bool = True):
+        from hikrobotcamlib import Camera, DeviceList, Frame, DeviceTransport # only import when we actually need this package. It does not run on MacOS, so it's better not run when not needed.
         self.cam: Camera | None = None
         self._is_opened = False
         self.frame_queue = queue.Queue(maxsize=2)
@@ -87,7 +88,7 @@ class HikVideoCapture:
                 self.cam.close()
             self._is_opened = False
 
-    def _frame_callback(self, frame: Frame, cam: Camera) -> None:
+    def _frame_callback(self, frame, cam) -> None:
         if self.frame_queue.full():
             try: self.frame_queue.get_nowait()
             except queue.Empty: pass
