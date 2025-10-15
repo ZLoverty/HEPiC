@@ -127,9 +127,8 @@ class MainWindow(QMainWindow):
         self.klipper_worker.run()
 
         # 创建 video worker （用于接收和处理视频信号）
-        folder = "/home/zhengyang/Documents/GitHub/etp_ctl/test/filament_images_simulated"
-        fps = 10
-        self.video_worker = VideoWorker(image_folder=folder, fps=fps)
+        
+        self.video_worker = VideoWorker()
         # 连接信号槽
         self.video_worker.run()
 

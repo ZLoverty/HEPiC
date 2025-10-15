@@ -13,6 +13,7 @@ import json
 from qasync import QEventLoop, asyncSlot
 import numpy as np
 from vision import filament_diameter, convert_to_grayscale, draw_filament_contour, find_longest_branch, ImageStreamer
+from video_capture import HikVideoCapture
 from collections import deque
 import platform
 import aiohttp
@@ -256,13 +257,18 @@ class VideoWorker(QObject):
     new_frame_signal = Signal(np.ndarray)
     finished = Signal()
 
-    def __init__(self, image_folder, fps):
+    def __init__(self):
         super().__init__()
-        self.image_folder = image_folder
-        self.fps = fps
+        # 调试用图片流
+        # self.image_folder = "/home/zhengyang/Documents/GitHub/etp_ctl/test/filament_images_simulated"
+        # self.fps = 10
+        # self.cap = ImageStreamer(self.image_folder, fps=self.fps)
+
+        # 真图片流
+        fps = 20
+        self.cap = HikVideoCapture(width=512, height=512, exposure_time=50000, center_roi=True)
         self.running = True
-        self.cap = ImageStreamer(self.image_folder, fps=self.fps)
-        self.frame_delay = 1 / self.fps  
+        self.frame_delay = 1 / fps  
 
     @asyncSlot()
     async def run(self):
