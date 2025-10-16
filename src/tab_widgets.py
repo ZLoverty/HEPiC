@@ -304,8 +304,8 @@ class VisionWidget(pg.GraphicsLayoutWidget):
         self.view_box.setMouseEnabled(x=False, y=False)
 
         # 4. 对于纯图像显示，我们通常不希望看到坐标轴，可以隐藏它们
-        self.plot_item.hideAxis('left')
-        self.plot_item.hideAxis('bottom')
+        # self.plot_item.hideAxis('left')
+        # self.plot_item.hideAxis('bottom')
         
         # 5. 创建 ImageItem 并将其添加到 PlotItem 中
         self.img_item = pg.ImageItem()
@@ -324,7 +324,7 @@ class VisionWidget(pg.GraphicsLayoutWidget):
 
             pos = event.scenePosition()
             mousePoint = self.plot_item.vb.mapSceneToView(pos)
-            self.roi_start_pos = mousePoint.x(), mousePoint.y()
+            self.roi_start_pos = mousePoint
 
             # --- 诊断代码 ---
             scene_pos = event.scenePosition()
@@ -385,6 +385,27 @@ class VisionWidget(pg.GraphicsLayoutWidget):
         
         roi_info = (int(pos.x()), int(pos.y()), int(size.x()), int(size.y()))
         self.sigRoiChanged.emit(roi_info)
+
+class VisionPageWidget(QWidget):
+    """Video + control widgets"""
+    def __init__(self):
+        # 设定曝光时间的窗口
+        super().__init__()
+        self.exp_time_label = QLabel("曝光时间")
+        self.exp_time = QLineEdit("50")
+        self.exp_time_unit = QLabel("ms")
+        self.vision_widget = VisionWidget()
+        layout = QHBoxLayout(self)
+        control_layout = QVBoxLayout()
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(self.exp_time_label)
+        button_layout.addWidget(self.exp_time)
+        button_layout.addWidget(self.exp_time_unit)
+        control_layout.addLayout(button_layout)
+        control_layout.addStretch(1)
+        layout.addWidget(self.vision_widget)
+        layout.addLayout(control_layout)
+        self.setLayout(layout)
 
 class GcodeWidget(QWidget):
 

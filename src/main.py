@@ -11,7 +11,7 @@ from PySide6.QtCore import Signal, Slot, QThread
 import pyqtgraph as pg
 from collections import deque
 from communications import TCPClient, KlipperWorker, VideoWorker, ProcessingWorker, ConnectionTester
-from tab_widgets import ConnectionWidget, PlatformStatusWidget, DataPlotWidget, CommandWidget, LogWidget, VisionWidget, GcodeWidget, HomeWidget
+from tab_widgets import ConnectionWidget, PlatformStatusWidget, DataPlotWidget, CommandWidget, LogWidget, VisionPageWidget, GcodeWidget, HomeWidget
 import asyncio
 from qasync import QEventLoop, asyncSlot
 from config import Config
@@ -45,7 +45,7 @@ class MainWindow(QMainWindow):
         self.connection_widget = ConnectionWidget()      
         self.status_widget = PlatformStatusWidget()
         self.data_widget = DataPlotWidget()
-        self.vision_widget = VisionWidget()
+        self.vision_page_widget = VisionPageWidget()
         self.gcode_widget = GcodeWidget()
 
         # 主页布局
@@ -62,7 +62,7 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.tabs)
         self.tabs.addTab(self.home_widget, "主页")
         # self.tabs.addTab(self.data_widget, "数据")
-        self.tabs.addTab(self.vision_widget, "视觉")
+        self.tabs.addTab(self.vision_page_widget, "视觉")
         # self.tabs.addTab(self.gcode_widget, "G-code")
         self.setCentralWidget(self.stacked_widget)
 
@@ -137,7 +137,7 @@ class MainWindow(QMainWindow):
         # 连接信号槽
         self.video_worker.new_frame_signal.connect(self.processing_worker.cache_frame)
         self.worker.data_received.connect(self.processing_worker.process_frame)
-        self.processing_worker.proc_frame_signal.connect(self.vision_widget.update_live_display)
+        self.processing_worker.proc_frame_signal.connect(self.vision_page_widget.vision_widget.update_live_display)
         
         self.connected.emit(True)
         self.show_UI(1)
