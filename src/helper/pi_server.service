@@ -1,0 +1,30 @@
+[Unit]
+Description=Robust TCP Data Server
+# 确保在网络连接建立后才启动本服务
+After=network.target
+
+[Service]
+# --- 请根据您的实际情况修改以下路径和用户 ---
+# 推荐使用一个非 root 用户运行，例如 'pi'
+User=pi
+# 您的项目文件所在的目录
+WorkingDirectory=/home/pi/my_project
+# 启动服务的命令 (请使用 python3 的绝对路径)
+ExecStart=/usr/bin/python3 /home/pi/my_project/robust_server.py
+
+# --- 服务健壮性配置 ---
+# 如果服务因错误退出，则在 10 秒后自动重启
+Restart=on-failure
+RestartSec=10s
+# 给予 30 秒的时间让程序在收到停止信号后进行清理
+TimeoutStopSec=30s
+
+# --- 日志配置 ---
+# 将所有标准输出和标准错误重定向到 systemd 的日志系统 (journald)
+# 这样就可以使用 journalctl 命令来查看日志
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+# 定义服务所属的目标，使其可以被 systemctl enable/disable 管理
+WantedBy=multi-user.target
