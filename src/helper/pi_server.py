@@ -3,8 +3,7 @@ import json
 import random
 import sys
 
-freq = float(sys.argv[1])
-delay = 1 / freq
+delay = 0.01 # 设置数据传输频率上限为 100 Hz
 
 async def handle_client(reader, writer):
     """
