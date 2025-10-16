@@ -256,6 +256,7 @@ class VideoWorker(QObject):
     运行 ImageStreamer 的工作线程，通过信号发送图像帧。
     """
     new_frame_signal = Signal(np.ndarray)
+    roi_frame_signal = Signal(np.ndarray)
     finished = Signal()
 
     def __init__(self, test_mode=False, image_folder="~/Documents/GitHub/etp_ctl/test/filament_images_simulated", fps=10):
@@ -275,6 +276,7 @@ class VideoWorker(QObject):
             
         self.running = True
         self.frame_delay = 1 / fps  
+        self.roi = None
 
     @asyncSlot()
     async def run(self):
@@ -283,10 +285,17 @@ class VideoWorker(QObject):
             ret, frame = self.cap.read()
             if ret:
                 self.new_frame_signal.emit(frame)
+                if self.roi is not None:
+                    x, y, w, h = self.roi
+                    self.roi_frame_signal.emit(frame[y:y+h, x:x+w])
             else:
                 print("Failed to read frame.")
             
             await asyncio.sleep(self.frame_delay)
+
+    @Slot(tuple)
+    def set_roi(self, roi):
+        self.roi = roi
 
     @Slot()
     def stop(self):
@@ -294,8 +303,21 @@ class VideoWorker(QObject):
         self.running = False
         self.cap.release()
 
-class ProcessingWorker(QObject):
+    @asyncSlot(float)
+    async def set_exp_time(self, exp_time):
+        """
+        Parameters
+        ----------
+        exp_time : float
+            exposure time in ms.
+        """
+        self.cap.release()
+        while self.cap._is_opened:
+            await asyncio.sleep(1)
+        self.cap = HikVideoCapture(width=512, height=512, exposure_time=exp_time*1000, center_roi=True)
 
+class ProcessingWorker(QObject):
+    """处理图像的逻辑：如果ROI没有被设置，则只在视觉页更新未处理的图像；如果ROI已经设置，则在更新视觉页未处理图像同时，更新处理过的ROI图像。"""
     die_diameter_signal = Signal(float)
     proc_frame_signal = Signal(np.ndarray)
 
@@ -315,7 +337,9 @@ class ProcessingWorker(QObject):
             gray = convert_to_grayscale(img) # only process gray images    
             try:
                 diameter, skeleton, dist_transform = filament_diameter(gray)
+                skeleton[dist_transform < dist_transform.max()*0.9] = False
                 longest_branch = find_longest_branch(skeleton)
+                # filter the pixels on skeleton where dt is smaller than 0.9 of the max
                 diameter_refine = dist_transform[longest_branch].mean() * 2.0
                 proc_frame = draw_filament_contour(gray, longest_branch, diameter_refine)
                 self.proc_frame_signal.emit(proc_frame)                                         

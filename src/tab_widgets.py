@@ -287,7 +287,7 @@ class VisionWidget(pg.GraphicsLayoutWidget):
 
         self.roi = None
         self.roi_start_pos = None
-
+        # self.mouse_enabled = True
         # 告诉布局管理器，让ViewBox占据所有可用空间，从而最小化边距
         self.ci.layout.setContentsMargins(0, 0, 0, 0)
 
@@ -304,22 +304,22 @@ class VisionWidget(pg.GraphicsLayoutWidget):
         self.view_box.setMouseEnabled(x=False, y=False)
 
         # 4. 对于纯图像显示，我们通常不希望看到坐标轴，可以隐藏它们
-        # self.plot_item.hideAxis('left')
-        # self.plot_item.hideAxis('bottom')
+        self.plot_item.hideAxis('left')
+        self.plot_item.hideAxis('bottom')
         
         # 5. 创建 ImageItem 并将其添加到 PlotItem 中
         self.img_item = pg.ImageItem()
         self.plot_item.addItem(self.img_item)
-    
+
     @Slot(np.ndarray)
     def update_live_display(self, frame):
         self.img_item.setImage(frame, axisOrder="row-major")
     
     def mousePressEvent(self, event):
         # pyqtgraph 内部会处理好 PyQt/PySide 的差异，所以这部分逻辑不变
-        if event.button() == pg.QtCore.Qt.MouseButton.LeftButton and self.view_box.sceneBoundingRect().contains(event.scenePosition()):
+        if event.button() == pg.QtCore.Qt.MouseButton.LeftButton:
             if self.roi:
-                self.view_box.removeItem(self.roi)
+                self.plot_item.removeItem(self.roi)
                 self.roi = None
 
             pos = event.scenePosition()
@@ -327,22 +327,22 @@ class VisionWidget(pg.GraphicsLayoutWidget):
             self.roi_start_pos = mousePoint
 
             # --- 诊断代码 ---
-            scene_pos = event.scenePosition()
-            view_pos = self.view_box.mapSceneToView(scene_pos)
-            image_pos = self.img_item.mapFromScene(scene_pos)
+            # scene_pos = event.scenePosition()
+            # view_pos = self.view_box.mapSceneToView(scene_pos)
+            # image_pos = self.img_item.mapFromScene(scene_pos)
             
 
-            print("--- 坐标诊断 ---")
-            print(f"Scene Coords (墙壁坐标):     x={scene_pos.x():.2f}, y={scene_pos.y():.2f}")
-            print(f"ViewBox Coords (画框坐标):   x={view_pos.x():.2f}, y={view_pos.y():.2f}")
-            print(f"ImageItem Coords (画布坐标): x={image_pos.x():.2f}, y={image_pos.y():.2f}")
-            print(f"ImageItem 自身位置: x={self.img_item.pos().x()}, y={self.img_item.pos().y()}")
-            print("-----------------")
+            # print("--- 坐标诊断 ---")
+            # print(f"Scene Coords (墙壁坐标):     x={scene_pos.x():.2f}, y={scene_pos.y():.2f}")
+            # print(f"ViewBox Coords (画框坐标):   x={view_pos.x():.2f}, y={view_pos.y():.2f}")
+            # print(f"ImageItem Coords (画布坐标): x={image_pos.x():.2f}, y={image_pos.y():.2f}")
+            # print(f"ImageItem 自身位置: x={self.img_item.pos().x()}, y={self.img_item.pos().y()}")
+            # print("-----------------")
 
 
             # 创建新的RectROI
             self.roi = pg.RectROI(self.roi_start_pos, [1, 1], pen='y', removable=True)
-            self.view_box.addItem(self.roi)
+            self.plot_item.addItem(self.roi)
             
             event.accept()
         else:
@@ -350,7 +350,7 @@ class VisionWidget(pg.GraphicsLayoutWidget):
 
     def mouseMoveEvent(self, event):
         if self.roi and event.buttons() == pg.QtCore.Qt.MouseButton.LeftButton:
-            current_pos = self.view_box.mapSceneToView(event.scenePosition())
+            current_pos = self.plot_item.getViewBox().mapSceneToView(event.scenePosition())
             # 更新ROI的位置和大小，以确保拖拽行为符合直觉
             # min()确保左上角坐标正确，abs()确保宽高为正
             start_x, start_y = self.roi_start_pos.x(), self.roi_start_pos.y()
@@ -388,6 +388,9 @@ class VisionWidget(pg.GraphicsLayoutWidget):
 
 class VisionPageWidget(QWidget):
     """Video + control widgets"""
+
+    sigExpTime = Signal(float)
+
     def __init__(self):
         # 设定曝光时间的窗口
         super().__init__()
@@ -395,17 +398,27 @@ class VisionPageWidget(QWidget):
         self.exp_time = QLineEdit("50")
         self.exp_time_unit = QLabel("ms")
         self.vision_widget = VisionWidget()
+        self.roi_vision_widget = VisionWidget()
         layout = QHBoxLayout(self)
         control_layout = QVBoxLayout()
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.exp_time_label)
         button_layout.addWidget(self.exp_time)
         button_layout.addWidget(self.exp_time_unit)
+        button_layout.addStretch(1)
         control_layout.addLayout(button_layout)
-        control_layout.addStretch(1)
+        # control_layout.addStretch(1)
+        control_layout.addWidget(self.roi_vision_widget, 4)
         layout.addWidget(self.vision_widget)
         layout.addLayout(control_layout)
         self.setLayout(layout)
+
+        # 连接信号槽
+        self.exp_time.returnPressed.connect(self.on_exp_time_pressed)
+    
+    def on_exp_time_pressed(self):
+        exp_time = float(self.exp_time.text())
+        self.sigExpTime.emit(exp_time)
 
 class GcodeWidget(QWidget):
 
@@ -565,15 +578,19 @@ class HomeWidget(QWidget):
     """主页控件，包含 G-code 控件和数据状态监视控件"""
 
     def __init__(self):
-        super().__init__(self)
+        super().__init__()
         self.gcode_widget = GcodeWidget()
         self.data_widget = DataPlotWidget()
         self.status_widget = PlatformStatusWidget()
+        self.dieswell_widget = VisionWidget()
 
         # 布局
         layout = QHBoxLayout()
         data_layout = QVBoxLayout()
-        data_layout.addWidget(self.status_widget)
+        status_and_vision_layout = QHBoxLayout()
+        status_and_vision_layout.addWidget(self.status_widget)
+        status_and_vision_layout.addWidget(self.dieswell_widget)
+        data_layout.addLayout(status_and_vision_layout)
         data_layout.addWidget(self.data_widget)
         layout.addWidget(self.gcode_widget)
         layout.addLayout(data_layout)

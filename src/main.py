@@ -42,20 +42,12 @@ class MainWindow(QMainWindow):
         self.tabs.setTabPosition(QTabWidget.TabPosition.West) # 关键！把标签放到左边
         self.tabs.setMovable(True) # 让标签页可以拖动排序
         # 标签页们
-        self.connection_widget = ConnectionWidget()      
-        self.status_widget = PlatformStatusWidget()
-        self.data_widget = DataPlotWidget()
+        self.connection_widget = ConnectionWidget()  
+        self.home_widget = HomeWidget()
         self.vision_page_widget = VisionPageWidget()
-        self.gcode_widget = GcodeWidget()
-
-        # 主页布局
-        self.home_widget = QWidget()
-        layout = QHBoxLayout(self.home_widget)
-        data_layout = QVBoxLayout()
-        data_layout.addWidget(self.status_widget)
-        data_layout.addWidget(self.data_widget)
-        layout.addWidget(self.gcode_widget)
-        layout.addLayout(data_layout)
+        self.status_widget = self.home_widget.status_widget
+        self.data_widget = self.home_widget.data_widget
+        self.gcode_widget = self.home_widget.gcode_widget
 
         # 添加标签页到标签栏
         self.stacked_widget.addWidget(self.connection_widget)
@@ -110,10 +102,8 @@ class MainWindow(QMainWindow):
         self.worker = TCPClient(self.host, self.port)
         # 连接信号槽
         
-        self.worker.data_received.connect(self.data_widget.update_display)
-        self.worker.connection_status.connect(self.connection_widget.update_self_test)
+        self.worker.data_received.connect(self.home_widget.data_widget.update_display)
         self.worker.connection_status.connect(self.update_status)
-        self.worker.connection_status.connect(self.connection_widget.update_button_status)
         self.worker.run()
         
         # 创建 klipper worker（用于查询平台状态和发送动作指令）
@@ -135,9 +125,13 @@ class MainWindow(QMainWindow):
         # 创建 image processing worker 用于处理图像，探测熔体直径
         self.processing_worker = ProcessingWorker()
         # 连接信号槽
-        self.video_worker.new_frame_signal.connect(self.processing_worker.cache_frame)
+        self.vision_page_widget.vision_widget.sigRoiChanged.connect(self.video_worker.set_roi)
+        self.video_worker.new_frame_signal.connect(self.vision_page_widget.vision_widget.update_live_display)
+        self.video_worker.roi_frame_signal.connect(self.processing_worker.cache_frame)
         self.worker.data_received.connect(self.processing_worker.process_frame)
-        self.processing_worker.proc_frame_signal.connect(self.vision_page_widget.vision_widget.update_live_display)
+        self.processing_worker.proc_frame_signal.connect(self.vision_page_widget.roi_vision_widget.update_live_display)
+        self.processing_worker.proc_frame_signal.connect(self.home_widget.dieswell_widget.update_live_display)
+        self.vision_page_widget.sigExpTime.connect(self.video_worker.set_exp_time)
         
         self.connected.emit(True)
         self.show_UI(1)
