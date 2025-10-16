@@ -16,22 +16,26 @@ async def handle_client(reader, writer):
     # 创建一个 future，用于在任一循环结束后通知另一个循环停止
     shutdown_signal = asyncio.Future()
 
+    # 
+
     async def send_loop(writer):
         """周期性地生成并发送数据给这个客户端"""
         while not shutdown_signal.done():
             try:
                 # --- 这是您提供的代码，经过TCP适配 ---
-                extrusion_force = 2 + random.uniform(-.2, .2)
-                die_temperature = 200.0 + random.uniform(-10, 10)
-                hotend_temperature = 200.0 + random.uniform(-10, 10)
-                die_swell = 1.4 + random.uniform(-.1, .1)
+                # extrusion_force = 2 + random.uniform(-.2, .2)
+                # die_temperature = 200.0 + random.uniform(-10, 10)
+                # hotend_temperature = 200.0 + random.uniform(-10, 10)
+                # die_swell = 1.4 + random.uniform(-.1, .1)
+                # message = {
+                #     "extrusion_force": extrusion_force,
+                #     "die_temperature": die_temperature,
+                #     "die_swell": die_swell,
+                #     "hotend_temperature": hotend_temperature
+                # }
                 message = {
-                    "extrusion_force": extrusion_force,
-                    "die_temperature": die_temperature,
-                    "die_swell": die_swell,
-                    "hotend_temperature": hotend_temperature
+                    "extrusion_force": force_list[-1],
                 }
-                
                 # 1. 序列化成 JSON 字符串，然后编码成 bytes
                 data_to_send = json.dumps(message).encode("utf-8") + b'\n' # 加一个换行符作为分隔符
                 
