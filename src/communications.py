@@ -326,7 +326,6 @@ class ProcessingWorker(QObject):
             except Exception as e:
                 raise f"{e}"
         else:
-            print("No image cached, check camera connection!")
             self.die_diameter_signal.emit(np.nan)
         
         self.image_buffer.clear()
