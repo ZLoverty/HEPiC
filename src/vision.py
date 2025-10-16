@@ -126,7 +126,7 @@ def draw_filament_contour(img, skeleton, diameter):
 
     contours, _ = cv2.findContours(reconstructed_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    img_rgb = cv2.cvtColor(cv2.cvtColor(img, cv2.COLOR_GRAY2BGR), cv2.COLOR_BGR2RGB)
+    img_rgb = cv2.cvtColor(cv2.cvtColor(to8bit(img), cv2.COLOR_GRAY2BGR), cv2.COLOR_BGR2RGB)
 
     labeled_image = cv2.drawContours(img_rgb.copy(), contours, -1, (255, 0, 0), 2)
 
