@@ -178,14 +178,16 @@ class DataPlotWidget(QWidget):
             else:
                 t = time.time() - self.t0
 
-            # self.temp_value_label.setText(f"{json_data["hotend_temperature"]:.1f} / {self.set_temperature:.1f} °C")
             self.time.append(t)
-            self.die_temperature.append(data["die_temperature"])
-            self.extrusion_force.append(data["extrusion_force"])
-            self.die_swell.append(data["die_swell"])
-            self.force_curve.setData(list(self.time), list(self.extrusion_force))
-            self.dietemp_curve.setData(list(self.time), list(self.die_temperature))
-            self.dieswell_curve.setData(list(self.time), list(self.die_swell))
+            if "weight" in data:
+                self.extrusion_force.append(data["weight"] * 9.8) 
+                self.force_curve.setData(list(self.time), list(self.extrusion_force))
+            if "die_temperature" in data:
+                self.die_temperature.append(data["die_temperature"])
+                self.dietemp_curve.setData(list(self.time), list(self.die_temperature))
+            if "die_swell" in data:
+                self.die_swell.append(data["die_swell"])
+                self.dieswell_curve.setData(list(self.time), list(self.die_swell))
 
         except (IndexError, ValueError):
             self.temp_value_label.setText("解析错误")
