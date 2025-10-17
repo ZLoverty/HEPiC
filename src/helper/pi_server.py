@@ -8,18 +8,29 @@ import sys
 from pathlib import Path
 import snap7
 from snap7.util import get_real
+import argparse
+import numpy as np
 
 class PiServer:
     """
     一个健壮的、可作为服务运行的异步TCP服务器。
     它从配置文件加载设置，使用专业的日志系统，并能优雅地处理关闭信号。
     """
-    def __init__(self, config_path):
+    def __init__(self, config_path, test_mode=False):
         self.config = self._load_config(config_path)
         self.logger = self._setup_logging()
         self.server = None
         self.tasks = set()
-
+        self.test_mode = test_mode # if test_mode is True, generate random numbers instead of read data from PLC
+        if not self.test_mode:
+            # read plc related params
+            self.plc_ip = self.config.get("plc_ip")
+            self.weight_db = self.config.get("weight_db")
+            self.weight_start = self.config.get("weight_start")
+            self.meter_db = self.config.get("meter_db")
+            self.meter_start = self.config.get("meter_start")
+            # start plc connection
+            self.plc = RobustPLC(ip_address=self.plc_ip, rack=0, slot=1)
 
     def _load_config(self, path):
         """加载 JSON 配置文件"""
@@ -48,26 +59,16 @@ class PiServer:
         if log_file:
             # 使用 RotatingFileHandler 实现日志文件自动分割
             # 10MB一个文件，最多保留5个
+            log_file_path = Path(log_file).expanduser().resolve().parent
+            if not log_file_path.exists():
+                log_file_path.mkdir()
+                
             file_handler = logging.handlers.RotatingFileHandler(
                 log_file, maxBytes=10*1024*1024, backupCount=5, encoding='utf-8')
             file_handler.setFormatter(formatter)
             logger.addHandler(file_handler)
             
         return logger
-
-    def connect_devices(self):
-        self.plc_ip = self.config.get("plc_ip")
-        self.weight_db = self.config.get("weight_db")
-        self.weight_start = self.config.get("weight_start")
-        self.meter_db = self.config.get("meter_db")
-        self.meter_start = self.config.get("meter_start")
-
-        self.plc = snap7.client.Client()
-        print(f"正在连接到 PLC at {self.plc_ip}...")
-        RACK = 0
-        SLOT = 1
-        # 2. 在循环外，只连接一次
-        self.plc.connect(self.plc_ip, RACK, SLOT)
 
     async def _handle_client(self, reader, writer):
         """为每个客户端连接创建独立的处理器"""
@@ -80,11 +81,21 @@ class PiServer:
             """周期性地发送数据给客户端"""
             while not shutdown_signal.done():
                 try:
-                    # read weight and meter from PLC
-                    db_data = self.plc.db_read(self.weight_db, self.weight_start, 4)
-                    weight = get_real(db_data, 0)
-                    db_data = self.plc.db_read(self.meter_db, self.meter_start, 4)
-                    meter = get_real(db_data, 0)
+                    if not self.test_mode:
+                        if self.plc.is_connected():
+                            # read weight and meter from PLC
+                            db_data = self.plc.db_read(self.weight_db, self.weight_start, 4)
+                            weight = get_real(db_data, 0)
+                            db_data = self.plc.db_read(self.meter_db, self.meter_start, 4)
+                            meter = get_real(db_data, 0)
+                        else:
+                            print("读取数据失败，请检查日志。可能是连接刚刚断开。")
+                            print("正在尝试重连 PLC")
+                            await asyncio.sleep(2)
+                            continue
+                    else:
+                        weight = 2 + random.uniform(-.2, .2)
+                        meter = 2 + random.uniform(-.2, .2)
 
                     message = {
                         "weight": weight,
@@ -94,13 +105,14 @@ class PiServer:
                     
                     self.logger.debug(f"向 {addr} 发送 -> {message}")
                     writer.write(data_to_send)
-                    await writer.drain()
-                    
+                    await writer.drain()             
                     await asyncio.sleep(self.config.get("send_delay", 0.01))
                 except (ConnectionResetError, BrokenPipeError) as e:
                     self.logger.warning(f"与 {addr} 的连接异常断开: {e}")
                     if not shutdown_signal.done():
                         shutdown_signal.set_result(True)
+                except KeyboardInterrupt:
+                    print("\n程序被用户中断。")
                 except Exception as e:
                     self.logger.error(f"向 {addr} 发送数据时发生未知错误: {e}", exc_info=True)
                     if not shutdown_signal.done():
@@ -123,11 +135,6 @@ class PiServer:
                     self.logger.error(f"从 {addr} 接收数据时出错: {e}", exc_info=True)
                     if not shutdown_signal.done():
                         shutdown_signal.set_result(True)
-
-        async def image_send_loop(exposure_time=50000):
-            """读取相机图片并发送给客户端。"""
-            self.cap = AsyncHikVideoCapture(width=512, height=512, exposure_time=exposure_time, center_roi=True)
-            # 应该把所有数据都做成 json，有一个固定的结构描述类型和实际数据，可以
 
         send_task = asyncio.create_task(send_loop())
         receive_task = asyncio.create_task(receive_loop())
@@ -184,200 +191,184 @@ class PiServer:
             sys.exit(1)
 
 
-import cv2
-import asyncio # 1. 导入 asyncio
+import snap7
 import time
-import numpy as np
-from typing import Tuple, Optional
+import logging
+from threading import Lock, Thread, Event
 
-# hikrobotcamlib 依赖仍然是可选的，只在实际使用时导入
-try:
-    from hikrobotcamlib import Camera, DeviceList, Frame, DeviceTransport
-except ImportError:
-    print("警告: hikrobotcamlib 未安装。此类将无法工作。")
-    Camera = DeviceList = Frame = DeviceTransport = None
+# 配置日志记录器，方便调试
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-
-class AsyncHikVideoCapture:
+class RobustPLC:
     """
-    一个使用 asyncio 的异步接口，用于海康机器人工业相机。
-    read() 方法是一个协程，在没有新帧时它会交出控制权，允许事件循环运行其他任务。
-
-    用法:
-        async def main():
-            cap = AsyncHikVideoCapture(width=640, height=480)
-            async with cap: # 使用异步上下文管理器
-                while True:
-                    ret, frame = await cap.read() # 'await' 是关键
-                    if not ret:
-                        print("获取帧失败，退出...")
-                        break
-                    cv2.imshow('Async Hikvision Feed', frame)
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
-                        break
-            cv2.destroyAllWindows()
-
-        if __name__ == '__main__':
-            asyncio.run(main())
+    一个健壮的 Siemens S7 PLC 连接器，具备自动重连和线程安全功能。
     """
+    def __init__(self, ip_address, rack=0, slot=1, reconnect_interval=5):
+        """
+        初始化 PLC 连接器。
+        :param ip_address: PLC 的 IP 地址
+        :param rack: 机架号 (通常为 0)
+        :param slot: 插槽号 (S7-1200/1500 通常为 1, S7-300/400 通常为 2)
+        :param reconnect_interval: 自动重连尝试的间隔时间（秒）
+        """
+        self.ip_address = ip_address
+        self.rack = rack
+        self.slot = slot
+        self.reconnect_interval = reconnect_interval
 
-    def __init__(self, width: Optional[int] = None, height: Optional[int] = None, exposure_time: Optional[float] = None, center_roi: bool = True):
-        if Camera is None:
-            raise ImportError("hikrobotcamlib 未安装，无法初始化相机。")
+        self._client = snap7.client.Client()
+        self._lock = Lock()  # 线程锁，确保在多线程环境下的操作安全
+        self._is_connected = False
         
-        self.cam: Optional[Camera] = None
-        self._is_opened = False
-        self.frame_queue = asyncio.Queue(maxsize=2) # 2. 使用 asyncio.Queue
-        self.loop = None # 用于线程安全地与事件循环交互
+        # 用于后台重连线程
+        self._reconnect_thread = None
+        self._stop_event = Event()
 
-        # --- 初始化逻辑与之前类似，但增加了对 event loop 的处理 ---
-        try:
-            # 在__init__中获取当前事件循环，因为回调需要它
-            # 注意: 这要求 AsyncHikVideoCapture 的实例必须在一个正在运行的事件循环中创建
-            self.loop = asyncio.get_running_loop() 
+    def is_connected(self):
+        """返回当前的连接状态"""
+        with self._lock:
+            # 采用双重检查确保状态准确
+            if self._is_connected:
+                # get_connected() 是一个轻量级的网络检查
+                self._is_connected = self._client.get_connected()
+            return self._is_connected
+
+    def connect(self):
+        """
+        连接到 PLC。如果连接失败，会返回 False 但不会抛出异常。
+        """
+        with self._lock:
+            if self._is_connected:
+                return True
+            try:
+                self._client.connect(self.ip_address, self.rack, self.slot)
+                # 连接后检查 PDU 长度，这是一个很好的连接验证方法
+                pdu_length = self._client.get_pdu_length()
+                if pdu_length > 0:
+                    self._is_connected = True
+                    logging.info(f"成功连接到 PLC {self.ip_address}。PDU size: {pdu_length}")
+                    # 连接成功后，启动后台健康检查和重连线程
+                    self._start_reconnect_thread()
+                    return True
+                else: # 理论上 connect 成功 pdu 就会 > 0，但作为双重保障
+                    self._is_connected = False
+                    logging.warning(f"连接到 PLC {self.ip_address} 似乎成功，但 PDU 长度为 0。")
+                    return False
+            except snap7.exceptions.Snap7Exception as e:
+                self._is_connected = False
+                logging.error(f"连接 PLC {self.ip_address} 失败: {e}")
+                # 即使初次连接失败，也启动重连线程
+                self._start_reconnect_thread()
+                return False
+
+    def disconnect(self):
+        """
+        断开与 PLC 的连接。
+        """
+        # 先停止后台重连线程
+        self._stop_reconnect_thread()
+        with self._lock:
+            if self._is_connected:
+                try:
+                    self._client.disconnect()
+                    logging.info(f"已从 PLC {self.ip_address} 断开连接。")
+                except snap7.exceptions.Snap7Exception as e:
+                    logging.error(f"断开 PLC 连接时出错: {e}")
+            self._is_connected = False
+
+    def _start_reconnect_thread(self):
+        """启动后台健康检查和重连线程（如果尚未运行）"""
+        if self._reconnect_thread is None or not self._reconnect_thread.is_alive():
+            self._stop_event.clear()
+            self._reconnect_thread = Thread(target=self._reconnect_handler, daemon=True)
+            self._reconnect_thread.start()
+            logging.info("后台重连/健康检查线程已启动。")
+
+    def _stop_reconnect_thread(self):
+        """停止后台重连线程"""
+        if self._reconnect_thread and self._reconnect_thread.is_alive():
+            self._stop_event.set()
+            # 不需要 join，因为它是 daemon 线程，主程序退出它就退出
+            # self._reconnect_thread.join() 
+            logging.info("后台重连/健康检查线程已停止。")
+
+    def _reconnect_handler(self):
+        """
+        后台线程任务：周期性地检查连接，如果断开则尝试重连。
+        """
+        while not self._stop_event.is_set():
+            with self._lock:
+                # 仅在应该连接但实际未连接时尝试重连
+                if not self._is_connected:
+                    logging.info(f"连接已断开，将在 {self.reconnect_interval} 秒后尝试重连...")
+                    # 在锁外等待，避免长时间持有锁
+                    time.sleep(self.reconnect_interval) 
+                    try:
+                        # 重新尝试连接
+                        self._client.connect(self.ip_address, self.rack, self.slot)
+                        if self._client.get_connected():
+                            self._is_connected = True
+                            logging.info(f"重连成功! PLC: {self.ip_address}")
+                    except snap7.exceptions.Snap7Exception:
+                        logging.warning(f"重连尝试失败。PLC: {self.ip_address}")
+                else:
+                    # 如果已连接，就做一次健康检查
+                    if not self._client.get_connected():
+                        self._is_connected = False
+                        logging.warning(f"连接丢失! PLC: {self.ip_address}")
             
-            print("正在搜索设备...")
-            dev_info = next(iter(DeviceList(DeviceTransport.GIGE | DeviceTransport.USB)), None)
-            if dev_info is None:
-                raise RuntimeError("错误: 未找到任何相机设备。")
+            # 无论连接状态如何，都等待一段时间再检查
+            time.sleep(self.reconnect_interval)
 
-            self.cam = Camera(dev_info)
-            self.cam.open()
-            
-            # 设置ROI和曝光时间的逻辑保持不变
-            # ... (这部分代码与你原来的版本完全相同) ...
-            if width is not None and height is not None:
-                self.cam.set_int("Width", width)
-                self.cam.set_int("Height", height)
-                if center_roi:
-                    width_max = self.cam.get_int("WidthMax")
-                    height_max = self.cam.get_int("HeightMax")
-                    offset_x = (width_max - width) // 2
-                    offset_y = (height_max - height) // 2
-                    self.cam.set_int("OffsetX", offset_x)
-                    self.cam.set_int("OffsetY", offset_y)
-            if exposure_time is not None:
-                self.cam.set_float("ExposureTime", exposure_time)
-            self.cam.set_enum("PixelFormat", "Mono8")
-
-            # 设置回调函数
-            self.cam.frame_callback = self._frame_callback
-            self.cam.trigger_enable(False)
-            self.cam.start()
-            
-            self._is_opened = True
-            print(f"相机 {self.cam.info.model} ({self.cam.info.serialno}) 已成功打开并开始采集。")
-
-        except Exception as e:
-            print(f"初始化相机时出错: {e}")
-            if self.cam:
-                self.cam.close()
-            self._is_opened = False
-            # 重新抛出异常，让调用者知道初始化失败
-            raise
-
-    def _frame_callback(self, frame, cam) -> None:
-        # 3. 这是关键：从外部线程安全地将数据放入 asyncio.Queue
-        if self.frame_queue.full():
-            # 尝试清空一个元素，为新帧腾出空间
-            try: self.frame_queue.get_nowait()
-            except asyncio.QueueEmpty: pass
+    def read_db(self, db_number, start_offset, size):
+        """
+        一个受保护的 DB 读取方法。
+        :return: 成功时返回 bytearray，失败时返回 None。
+        """
+        if not self.is_connected():
+            logging.warning("读取失败：PLC 未连接。")
+            return None
         
-        # 图像处理逻辑与之前相同
-        height = frame.infoptrcts.nHeight
-        width = frame.infoptrcts.nWidth
-        img_data = np.ctypeslib.as_array(frame.dataptr, shape=(frame.len,)).copy()
-        
-        try:
-            img = img_data.reshape((height, width))
-            # 使用 call_soon_threadsafe 将 put_nowait 操作调度到事件循环
-            self.loop.call_soon_threadsafe(self.frame_queue.put_nowait, img)
-        except (ValueError, asyncio.QueueFull):
-            pass
+        with self._lock:
+            try:
+                data = self._client.db_read(db_number, start_offset, size)
+                return data
+            except snap7.exceptions.Snap7Exception as e:
+                logging.error(f"读取 DB{db_number} 失败: {e}")
+                # 发生异常通常意味着连接已中断
+                self._is_connected = False
+                return None
 
-    def isOpened(self) -> bool:
-        return self._is_opened
-
-    async def read(self) -> Tuple[bool, Optional[np.ndarray]]:
-        # 4. 将 read 变成一个协程 (async def)
-        if not self.isOpened():
-            return False, None
-        try:
-            # 'await' 会在这里暂停，直到队列中有新帧，期间事件循环可以运行其他任务
-            frame = await asyncio.wait_for(self.frame_queue.get(), timeout=1.0)
-            self.frame_queue.task_done() # 推荐的做法
-            return True, frame
-        except asyncio.TimeoutError:
-            print("警告: 等待帧超时。")
-            return False, None
-
-    def release(self):
-        if self.cam and self.isOpened():
-            print("正在释放相机资源...")
-            self.cam.stop()
-            self.cam.close()
-            self._is_opened = False
-            print("相机资源已释放。")
-
-    # 5. 实现异步上下文管理器，方便使用 `async with`
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        self.release()
-
-# --- 如何使用 (异步版本) ---
-
-async def other_logic():
-    """一个模拟其他任务的协程，证明在等待图像时程序没有被阻塞。"""
-    counter = 0
-    while True:
-        print(f"其他逻辑正在运行... Counter: {counter}")
-        counter += 1
-        await asyncio.sleep(1) # 每秒执行一次
-
-async def main():
-    """主异步函数"""
-    try:
-        # 必须在 async 函数内部创建实例
-        cap = AsyncHikVideoCapture(width=640, height=480, exposure_time=100000, center_roi=True)
-    except (RuntimeError, ImportError) as e:
-        print(f"无法启动相机: {e}，程序退出。")
-        return
-        
-    # 创建一个后台任务来运行 'other_logic'
-    background_task = asyncio.create_task(other_logic())
-
-    async with cap: # 使用 async with 自动管理资源的释放
-        while True:
-            # 当这里在 'await' 时，事件循环会去运行 'other_logic'
-            print("主逻辑：正在等待下一帧图像...")
-            ret, frame = await cap.read()
+    def write_db(self, db_number, start_offset, data):
+        """
+        一个受保护的 DB 写入方法。
+        :param data: bytearray 类型的数据
+        :return: 成功时返回 True，失败时返回 False。
+        """
+        if not self.is_connected():
+            logging.warning("写入失败：PLC 未连接。")
+            return False
             
-            if not ret:
-                break
+        with self._lock:
+            try:
+                self._client.db_write(db_number, start_offset, data)
+                return True
+            except snap7.exceptions.Snap7Exception as e:
+                logging.error(f"写入 DB{db_number} 失败: {e}")
+                self._is_connected = False
+                return False
             
-            print("主逻辑：已收到新帧！")
-            cv2.imshow('Async Hikvision Feed', frame)
-            
-            # 注意：cv2.waitKey() 是一个阻塞调用，但设为1ms影响很小
-            # 在纯异步GUI框架(如Qt for Python)中，这一步也会是异步的
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-    
-    # 清理
-    background_task.cancel()
-    try:
-        await background_task
-    except asyncio.CancelledError:
-        print("后台任务已成功取消。")
-    
-    cv2.destroyAllWindows()
-    print("程序结束。")
 
 if __name__ == "__main__":
     # 假设配置文件与脚本在同一目录下
-    server_app = PiServer("~/Documents/GitHub/etp_ctl/src/helper/config.json")
+
+    parser = argparse.ArgumentParser(description="Pi data server TCP")
+
+    parser.add_argument("config_file", type=str, help="path to the config json file.")
+    parser.add_argument("-t", "--test_mode", help="test mode switch", action="store_true")
+    args = parser.parse_args()
+    
+    server_app = PiServer(args.config_file, test_mode=args.test_mode)
     try:
         asyncio.run(server_app.run())
     except (KeyboardInterrupt, SystemExit):
