@@ -73,7 +73,7 @@ class PiServer:
     async def _handle_client(self, reader, writer):
         """为每个客户端连接创建独立的处理器"""
         addr = writer.get_extra_info('peername')
-        self.logger.info(f"接受来自 {addr} 的新连接")
+        self.logger.info(f"accepting new link from {addr}")
 
         shutdown_signal = asyncio.Future()
 
@@ -103,18 +103,18 @@ class PiServer:
                     }
                     data_to_send = json.dumps(message).encode("utf-8") + b'\n'
                     
-                    self.logger.debug(f"向 {addr} 发送 -> {message}")
+                    self.logger.debug(f"sending to {addr} -> {message}")
                     writer.write(data_to_send)
                     await writer.drain()             
                     await asyncio.sleep(self.config.get("send_delay", 0.01))
                 except (ConnectionResetError, BrokenPipeError) as e:
-                    self.logger.warning(f"与 {addr} 的连接异常断开: {e}")
+                    self.logger.warning(f"disconnect from {addr}: {e}")
                     if not shutdown_signal.done():
                         shutdown_signal.set_result(True)
                 except KeyboardInterrupt:
                     print("\n程序被用户中断。")
                 except Exception as e:
-                    self.logger.error(f"向 {addr} 发送数据时发生未知错误: {e}", exc_info=True)
+                    self.logger.error(f"unknow error sending to {addr}: {e}", exc_info=True)
                     if not shutdown_signal.done():
                         shutdown_signal.set_result(True)
 
@@ -124,15 +124,15 @@ class PiServer:
                 try:
                     data = await reader.read(1024)
                     if not data:
-                        self.logger.info(f"客户端 {addr} 已主动断开连接。")
+                        self.logger.info(f"client {addr} has disconnected")
                         if not shutdown_signal.done():
                             shutdown_signal.set_result(True)
                         break
                     
                     message = data.decode().strip()
-                    self.logger.info(f"从 {addr} 收到消息: {message!r}")
+                    self.logger.info(f"received from {addr}: {message!r}")
                 except Exception as e:
-                    self.logger.error(f"从 {addr} 接收数据时出错: {e}", exc_info=True)
+                    self.logger.error(f"error when receiving from {addr}: {e}", exc_info=True)
                     if not shutdown_signal.done():
                         shutdown_signal.set_result(True)
 
@@ -148,13 +148,13 @@ class PiServer:
         self.tasks.remove(send_task)
         self.tasks.remove(receive_task)
         
-        self.logger.info(f"关闭与 {addr} 的连接。")
+        self.logger.info(f"close connection from {addr}")
         writer.close()
         await writer.wait_closed()
 
     async def _shutdown(self, sig):
         """优雅地关闭服务器"""
-        self.logger.info(f"收到关闭信号: {sig.name}. 服务器正在关闭...")
+        self.logger.info(f"receive close signal: {sig.name}. closing...")
         
         # 停止接受新连接
         if self.server:
@@ -184,10 +184,10 @@ class PiServer:
         try:
             self.server = await asyncio.start_server(self._handle_client, host, port)
             addrs = ', '.join(str(sock.getsockname()) for sock in self.server.sockets)
-            self.logger.info(f"服务器已启动，正在监听 {addrs}")
+            self.logger.info(f"server start listening {addrs}")
             await self.server.serve_forever()
         except Exception as e:
-            self.logger.critical(f"服务器启动失败: {e}", exc_info=True)
+            self.logger.critical(f"server fails to start: {e}", exc_info=True)
             sys.exit(1)
 
 
@@ -246,17 +246,17 @@ class RobustPLC:
                 pdu_length = self._client.get_pdu_length()
                 if pdu_length > 0:
                     self._is_connected = True
-                    logging.info(f"成功连接到 PLC {self.ip_address}。PDU size: {pdu_length}")
+                    logging.info(f"connected to PLC {self.ip_address} PDU size: {pdu_length}")
                     # 连接成功后，启动后台健康检查和重连线程
                     self._start_reconnect_thread()
                     return True
                 else: # 理论上 connect 成功 pdu 就会 > 0，但作为双重保障
                     self._is_connected = False
-                    logging.warning(f"连接到 PLC {self.ip_address} 似乎成功，但 PDU 长度为 0。")
+                    logging.warning(f"seem to connect PLC {self.ip_address} but PDU length is 0。")
                     return False
             except snap7.exceptions.Snap7Exception as e:
                 self._is_connected = False
-                logging.error(f"连接 PLC {self.ip_address} 失败: {e}")
+                logging.error(f"connect PLC {self.ip_address} failed: {e}")
                 # 即使初次连接失败，也启动重连线程
                 self._start_reconnect_thread()
                 return False
@@ -271,9 +271,9 @@ class RobustPLC:
             if self._is_connected:
                 try:
                     self._client.disconnect()
-                    logging.info(f"已从 PLC {self.ip_address} 断开连接。")
+                    logging.info(f"disconnected from PLC {self.ip_address}。")
                 except snap7.exceptions.Snap7Exception as e:
-                    logging.error(f"断开 PLC 连接时出错: {e}")
+                    logging.error(f"error connecting PLC: {e}")
             self._is_connected = False
 
     def _start_reconnect_thread(self):
@@ -282,7 +282,7 @@ class RobustPLC:
             self._stop_event.clear()
             self._reconnect_thread = Thread(target=self._reconnect_handler, daemon=True)
             self._reconnect_thread.start()
-            logging.info("后台重连/健康检查线程已启动。")
+            logging.info("background connection check started")
 
     def _stop_reconnect_thread(self):
         """停止后台重连线程"""
@@ -290,7 +290,7 @@ class RobustPLC:
             self._stop_event.set()
             # 不需要 join，因为它是 daemon 线程，主程序退出它就退出
             # self._reconnect_thread.join() 
-            logging.info("后台重连/健康检查线程已停止。")
+            logging.info("background connection check stopped")
 
     def _reconnect_handler(self):
         """
@@ -300,7 +300,7 @@ class RobustPLC:
             with self._lock:
                 # 仅在应该连接但实际未连接时尝试重连
                 if not self._is_connected:
-                    logging.info(f"连接已断开，将在 {self.reconnect_interval} 秒后尝试重连...")
+                    logging.info(f"disconnected, will retry in {self.reconnect_interval} ")
                     # 在锁外等待，避免长时间持有锁
                     time.sleep(self.reconnect_interval) 
                     try:
@@ -308,14 +308,14 @@ class RobustPLC:
                         self._client.connect(self.ip_address, self.rack, self.slot)
                         if self._client.get_connected():
                             self._is_connected = True
-                            logging.info(f"重连成功! PLC: {self.ip_address}")
+                            logging.info(f"connected! PLC: {self.ip_address}")
                     except snap7.exceptions.Snap7Exception:
-                        logging.warning(f"重连尝试失败。PLC: {self.ip_address}")
+                        logging.warning(f"connect fail PLC: {self.ip_address}")
                 else:
                     # 如果已连接，就做一次健康检查
                     if not self._client.get_connected():
                         self._is_connected = False
-                        logging.warning(f"连接丢失! PLC: {self.ip_address}")
+                        logging.warning(f"lost connection! PLC: {self.ip_address}")
             
             # 无论连接状态如何，都等待一段时间再检查
             time.sleep(self.reconnect_interval)
@@ -326,7 +326,7 @@ class RobustPLC:
         :return: 成功时返回 bytearray，失败时返回 None。
         """
         if not self.is_connected():
-            logging.warning("读取失败：PLC 未连接。")
+            logging.warning("fail to read：PLC disconnected。")
             return None
         
         with self._lock:
@@ -334,7 +334,7 @@ class RobustPLC:
                 data = self._client.db_read(db_number, start_offset, size)
                 return data
             except snap7.exceptions.Snap7Exception as e:
-                logging.error(f"读取 DB{db_number} 失败: {e}")
+                logging.error(f"read DB{db_number} fail: {e}")
                 # 发生异常通常意味着连接已中断
                 self._is_connected = False
                 return None
@@ -346,7 +346,7 @@ class RobustPLC:
         :return: 成功时返回 True，失败时返回 False。
         """
         if not self.is_connected():
-            logging.warning("写入失败：PLC 未连接。")
+            logging.warning("write fail：PLC disconnected。")
             return False
             
         with self._lock:
@@ -354,7 +354,7 @@ class RobustPLC:
                 self._client.db_write(db_number, start_offset, data)
                 return True
             except snap7.exceptions.Snap7Exception as e:
-                logging.error(f"写入 DB{db_number} 失败: {e}")
+                logging.error(f"write DB{db_number} fail: {e}")
                 self._is_connected = False
                 return False
             
@@ -372,4 +372,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(server_app.run())
     except (KeyboardInterrupt, SystemExit):
-        server_app.logger.info("程序已终止。")
+        server_app.logger.info("program closed")
