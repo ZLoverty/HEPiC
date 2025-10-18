@@ -2,7 +2,8 @@ import sys
 import threading
 import queue  # 使用队列进行线程安全的数据交换
 import numpy as np
-import optris.otcsdk as otc
+sys.path.append("")
+import optris_lib.otcsdk as otc
 import cv2  # 仅用于 get() 方法的常量
 
 # 确保 SDK 只被初始化一次
