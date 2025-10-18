@@ -289,7 +289,7 @@ class VideoWorker(QObject):
                     x, y, w, h = self.roi
                     self.roi_frame_signal.emit(frame[y:y+h, x:x+w])
             else:
-                print("Failed to read frame.")
+                print("Fail to read frame.")
             
             await asyncio.sleep(self.frame_delay)
 
@@ -345,8 +345,9 @@ class ProcessingWorker(QObject):
                 self.proc_frame_signal.emit(proc_frame)                                         
             except ValueError as e:
                 # 已知纯色图片会导致检测失败，在此情况下可以不必报错继续运行，将出口直径记为 np.nan 即可
-                print("ValueError: 纯色图片")
+                print(f"图像无法处理: {e}")
                 self.die_diameter_signal.emit(np.nan)
+                self.proc_frame_signal.emit(gray)
             except Exception as e:
                 raise f"{e}"
         else:
