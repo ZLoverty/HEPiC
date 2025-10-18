@@ -168,8 +168,6 @@ class MainWindow(QMainWindow):
             self.klipper_worker.send_gcode(f"M104 S{target}")
 
     def closeEvent(self, event):
-        """关闭窗口时，优雅地停止后台线程"""
-        self.disconnect_from_ip()
         event.accept()
 
     # def closeEvent(self, event):
