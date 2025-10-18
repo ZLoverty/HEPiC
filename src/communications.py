@@ -10,11 +10,14 @@ import time
 import asyncio
 import websockets
 import json
-from queue import Queue
 from qasync import QEventLoop, asyncSlot
 import numpy as np
 from vision import filament_diameter, convert_to_grayscale, draw_filament_contour, find_longest_branch, ImageStreamer
+from video_capture import HikVideoCapture
 from collections import deque
+import platform
+import aiohttp
+from pathlib import Path
 
 class TCPClient(QObject):
     # --- 信号 ---
@@ -22,6 +25,7 @@ class TCPClient(QObject):
     connection_status = Signal(str)
     # 收到并解析完数据后发出
     data_received = Signal(dict)
+    connected = Signal(int)
 
     def __init__(self, host, port):
         super().__init__()
@@ -32,11 +36,8 @@ class TCPClient(QObject):
     @asyncSlot()
     async def run(self):
         if await self.connect():
-            try:
-                await self._receive_task
-            finally:
-                print("\n--- 准备关闭客户端 ---")
-                self.stop()
+            self.is_running = True
+            await self.receive_data()
         else:
             self.stop()
 
@@ -47,33 +48,22 @@ class TCPClient(QObject):
         """
         try:
             # 创建异步 TCP 连接
-            print(f"正在连接到 {self.host}:{self.port}...")
-            self.connection_status.emit(f"正在尝试连接 {self.host}:{self.port}...")
-            self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.host, self.port), timeout=5.0)
-            # 直到连接成功，更改状态为 running
-            self.is_running = True
-            print("连接成功！")
-            self.connection_status.emit("连接成功")
-
-            # 3. 启动一个专门用于接收数据的任务
-            self._receive_task = asyncio.create_task(self._receive_loop())
+            print(f"正在连接树莓派 {self.host}: {self.port} ...")
+            self.connection_status.emit(f"正在连接挤出测试平台树莓派 {self.host}: {self.port} ...")
+            self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.host, self.port), timeout=2.0)
+            print("树莓派连接成功！")
+            self.connection_status.emit("树莓派连接成功！")
+            self.connected.emit(1)
             return True
-
         except (asyncio.TimeoutError, OSError) as e:
-            print(f"连接超时")
-            self.connection_status.emit(f"连接超时，请检查设备是否开启，IP 地址是否正确")
+            print(f"树莓派连接超时")
+            self.connection_status.emit(f"树莓派连接超时，请检查设备是否开启，IP 地址是否正确")
             return False
-        
-        except Exception as e:
-            print(f"连接失败: {e}")
-            self.connection_status.emit(f"连接失败: {e}")
-            return False
-
-    async def _receive_loop(self):
+    
+    async def receive_data(self):
         """
         这个函数在后台线程中运行，持续接收数据。
         """
-        print("数据接收循环已启动...")
         while self.is_running:
             try:
                 # 读取一行数据
@@ -83,7 +73,7 @@ class TCPClient(QObject):
                     self.connection_status.emit("连接已断开")
                     break
                 message_str = data.decode('utf-8').strip()
-                print(f"{message_str}")
+                # print(f"{message_str}")
                 try:
                     message_dict = json.loads(message_str)
                     self.data_received.emit(message_dict)
@@ -94,16 +84,9 @@ class TCPClient(QObject):
                 print("连接被重置或中止。")
                 self.connection_status.emit("连接已断开")
                 break
-            except Exception as e:
-                # 如果_is_running是False，说明是主动关闭，这个错误是预期的
-                if self.is_running:
-                    print(f"接收数据时出错: {e}")
-                    self.connection_status.emit(f"连接错误: {e}")
-                break
         
         # 循环结束后，确保状态被更新
         self.is_running = False
-        print("数据接收循环已停止。")
 
     @asyncSlot()
     async def stop(self):
@@ -111,18 +94,11 @@ class TCPClient(QObject):
         关闭连接并停止接收线程。
         """
         if not self.is_running:
+            self.connection_status.emit("连接已断开")
             return
 
         print("正在关闭连接...")
         self.is_running = False
-
-        if self.writer:
-            self.writer.close()
-            await self.writer.wait_closed()
-        
-        if self._receive_task:
-            self._receive_task.cancel()
-
         self.connection_status.emit("连接已断开")
         print("连接已断开")
 
@@ -130,120 +106,177 @@ class KlipperWorker(QObject):
     """
     处理与 Klipper (Moonraker) 的 WebSocket 通信
     """
-    # 定义信号：
-    # response_received: 收到打印机返回信息时发出
-    # connection_status: 连接状态变化时发出
-    response_received = Signal(str)
+
     connection_status = Signal(str)
+    hotend_temperature = Signal(float)
+    current_step_signal = Signal(int)
+    gcode_error = Signal(str)
 
     def __init__(self, host, port):
         super().__init__()
         self.host = host
         self.port = port
-        self._running = True
-        self.message_queue = Queue() # 线程安全的消息队列
-        self.request_id = 1
-        self._stop_event = asyncio.Event()
+        self.is_running = True
+        self.message_queue = asyncio.Queue() # klipper 的消息队列
+        self.gcode_queue = asyncio.Queue() # gcode 的消息队列
+        self.uri = f"ws://{self.host}:{self.port}/websocket"
+        
 
-    @Slot()
-    def run(self):
-        """线程主循环"""
-        # 使用 asyncio 运行 WebSocket 客户端
-        try:
-            asyncio.run(self.main_loop())
-        except Exception as e:
-            self.connection_status.emit(f"Klipper 连接失败: {e}")
-
-    async def main_loop(self):
+    @asyncSlot()
+    async def run(self):
         """Asyncio 事件循环，处理 WebSocket 连接和通信"""
-        uri = f"ws://{self.host}:{self.port}/websocket"
-        
-        while self._running:
-            try:
-                self.connection_status.emit(f"正在连接 Klipper 服务 {uri}...")
-                print(f"[DIAG] Attempting to connect to {uri}...")
-                async with websockets.connect(uri) as websocket:
-                    self.connection_status.emit("连接成功")
-                    print("[DIAG] WebSocket connection established.")
-                    
-                    # 并发处理接收消息和发送消息
-                    consumer_task = asyncio.create_task(self.message_consumer(websocket))
-                    producer_task = asyncio.create_task(self.message_producer(websocket))
-
-                    tasks = [consumer_task, producer_task]
-                    await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-
-            except (websockets.exceptions.ConnectionClosed, ConnectionRefusedError, OSError) as e:
-                # 捕获已知的连接错误
-                self.connection_status.emit(f"连接失败: {e}")
-            except Exception as e:
-                # 捕获其他未知错误
-                self.connection_status.emit(f"未知错误: {e}")
-        
-            if self._running:
-                self.connection_status.emit("5s 后尝试重连...")
-                try:
-                    # 等待5秒，但如果在这期间停止信号被触发，会立刻唤醒
-                    await asyncio.wait_for(self._stop_event.wait(), timeout=5.0)
-                    # 如果被唤醒，说明收到了停止信号，跳出 while 循环
-                    break 
-                except asyncio.TimeoutError:
-                    # 5秒正常结束，继续下一次重连尝试
-                    pass
-
-    async def message_consumer(self, websocket):
-        """持续从 WebSocket 接收消息"""
-        async for message in websocket:
-            # print(f"[DIAG] 4. Worker received raw response:\n{message}\n")
-            self.response_received.emit(str(message))
-
-    async def message_producer(self, websocket):
-        """从队列中获取消息并发送到 WebSocket"""
-        while self._running:
-            if not self.message_queue.empty():
-                command = self.message_queue.get()
-                
-                # Moonraker 需要 JSON-RPC 格式
-                request = {
+        try:
+            print(f"正在连接 Klipper {self.uri} ...")
+            self.connection_status.emit(f"正在连接 Klipper {self.uri} ...")
+            # async with asyncio.wait_for(websockets.connect(self.uri), timeout=2.0) as websocket:
+            async with websockets.connect(self.uri, open_timeout=2.0) as websocket:
+                print("Klipper 连接成功！")
+                self.connection_status.emit("Klipper 连接成功！")
+                subscribe_message = {
                     "jsonrpc": "2.0",
-                    "method": "printer.gcode.script",
-                    "params": {"script": command},
-                    "id": self.request_id
+                    "method": "printer.objects.subscribe",
+                    "params": {
+                        "objects": {
+                            "extruder": ["temperature"]
+                        }
+                    },
+                    "id": 1 # 一个随机的ID
                 }
-                self.request_id += 1
 
-                json_request = json.dumps(request)
-                
-                print(f"[DIAG] 3. Worker sending JSON:\n{json_request}\n")
+                # 发送订阅请求
+                await websocket.send(json.dumps(subscribe_message))
+                print("已发送状态订阅请求...")
 
-                await websocket.send(json_request)
-            await asyncio.sleep(.1) # 避免忙循环
+                listener_task = asyncio.create_task(self.message_listener(websocket))
+                sender_task = asyncio.create_task(self.gcode_sender(websocket))
+                processor_task = asyncio.create_task(self.data_processor())
 
-    @Slot(str)
-    def send_gcode(self, command):
-        """接收来自主线程的命令，并放入队列"""
-        print(f"[DIAG] 2. Worker received command: '{command}'")
-        self.message_queue.put(command)
+                await asyncio.gather(listener_task, sender_task, processor_task)
+
+        except (websockets.exceptions.ConnectionClosedError, ConnectionRefusedError) as e:
+            print(f"Klipper 连接失败")
+        except TimeoutError as e:
+            print("Klipper 连接超时，检查服务器是否开启")
+            self.connection_status.emit("Klipper 连接超时，检查服务器是否开启")
+
+    async def message_listener(self, websocket):
+        # 监听来自服务器的消息
+        while self.is_running:
+            async for message in websocket:
+                data = json.loads(message)
+                # 将收到的原始数据放入队列，交给消费者处理
+                await self.message_queue.put(data)
+
+    async def gcode_sender(self, websocket):
+        # 发送用户输入的gcode消息
+        while self.is_running:
+            gcode = await self.gcode_queue.get()
+            self.current_step += 1
+            gcode_message = {
+                "jsonrpc": "2.0",
+                "id": self.current_step, 
+                "method": "printer.gcode.script",
+                "params": {
+                    "script": gcode + "\nM400"
+                },
+            }
+            # print(f"Step {self.current_step}: {gcode}")
+            await websocket.send(json.dumps(gcode_message)) 
+
+    @asyncSlot(str)
+    async def send_gcode(self, command):
+        """接收来自主线程的命令，并放入队列。command 可以是多行 gcode，行用换行符隔开，此函数会将多行命令分割为单行依次送入执行队列，以便追踪命令执行进度。
+        
+        Parameters
+        ----------
+        command : str
+            gcode string, can be one-liner or multi-liner
+        """
+
+        self.current_step = 0 # 用于标记 gcode 回执
+        self.current_step_signal.emit(self.current_step)
+        command_list = command.split("\n")
+        for cmd in command_list:
+            await self.gcode_queue.put(cmd)
+
+    async def data_processor(self):
+        """
+        消费者：从队列中等待并获取数据，然后进行处理。本函数需要处理多种与 Klipper 的通讯信息，至少包含 i) 订阅回执，ii) gcode 发送。
+        """
+        print("数据处理器已启动，等待数据...")
+        while True:
+            # 核心：在这里await，等待队列中有新数据
+            data = await self.message_queue.get()
+
+            # Moonraker的数据有两种主要类型：
+            # 1. 对你请求的响应 (包含 "result" 键)
+            # 2. 服务器主动推送的状态更新 (方法为 "notify_status_update")
+            if "method" in data: 
+                if data["method"] == "notify_status_update": # 判断是否是状态回执
+                    try:
+                        temp = data["params"][0]["extruder"]["temperature"]
+                    except:
+                        temp = np.nan
+                    self.hotend_temperature.emit(temp)
+                elif data["method"] == "printer.gcode.script": # 发送 G-code
+                    async with websockets.connect(self.uri) as websocket:
+                        await websocket.send(json.dumps(data))
+                elif data["method"] == "notify_proc_stat_update":
+                    pass
+                elif data["method"] == "notify_gcode_response":
+                    self.gcode_error.emit(data["params"][0])
+                else:
+                    print(data)
+            elif "id" in data:
+                # print(data)
+                if "result" in data:
+                    # print(f"--> Feedback: step {data["id"]}")
+                    # 高亮当前正在执行的 G-code
+                    self.current_step_signal.emit(data["id"])
+                elif "error" in data:
+                    # print(data)
+                    self.gcode_error.emit(f"{data["error"]["code"]}: {data["error"]["message"]}")
+                else:
+                    pass
+            else:
+                print(data)
+
+            # 标记任务完成，这对于优雅退出很重要
+            self.message_queue.task_done()
+
+    
 
     @asyncSlot()
     async def stop(self):
         """停止线程"""
-        self._running = False
+        self.is_running = False
 
 class VideoWorker(QObject):
     """
     运行 ImageStreamer 的工作线程，通过信号发送图像帧。
     """
     new_frame_signal = Signal(np.ndarray)
+    roi_frame_signal = Signal(np.ndarray)
     finished = Signal()
 
-    def __init__(self, image_folder, fps):
+    def __init__(self, test_mode=False, image_folder="~/Documents/GitHub/etp_ctl/test/filament_images_simulated", fps=10):
+        """
+        Parameters
+        ----------
+        test_mode : bool
+            if true, enable test mode, which utilizes a sequence of local images to simulate a video stream from a camera.
+        """
         super().__init__()
-        self.image_folder = image_folder
-        self.fps = fps
+       
+        if test_mode:  # 调试用图片流
+            image_folder = Path(image_folder).expanduser().resolve()
+            self.cap = ImageStreamer(str(image_folder), fps=fps)
+        else: # 真图片流
+            self.cap = HikVideoCapture(width=512, height=512, exposure_time=50000, center_roi=True)
+            
         self.running = True
-        self.cap = ImageStreamer(self.image_folder, fps=self.fps)
-        self.frame_delay = 1 / self.fps  
+        self.frame_delay = 1 / fps  
+        self.roi = None
 
     @asyncSlot()
     async def run(self):
@@ -252,10 +285,17 @@ class VideoWorker(QObject):
             ret, frame = self.cap.read()
             if ret:
                 self.new_frame_signal.emit(frame)
+                if self.roi is not None:
+                    x, y, w, h = self.roi
+                    self.roi_frame_signal.emit(frame[y:y+h, x:x+w])
             else:
                 print("Failed to read frame.")
             
             await asyncio.sleep(self.frame_delay)
+
+    @Slot(tuple)
+    def set_roi(self, roi):
+        self.roi = roi
 
     @Slot()
     def stop(self):
@@ -263,8 +303,21 @@ class VideoWorker(QObject):
         self.running = False
         self.cap.release()
 
-class ProcessingWorker(QObject):
+    @asyncSlot(float)
+    async def set_exp_time(self, exp_time):
+        """
+        Parameters
+        ----------
+        exp_time : float
+            exposure time in ms.
+        """
+        self.cap.release()
+        while self.cap._is_opened:
+            await asyncio.sleep(1)
+        self.cap = HikVideoCapture(width=512, height=512, exposure_time=exp_time*1000, center_roi=True)
 
+class ProcessingWorker(QObject):
+    """处理图像的逻辑：如果ROI没有被设置，则只在视觉页更新未处理的图像；如果ROI已经设置，则在更新视觉页未处理图像同时，更新处理过的ROI图像。"""
     die_diameter_signal = Signal(float)
     proc_frame_signal = Signal(np.ndarray)
 
@@ -284,7 +337,9 @@ class ProcessingWorker(QObject):
             gray = convert_to_grayscale(img) # only process gray images    
             try:
                 diameter, skeleton, dist_transform = filament_diameter(gray)
+                skeleton[dist_transform < dist_transform.max()*0.9] = False
                 longest_branch = find_longest_branch(skeleton)
+                # filter the pixels on skeleton where dt is smaller than 0.9 of the max
                 diameter_refine = dist_transform[longest_branch].mean() * 2.0
                 proc_frame = draw_filament_contour(gray, longest_branch, diameter_refine)
                 self.proc_frame_signal.emit(proc_frame)                                         
@@ -295,10 +350,142 @@ class ProcessingWorker(QObject):
             except Exception as e:
                 raise f"{e}"
         else:
-            print("No image cached, check camera connection!")
             self.die_diameter_signal.emit(np.nan)
         
         self.image_buffer.clear()
     
     def stop(self):
         self.image_buffer.clear()
+
+class ConnectionTester(QObject):
+    """初次连接时应进行一个网络自检，确定必要的硬件都已开启，且服务、端口都正确配置。这个自检应当用阻塞函数实现，因为如果自检不通过，运行之后的代码将毫无意义。因此，单独写这个自检函数。"""
+    test_msg = Signal(str)
+    # 【保持不变或按需修改】如果希望传递 host，就用 Signal(str)
+    success = Signal(str) 
+    fail = Signal()
+
+    def __init__(self, host, port):
+        super().__init__()
+        self.host = host
+        self.port = port
+        self.moonraker_port = 7125
+    
+    # 1. 将 run 方法改为 @asyncSlot
+    @asyncSlot()
+    async def run(self):
+        self.test_msg.emit(f"检查网络环境中 ...")
+
+        # --- 步骤 1: 异步检查主机基础连通性 (Ping) ---
+        self.test_msg.emit(f"[步骤 1/4] 正在 Ping 树莓派主机 {self.host} ...")
+        ping_ok = await self._is_host_reachable_async(self.host)
+        
+        if ping_ok:
+            self.test_msg.emit(f"✅ Ping 成功！主机 {self.host} 在网络上是可达的。")
+        else:
+            self.test_msg.emit(f"❌ Ping 失败，主机 {self.host} 不可达或阻止了 Ping 请求。")
+            self.fail.emit()
+            return
+
+        # --- 步骤 2: 异步检查特定 TCP 端口 ---
+        self.test_msg.emit(f"[步骤 2/4] 正在检查数据传输端口 {self.port} ...")
+        port_ok = await self._check_tcp_port_async(self.host, self.port)
+
+        if port_ok:
+            self.test_msg.emit(f"✅ 端口检查成功！数据服务器在 {self.host}:{self.port} 上正在监听。")
+        else:
+            self.test_msg.emit(f"❌ 端口检查失败。主机可达，但端口 {self.port} 已关闭或被防火墙过滤。")
+            self.test_msg.emit("数据端口连通性测试失败，请检查数据服务器是否启动")
+            self.fail.emit()
+
+        # --- 新增步骤 3: 检查 Moonraker API ---
+        self.test_msg.emit(f"[步骤 3/4] 正在检查 Moonraker 服务...")
+        if not await self._check_moonraker_async():
+            self.test_msg.emit(f"❌ Moonraker 服务无响应。")
+            self.fail.emit()
+            return
+
+        self.test_msg.emit(f"✅ Moonraker 服务 API 响应正常！")
+
+        # --- 新增步骤 4: 检查 Klipper 状态 ---
+        self.test_msg.emit(f"[步骤 4/4] 正在查询 Klipper 状态...")
+        klipper_ok, klipper_state = await self._check_klipper_async()
+        if not klipper_ok:
+            self.test_msg.emit(f"❌ Klipper 状态异常: '{klipper_state}'")
+            self.fail.emit()
+            return
+
+        self.test_msg.emit(f"✅ Klipper 状态为 '{klipper_state}'，一切就绪！")
+        self.test_msg.emit("所有检查通过，准备连接...")
+        self.success.emit(self.host)
+        
+    # 2. 实现异步的 ping 方法
+    async def _is_host_reachable_async(self, host: str, timeout: int = 2) -> bool:
+        system_name = platform.system().lower()
+        if system_name == "windows":
+            command = ["ping", "-n", "1", "-w", str(timeout * 1000), host]
+        else:
+            command = ["ping", "-c", "1", "-W", str(timeout), host]
+
+        try:
+            # 使用 asyncio.create_subprocess_exec 替代阻塞的 subprocess.run
+            proc = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            # 等待进程结束
+            await proc.wait()
+            return proc.returncode == 0
+        except (FileNotFoundError, asyncio.TimeoutError):
+            print("错误：ping 命令执行失败或超时。")
+            return False
+
+    # 3. 实现异步的 TCP 端口检查方法
+    async def _check_tcp_port_async(self, host: str, port: int, timeout: int = 3) -> bool:
+        try:
+            # 使用 asyncio.open_connection 尝试连接，并用 wait_for 控制超时
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(host, port), 
+                timeout=timeout
+            )
+            # 连接成功后，立即关闭 writer
+            writer.close()
+            await writer.wait_closed()
+            return True
+        except (asyncio.TimeoutError, OSError) as e:
+            # 捕获超时或连接被拒绝等错误
+            print(f"检查端口时发生错误: {e}")
+            return False
+        
+    async def _check_moonraker_async(self) -> bool:
+        """异步检查 Moonraker 的 /server/info API 端点。"""
+        url = f"http://{self.host}:{self.moonraker_port}/server/info"
+        try:
+            timeout = aiohttp.ClientTimeout(total=3)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(url) as response:
+                    return response.status == 200
+        except Exception as e:
+            print(f"检查 Moonraker 时出错: {e}")
+            return False
+
+    async def _check_klipper_async(self):
+        """通过 Moonraker 查询 Klipper 的状态。"""
+        url = f"http://{self.host}:{self.moonraker_port}/printer/objects/query?webhooks"
+        try:
+            timeout = aiohttp.ClientTimeout(total=3)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        # 安全地访问嵌套的字典
+                        state = data.get("result", {}).get("status", {}).get("webhooks", {}).get("state", "未知")
+                        if state == "ready":
+                            return True, state
+                        else:
+                            return False, state
+                    else:
+                        return False, f"HTTP 错误码: {response.status}"
+        except Exception as e:
+            print(f"检查 Klipper 时出错: {e}")
+            return False, "请求异常"

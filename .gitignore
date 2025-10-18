@@ -217,3 +217,10 @@ __marimo__/
 
 # vscode
 .vscode/
+
+# MacOS
+.DS_Store
+
+# HikVision
+*GenICam*
+*cache*

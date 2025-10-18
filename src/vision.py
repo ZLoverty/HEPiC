@@ -120,12 +120,13 @@ def draw_filament_contour(img, skeleton, diameter):
         try:
             cv2.circle(reconstructed_mask, center, int(round(diameter//2)), 255, thickness=-1)
         except ValueError as e:
-            print(f"Fail to process the image: {e}")
             return img
+        except Exception as e:
+            print(f"未知错误: {e}")
 
     contours, _ = cv2.findContours(reconstructed_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    img_rgb = cv2.cvtColor(cv2.cvtColor(img, cv2.COLOR_GRAY2BGR), cv2.COLOR_BGR2RGB)
+    img_rgb = cv2.cvtColor(cv2.cvtColor(to8bit(img), cv2.COLOR_GRAY2BGR), cv2.COLOR_BGR2RGB)
 
     labeled_image = cv2.drawContours(img_rgb.copy(), contours, -1, (255, 0, 0), 2)
 
@@ -151,9 +152,9 @@ def find_longest_branch(skeleton):
         print(f"ValueError: {e}")
         return None
     
-    branch_data = summarize(skel_obj) # analyze the branches in the skeleton
+    branch_data = summarize(skel_obj, separator="_") # analyze the branches in the skeleton
 
-    long_branch_id = branch_data["branch-distance"].argmax() + 1 # find the id of the longest branch (it's the data index + 1)
+    long_branch_id = branch_data["branch_distance"].argmax() + 1 # find the id of the longest branch (it's the data index + 1)
 
     branch_labels = skel_obj.path_label_image() # get path label image where locations of skeleton are labeled
 
