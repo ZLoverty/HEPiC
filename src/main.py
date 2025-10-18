@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Signal, Slot, QThread
 import pyqtgraph as pg
 from collections import deque
-from communications import TCPClient, KlipperWorker, VideoWorker, ProcessingWorker, ConnectionTester
+from communications import TCPClient, KlipperWorker, VideoWorker, ProcessingWorker, ConnectionTester, IRWorker
 from tab_widgets import ConnectionWidget, PlatformStatusWidget, DataPlotWidget, CommandWidget, LogWidget, VisionPageWidget, GcodeWidget, HomeWidget
 import asyncio
 from qasync import QEventLoop, asyncSlot
@@ -28,7 +28,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"挤出测试平台 v{Config.version}")
+        self.setWindowTitle(f"{Config.name} v{Config.version}")
         self.setGeometry(900, 100, 700, 500)
         self.initUI()
         
@@ -118,7 +118,7 @@ class MainWindow(QMainWindow):
 
         # 创建 video worker （用于接收和处理视频信号）
         
-        self.video_worker = VideoWorker()
+        self.video_worker = VideoWorker(test_mode=Config.test_mode)
         # 连接信号槽
         self.video_worker.run()
 
@@ -133,6 +133,9 @@ class MainWindow(QMainWindow):
         self.processing_worker.proc_frame_signal.connect(self.home_widget.dieswell_widget.update_live_display)
         self.vision_page_widget.sigExpTime.connect(self.video_worker.set_exp_time)
         
+        # 创建 IR image worker 处理红外成像仪图像，探测熔体出口温度
+        self.ir_worker = IRWorker()
+
         self.connected.emit(True)
         self.show_UI(1)
 

@@ -18,6 +18,7 @@ from collections import deque
 import platform
 import aiohttp
 from pathlib import Path
+from optris_camera import OptrisCamera
 
 class TCPClient(QObject):
     # --- 信号 ---
@@ -490,3 +491,26 @@ class ConnectionTester(QObject):
         except Exception as e:
             print(f"检查 Klipper 时出错: {e}")
             return False, "请求异常"
+        
+class IRWorker(VideoWorker):
+
+    def __init__(self, test_mode=False):
+        super().__init__(test_mode=test_mode)
+        if not test_mode:
+            self.cap = OptrisCamera(serial_number=0)
+
+    @asyncSlot()
+    async def run(self):
+        
+        while self.running:
+            ret_img, frame = self.cap.read(timeout=0.1)
+            ret_temp, temps = self.cap.read_temp(timeout=0.1)
+            if ret_img and ret_temp:
+                self.new_frame_signal.emit(frame)
+                if self.roi is not None:
+                    x, y, w, h = self.roi
+                    self.roi_frame_signal.emit(frame[y:y+h, x:x+w])
+            else:
+                print("Fail to read frame.")
+            
+            await asyncio.sleep(self.frame_delay)
