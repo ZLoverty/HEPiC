@@ -35,7 +35,7 @@ class ConnectionWidget(QWidget):
 
         # 组件
         self.ip_label = QLabel("树莓派 IP 地址 ")
-        self.ip_input = QLineEdit("192.168.114.48")
+        self.ip_input = QLineEdit(f"{Config.default_host}")
         self.connect_button = QPushButton("连接")
         self.self_test = QLabel("...")
         # self.disconnect_button = QPushButton("断开")
@@ -585,6 +585,7 @@ class HomeWidget(QWidget):
         self.data_widget = DataPlotWidget()
         self.status_widget = PlatformStatusWidget()
         self.dieswell_widget = VisionWidget()
+        self.ir_roi_widget = VisionWidget()
 
         # 布局
         layout = QHBoxLayout()
@@ -592,9 +593,20 @@ class HomeWidget(QWidget):
         status_and_vision_layout = QHBoxLayout()
         status_and_vision_layout.addWidget(self.status_widget)
         status_and_vision_layout.addWidget(self.dieswell_widget)
+        status_and_vision_layout.addWidget(self.ir_roi_widget)
         data_layout.addLayout(status_and_vision_layout)
         data_layout.addWidget(self.data_widget)
         layout.addWidget(self.gcode_widget)
         layout.addLayout(data_layout)
+        self.setLayout(layout)
+
+class IRPageWidget(QWidget):
+    """红外相机模块页面组件"""
+
+    def __init__(self):
+        super().__init__()
+        self.image_widget = VisionWidget()
+        layout = QVBoxLayout()
+        layout.addWidget(self.image_widget)
         self.setLayout(layout)
         

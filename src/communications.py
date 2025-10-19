@@ -19,26 +19,32 @@ import platform
 import aiohttp
 from pathlib import Path
 from optris_camera import OptrisCamera
+from config import Config
+import re
 
 class TCPClient(QObject):
     # --- 信号 ---
     # 连接状态变化时发出
     connection_status = Signal(str)
     # 收到并解析完数据后发出
-    data_received = Signal(dict)
     connected = Signal(int)
+    extrusion_force_signal = Signal(float)
+    meter_count_signal = Signal(float)
 
     def __init__(self, host, port):
         super().__init__()
         self.host = host
         self.port = port
-        self.is_running = False
+        self.is_running = True
+        self.queue = asyncio.Queue()
     
     @asyncSlot()
     async def run(self):
         if await self.connect():
-            self.is_running = True
-            await self.receive_data()
+            receive_task = asyncio.create_task(self.receive_data())
+            process_task = asyncio.create_task(self.process_data())
+            await asyncio.gather(receive_task, process_task)
+
         else:
             self.stop()
 
@@ -74,10 +80,9 @@ class TCPClient(QObject):
                     self.connection_status.emit("连接已断开")
                     break
                 message_str = data.decode('utf-8').strip()
-                # print(f"{message_str}")
                 try:
                     message_dict = json.loads(message_str)
-                    self.data_received.emit(message_dict)
+                    self.queue.put(message_dict)
                 except json.JSONDecodeError:
                     print(f"收到非JSON数据: {message_str}")
     
@@ -88,6 +93,29 @@ class TCPClient(QObject):
         
         # 循环结束后，确保状态被更新
         self.is_running = False
+    
+    async def process_data(self):
+        """这个函数持续从队列中提取数据并发射信号，最后将数据存至主程序中的list中。数据以
+        
+        {
+            "type": "data",
+            "name": "extrusion_force",
+            "value": 123
+        }
+        
+        的形式从服务器发送。
+        """
+        while self.is_running:
+            try:
+                message_dict = self.queue.get()
+                if message_dict["type"] == "data":
+                    if message_dict["name"] == "extrusion_force":
+                        self.extrusion_force_signal.emit(message_dict["value"])
+                    elif message_dict["name"] == "meter_count":
+                        self.meter_counnt_signal.emit(message_dict["value"])
+            except Exception as e:
+                print(f"{e}")
+
 
     @asyncSlot()
     async def stop(self):
@@ -121,6 +149,8 @@ class KlipperWorker(QObject):
         self.message_queue = asyncio.Queue() # klipper 的消息队列
         self.gcode_queue = asyncio.Queue() # gcode 的消息队列
         self.uri = f"ws://{self.host}:{self.port}/websocket"
+
+        self.active_feedrate_mms = 0
         
 
     @asyncSlot()
@@ -169,16 +199,48 @@ class KlipperWorker(QObject):
                 await self.message_queue.put(data)
 
     async def gcode_sender(self, websocket):
+
+        # 编译正则表达式以便复用
+        f_regex = re.compile(r'F([0-9.-]+)', re.IGNORECASE)
+        g_regex = re.compile(r'^(G0|G1)\s', re.IGNORECASE)
+
         # 发送用户输入的gcode消息
         while self.is_running:
-            gcode = await self.gcode_queue.get()
+            self.gcode = await self.gcode_queue.get()
+
+            # 从 G code 中解析进线速度
+            gcode_upper = self.gcode.upper().strip() # 标准化 G-code
+
+            # --- 关键逻辑：在发送前，解析并更新状态 ---
+            try:
+                # 1. 检查此行是否设置了新的 F 值
+                f_match = f_regex.search(gcode_upper)
+                if f_match:
+                    # G-code 的 F 单位是 mm/min，我们转为 mm/s
+                    self.modal_feedrate_mms = float(f_match.group(1)) / 60.0
+
+                # 2. 检查此行是否是移动指令
+                if g_regex.search(gcode_upper):
+                    # 是 G0 或 G1，所以 "活动" 速度就是当前的模态速度
+                    self.active_feedrate_mms = self.modal_feedrate_mms
+                elif gcode_upper:
+                    # 不是移动指令 (例如 M104, G28, G90)
+                    # 这些指令没有 feedrate，所以 "活动" 速度为 0
+                    self.active_feedrate_mms = 0.0
+                
+                # 如果是空行，什么也不做，保持上一个状态
+
+            except Exception as e:
+                print(f"Feedrate 解析出错: {e}")
+                self.active_feedrate_mms = 0.0 # 出错时归零
+
             self.current_step += 1
             gcode_message = {
                 "jsonrpc": "2.0",
                 "id": self.current_step, 
                 "method": "printer.gcode.script",
                 "params": {
-                    "script": gcode + "\nM400"
+                    "script": self.gcode + "\nM400"
                 },
             }
             # print(f"Step {self.current_step}: {gcode}")
@@ -270,7 +332,7 @@ class VideoWorker(QObject):
         super().__init__()
        
         if test_mode:  # 调试用图片流
-            image_folder = Path(image_folder).expanduser().resolve()
+            image_folder = Path(Config.test_image_folder).expanduser().resolve()
             self.cap = ImageStreamer(str(image_folder), fps=fps)
         else: # 真图片流
             self.cap = HikVideoCapture(width=512, height=512, exposure_time=50000, center_roi=True)
@@ -330,11 +392,11 @@ class ProcessingWorker(QObject):
     def cache_frame(self, frame):
         self.image_buffer.append(frame)
 
-    @Slot(dict)
-    def process_frame(self, data):
+    @Slot()
+    def process_frame(self):
         """当收到数据时，将队列里最新的图像取出分析，然后清空队列"""
         if self.image_buffer:
-            img = self.image_buffer[-1] # 取最后一张
+            img = self.image_buffer.popleft()
             gray = convert_to_grayscale(img) # only process gray images    
             try:
                 diameter, skeleton, dist_transform = filament_diameter(gray)
@@ -343,22 +405,15 @@ class ProcessingWorker(QObject):
                 # filter the pixels on skeleton where dt is smaller than 0.9 of the max
                 diameter_refine = dist_transform[longest_branch].mean() * 2.0
                 proc_frame = draw_filament_contour(gray, longest_branch, diameter_refine)
-                self.proc_frame_signal.emit(proc_frame)                                         
+                self.proc_frame_signal.emit(proc_frame)
+                self.die_diameter_signal.emit(diameter_refine)
             except ValueError as e:
                 # 已知纯色图片会导致检测失败，在此情况下可以不必报错继续运行，将出口直径记为 np.nan 即可
                 print(f"图像无法处理: {e}")
                 self.die_diameter_signal.emit(np.nan)
                 self.proc_frame_signal.emit(gray)
-            except Exception as e:
-                raise f"{e}"
-        else:
-            self.die_diameter_signal.emit(np.nan)
-        
-        self.image_buffer.clear()
+   
     
-    def stop(self):
-        self.image_buffer.clear()
-
 class ConnectionTester(QObject):
     """初次连接时应进行一个网络自检，确定必要的硬件都已开启，且服务、端口都正确配置。这个自检应当用阻塞函数实现，因为如果自检不通过，运行之后的代码将毫无意义。因此，单独写这个自检函数。"""
     test_msg = Signal(str)
@@ -492,25 +547,41 @@ class ConnectionTester(QObject):
             print(f"检查 Klipper 时出错: {e}")
             return False, "请求异常"
         
-class IRWorker(VideoWorker):
+class IRWorker(QObject):
+
+    sigNewFrame = Signal(np.ndarray)
+    sigRoiFrame = Signal(np.ndarray)
 
     def __init__(self, test_mode=False):
-        super().__init__(test_mode=test_mode)
-        if not test_mode:
+
+        super().__init__()
+        fps = 10
+        self.is_running = True
+        self.roi = None
+        self.frame_delay = 1 / fps
+
+        if test_mode:  # 调试用图片流
+            test_image_folder = Path(Config.test_image_folder).expanduser().resolve()
+            self.cap = ImageStreamer(str(test_image_folder), fps=fps)
+        else:
             self.cap = OptrisCamera(serial_number=0)
 
     @asyncSlot()
     async def run(self):
         
-        while self.running:
+        while self.is_running:
             ret_img, frame = self.cap.read(timeout=0.1)
             ret_temp, temps = self.cap.read_temp(timeout=0.1)
             if ret_img and ret_temp:
-                self.new_frame_signal.emit(frame)
+                self.sigNewFrame.emit(frame)
                 if self.roi is not None:
                     x, y, w, h = self.roi
-                    self.roi_frame_signal.emit(frame[y:y+h, x:x+w])
+                    self.sigRoiFrame.emit(frame[y:y+h, x:x+w])
             else:
                 print("Fail to read frame.")
             
             await asyncio.sleep(self.frame_delay)
+
+    @Slot(tuple)
+    def set_roi(self, roi):
+        self.roi = roi

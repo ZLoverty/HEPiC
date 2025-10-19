@@ -2,7 +2,7 @@ import sys
 import threading
 import queue  # 使用队列进行线程安全的数据交换
 import numpy as np
-import optris_lib.otcsdk as otc
+import optris.otcsdk as otc
 import cv2  # 仅用于 get() 方法的常量
 
 # 确保 SDK 只被初始化一次
@@ -215,7 +215,7 @@ class OptrisCamera(otc.IRImagerClient):
             self._builder.convertTemperatureToPaletteImage()
             image = np.empty((self._height, self._width, 3), dtype=np.uint8)
             self._builder.copyImageDataTo(image)
-            self._color_frame_queue.put_nowait(image) # 使用 put_nowait
+            self._color_frame_queue.put_nowait(cv2.cvtColor(image, cv2.COLOR_BGR2RGB)) # 使用 put_nowait
         except queue.Full:
             pass # 如果主线程处理不及时，丢弃此帧
         except Exception as e:

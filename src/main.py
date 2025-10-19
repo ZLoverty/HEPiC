@@ -7,11 +7,11 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QPlainTextEdit, QLabel, QGridLayout, QMessageBox, QTabWidget, QStackedWidget
 )
-from PySide6.QtCore import Signal, Slot, QThread
+from PySide6.QtCore import Signal, Slot, QThread, QTimer
 import pyqtgraph as pg
 from collections import deque
 from communications import TCPClient, KlipperWorker, VideoWorker, ProcessingWorker, ConnectionTester, IRWorker
-from tab_widgets import ConnectionWidget, PlatformStatusWidget, DataPlotWidget, CommandWidget, LogWidget, VisionPageWidget, GcodeWidget, HomeWidget
+from tab_widgets import ConnectionWidget, PlatformStatusWidget, DataPlotWidget, CommandWidget, LogWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget
 import asyncio
 from qasync import QEventLoop, asyncSlot
 from config import Config
@@ -31,6 +31,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{Config.name} v{Config.version}")
         self.setGeometry(900, 100, 700, 500)
         self.initUI()
+        self.timer = QTimer() # set data grabbing frequency
+        self.data_frequency = Config.data_frequency 
         
     def initUI(self):
         # --- 创建控件 ---
@@ -48,6 +50,9 @@ class MainWindow(QMainWindow):
         self.status_widget = self.home_widget.status_widget
         self.data_widget = self.home_widget.data_widget
         self.gcode_widget = self.home_widget.gcode_widget
+        self.ir_page_widget = IRPageWidget()
+        self.ir_image_widget = self.ir_page_widget.image_widget
+        self.ir_roi_widget = self.home_widget.ir_roi_widget
 
         # 添加标签页到标签栏
         self.stacked_widget.addWidget(self.connection_widget)
@@ -55,6 +60,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.home_widget, "主页")
         # self.tabs.addTab(self.data_widget, "数据")
         self.tabs.addTab(self.vision_page_widget, "视觉")
+        self.tabs.addTab(self.ir_page_widget, "红外")
         # self.tabs.addTab(self.gcode_widget, "G-code")
         self.setCentralWidget(self.stacked_widget)
 
@@ -66,6 +72,12 @@ class MainWindow(QMainWindow):
         self.gcode_widget.run_button.clicked.connect(self.run_gcode)
         self.status_widget.temp_input.returnPressed.connect(self.set_temperature)
     
+    def init_tmp_data(self):
+        """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
+        items = ["extrusion_force_N", "die_temperature_C", "die_diameter_mm", "meter_count_mm", "gcode", "hotend_temperature_C", "feedrate_mms", ]
+        self.extrusion_force_tmp = deque(maxlen=10)
+        self.meter_tmp = deque(maxlen=10)
+
 
     @Slot(int)
     def show_UI(self, UI_index):
@@ -102,7 +114,13 @@ class MainWindow(QMainWindow):
         self.worker = TCPClient(self.host, self.port)
         # 连接信号槽
         
-        self.worker.data_received.connect(self.home_widget.data_widget.update_display)
+
+        # implement in main function.
+        # self.worker.data_received.connect(self.home_widget.data_widget.update_display) 
+
+
+
+
         self.worker.connection_status.connect(self.update_status)
         self.worker.run()
         
@@ -128,16 +146,20 @@ class MainWindow(QMainWindow):
         self.vision_page_widget.vision_widget.sigRoiChanged.connect(self.video_worker.set_roi)
         self.video_worker.new_frame_signal.connect(self.vision_page_widget.vision_widget.update_live_display)
         self.video_worker.roi_frame_signal.connect(self.processing_worker.cache_frame)
-        self.worker.data_received.connect(self.processing_worker.process_frame)
         self.processing_worker.proc_frame_signal.connect(self.vision_page_widget.roi_vision_widget.update_live_display)
         self.processing_worker.proc_frame_signal.connect(self.home_widget.dieswell_widget.update_live_display)
         self.vision_page_widget.sigExpTime.connect(self.video_worker.set_exp_time)
         
         # 创建 IR image worker 处理红外成像仪图像，探测熔体出口温度
         self.ir_worker = IRWorker()
+        self.ir_worker.sigNewFrame.connect(self.ir_image_widget.update_live_display)
+        self.ir_image_widget.sigRoiChanged.connect(self.ir_worker.set_roi)
+        self.ir_worker.sigRoiFrame.connect(self.ir_roi_widget.update_live_display)
+        self.ir_worker.run()
 
         self.connected.emit(True)
         self.show_UI(1)
+        self.timer.start(1/self.data_frequency*1000)
 
     @Slot()
     def disconnect_from_ip(self):
@@ -150,8 +172,6 @@ class MainWindow(QMainWindow):
             self.klipper_worker = None
         if self.video_worker:
             self.video_worker.stop()
-        if self.processing_worker:
-            self.processing_worker.stop()
         
     @Slot(str)
     def update_status(self, status):
@@ -160,7 +180,7 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def run_gcode(self):
-        """运行从文件里来的 gcode """
+        """运行从文本框里来的 gcode """
         if self.klipper_worker:
             self.gcode_widget.gcode = self.gcode_widget.gcode_display.toPlainText()
             self.klipper_worker.send_gcode(self.gcode_widget.gcode)
