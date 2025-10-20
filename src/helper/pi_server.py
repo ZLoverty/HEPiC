@@ -113,6 +113,7 @@ class PiServer:
                         shutdown_signal.set_result(True)
                 except KeyboardInterrupt:
                     print("\n程序被用户中断。")
+                    sys.exit(1)
                 except Exception as e:
                     self.logger.error(f"unknow error sending to {addr}: {e}", exc_info=True)
                     if not shutdown_signal.done():
