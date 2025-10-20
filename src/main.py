@@ -32,7 +32,10 @@ class MainWindow(QMainWindow):
         self.setGeometry(900, 100, 700, 500)
         self.initUI()
         self.timer = QTimer() # set data grabbing frequency
-        self.data_frequency = Config.data_frequency 
+        self.data_frequency = Config.data_frequency
+        self.ircam_status = False
+        self.hikcam_status = False
+        self.init_data()
         
     def initUI(self):
         # --- 创建控件 ---
@@ -72,12 +75,16 @@ class MainWindow(QMainWindow):
         self.gcode_widget.run_button.clicked.connect(self.run_gcode)
         self.status_widget.temp_input.returnPressed.connect(self.set_temperature)
     
-    def init_tmp_data(self):
+    def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
         items = ["extrusion_force_N", "die_temperature_C", "die_diameter_mm", "meter_count_mm", "gcode", "hotend_temperature_C", "feedrate_mms", ]
-        self.extrusion_force_tmp = deque(maxlen=10)
-        self.meter_tmp = deque(maxlen=10)
-
+        # should define functions that can fetch the quantities from workers
+        self.extrusion_force_value = 0.0
+        self.meter_count_value = 0.0
+        self.extrusion_force_tmp = deque(maxlen=Config.tmp_data_maxlen)
+        self.meter_count_tmp = deque(maxlen=Config.tmp_data_maxlen)
+        self.extrusion_force = deque(maxlen=Config.final_data_maxlen)
+        self.meter_count = deque(maxlen=Config.final_data_maxlen)
 
     @Slot(int)
     def show_UI(self, UI_index):
@@ -118,9 +125,6 @@ class MainWindow(QMainWindow):
         # implement in main function.
         # self.worker.data_received.connect(self.home_widget.data_widget.update_display) 
 
-
-
-
         self.worker.connection_status.connect(self.update_status)
         self.worker.run()
         
@@ -134,28 +138,35 @@ class MainWindow(QMainWindow):
         self.klipper_worker.hotend_temperature.connect(self.status_widget.update_display_temperature)
         self.klipper_worker.run()
 
-        # 创建 video worker （用于接收和处理视频信号）
         
-        self.video_worker = VideoWorker(test_mode=Config.test_mode)
-        # 连接信号槽
-        self.video_worker.run()
+        try:
+            # 创建 video worker （用于接收和处理视频信号）
+            self.video_worker = VideoWorker(test_mode=Config.test_mode)
+            self.video_worker.run()
+            # 创建 image processing worker 用于处理图像，探测熔体直径
+            self.processing_worker = ProcessingWorker()
+            # 连接信号槽
+            self.vision_page_widget.vision_widget.sigRoiChanged.connect(self.video_worker.set_roi)
+            self.video_worker.new_frame_signal.connect(self.vision_page_widget.vision_widget.update_live_display)
+            self.video_worker.roi_frame_signal.connect(self.processing_worker.cache_frame)
+            self.processing_worker.proc_frame_signal.connect(self.vision_page_widget.roi_vision_widget.update_live_display)
+            self.processing_worker.proc_frame_signal.connect(self.home_widget.dieswell_widget.update_live_display)
+            self.vision_page_widget.sigExpTime.connect(self.video_worker.set_exp_time)
+        except Exception as e:
+            print(f"初始化熔体状态相机失败: {e}")
+        
+        
+        try:
+            # 创建 IR image worker 处理红外成像仪图像，探测熔体出口温度
+            self.ir_worker = IRWorker()
+            self.ir_worker.sigNewFrame.connect(self.ir_image_widget.update_live_display)
+            self.ir_image_widget.sigRoiChanged.connect(self.ir_worker.set_roi)
+            self.ir_worker.sigRoiFrame.connect(self.ir_roi_widget.update_live_display)
+            self.ir_worker.run()
+            self.ircam_status = True
+        except Exception as e:
+            print(f"初始化热成像仪失败，热成像仪不可用: {e}")
 
-        # 创建 image processing worker 用于处理图像，探测熔体直径
-        self.processing_worker = ProcessingWorker()
-        # 连接信号槽
-        self.vision_page_widget.vision_widget.sigRoiChanged.connect(self.video_worker.set_roi)
-        self.video_worker.new_frame_signal.connect(self.vision_page_widget.vision_widget.update_live_display)
-        self.video_worker.roi_frame_signal.connect(self.processing_worker.cache_frame)
-        self.processing_worker.proc_frame_signal.connect(self.vision_page_widget.roi_vision_widget.update_live_display)
-        self.processing_worker.proc_frame_signal.connect(self.home_widget.dieswell_widget.update_live_display)
-        self.vision_page_widget.sigExpTime.connect(self.video_worker.set_exp_time)
-        
-        # 创建 IR image worker 处理红外成像仪图像，探测熔体出口温度
-        self.ir_worker = IRWorker()
-        self.ir_worker.sigNewFrame.connect(self.ir_image_widget.update_live_display)
-        self.ir_image_widget.sigRoiChanged.connect(self.ir_worker.set_roi)
-        self.ir_worker.sigRoiFrame.connect(self.ir_roi_widget.update_live_display)
-        self.ir_worker.run()
 
         self.connected.emit(True)
         self.show_UI(1)
@@ -189,6 +200,21 @@ class MainWindow(QMainWindow):
         if self.klipper_worker:
             target = self.status_widget.temp_input.text()
             self.klipper_worker.send_gcode(f"M104 S{target}")
+    
+    @Slot()
+    def on_timer_tick(self):
+        """Record data into tmp queue on every timer tick."""
+        self.extrusion_force_tmp.append(self.worker.extrusion_force)
+        self.meter_count_tmp.append(self.worker.meter_count)
+
+        if len(self.extrusion_force_tmp) >= Config.tmp_data_maxlen:
+            # construct pd.DataFrame
+            extrusion_force_tmp = self.extrusion_force_tmp.copy()
+            meter_count_tmp = self.meter_count_tmp.copy()
+            # extend final queues
+
+            # clear queue
+
 
     def closeEvent(self, event):
         event.accept()
