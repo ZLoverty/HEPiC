@@ -18,7 +18,7 @@ from collections import deque
 import platform
 import aiohttp
 from pathlib import Path
-from optris_camera import OptrisCamera
+
 from config import Config
 import re
 
@@ -98,21 +98,19 @@ class TCPClient(QObject):
         """这个函数持续从队列中提取数据并发射信号，最后将数据存至主程序中的list中。数据以
         
         {
-            "type": "data",
-            "name": "extrusion_force",
-            "value": 123
+            "extrusion_force": 123,
+            "meter_count": 321
         }
         
         的形式从服务器发送。
         """
         while self.is_running:
             try:
-                message_dict = self.queue.get()
-                if message_dict["type"] == "data":
-                    if message_dict["name"] == "extrusion_force":
-                        self.extrusion_force_signal.emit(message_dict["value"])
-                    elif message_dict["name"] == "meter_count":
-                        self.meter_counnt_signal.emit(message_dict["value"])
+                message_dict = await self.queue.get()
+                if "extrusion_force" in message_dict:
+                    self.extrusion_force = message_dict["extrusion_force"]
+                elif "meter_count" in message_dict:
+                    self.meter_counnt_signal = message_dict["meter_count"]
             except Exception as e:
                 print(f"{e}")
 
@@ -564,6 +562,7 @@ class IRWorker(QObject):
             test_image_folder = Path(Config.test_image_folder).expanduser().resolve()
             self.cap = ImageStreamer(str(test_image_folder), fps=fps)
         else:
+            from optris_camera import OptrisCamera
             self.cap = OptrisCamera(serial_number=0)
 
     @asyncSlot()
