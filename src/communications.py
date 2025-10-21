@@ -13,7 +13,6 @@ import json
 from qasync import QEventLoop, asyncSlot
 import numpy as np
 from vision import filament_diameter, convert_to_grayscale, draw_filament_contour, find_longest_branch, ImageStreamer
-from video_capture import HikVideoCapture
 from collections import deque
 import platform
 import aiohttp
@@ -35,66 +34,45 @@ class TCPClient(QObject):
         super().__init__()
         self.host = host
         self.port = port
-        self.is_running = True
+        self.is_running = False
         self.queue = asyncio.Queue()
         self.extrusion_force = np.nan
         self.meter_count = np.nan
     
     @asyncSlot()
     async def run(self):
-        if await self.connect():
-            receive_task = asyncio.create_task(self.receive_data())
-            process_task = asyncio.create_task(self.process_data())
-            await asyncio.gather(receive_task, process_task)
-
-        else:
-            self.stop()
-
-    async def connect(self):
-        """
-        连接到TCP服务器并启动接收线程。
-        这是一个阻塞操作，直到连接成功或失败。
-        """
+        self.is_running = True
         try:
-            # 创建异步 TCP 连接
-            print(f"正在连接树莓派 {self.host}: {self.port} ...")
-            self.connection_status.emit(f"正在连接挤出测试平台树莓派 {self.host}: {self.port} ...")
             self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.host, self.port), timeout=2.0)
-            print("树莓派连接成功！")
-            self.connection_status.emit("树莓派连接成功！")
-            self.connected.emit(1)
-            return True
-        except (asyncio.TimeoutError, OSError) as e:
-            print(f"树莓派连接超时")
-            self.connection_status.emit(f"树莓派连接超时，请检查设备是否开启，IP 地址是否正确")
-            return False
-    
+            self.receive_task = asyncio.create_task(self.receive_data())
+            self.process_task = asyncio.create_task(self.process_data())
+            await asyncio.gather(self.receive_task, self.process_task)
+        except Exception as e:
+            print(f"未知错误: {e}")
+        finally: # 无论如何中断，都关闭 writer，并关闭两个任务
+            self.writer.close()
+            await self.writer.wait_closed()
+            self.receive_task.cancel()
+            self.process_task.cancel()
+            await asyncio.gather(self.receive_task, self.process_task, return_exceptions=True)
+            
     async def receive_data(self):
         """
         这个函数在后台线程中运行，持续接收数据。
         """
-        while self.is_running:
-            try:
+        try:
+            while self.is_running:
+            
                 # 读取一行数据
                 data = await self.reader.readline()
-                if not data:
-                    print("数据为空，连接被服务器关闭。")
-                    self.connection_status.emit("连接已断开")
-                    break
                 message_str = data.decode('utf-8').strip()
-                try:
-                    message_dict = json.loads(message_str)
-                    await self.queue.put(message_dict)
-                except json.JSONDecodeError:
-                    print(f"收到非JSON数据: {message_str}")
-    
-            except (ConnectionResetError, ConnectionAbortedError):
-                print("连接被重置或中止。")
-                self.connection_status.emit("连接已断开")
-                break
-        
-        # 循环结束后，确保状态被更新
-        self.is_running = False
+                message_dict = json.loads(message_str)
+                await self.queue.put(message_dict)
+        except (ConnectionResetError, ConnectionAbortedError):
+            print("连接被重置或中止。")
+            self.connection_status.emit("连接已断开")
+        except Exception as e:
+            print(f"位置错误: {e}")
     
     async def process_data(self):
         """这个函数持续从队列中提取数据并发射信号，最后将数据存至主程序中的list中。数据以
@@ -106,30 +84,33 @@ class TCPClient(QObject):
         
         的形式从服务器发送。
         """
-        while self.is_running:
-            try:
+        try:
+            while self.is_running:   
                 message_dict = await self.queue.get()
                 if "extrusion_force" in message_dict:
                     self.extrusion_force = message_dict["extrusion_force"]
-                elif "meter_count" in message_dict:
-                    self.meter_counnt_signal = message_dict["meter_count"]
-            except Exception as e:
-                print(f"{e}")
-
+                if "meter_count" in message_dict:
+                    self.meter_count = message_dict["meter_count"]
+            # 标记队列任务已完成（好习惯）
+                self.queue.task_done()
+        except asyncio.CancelledError:
+            print("Process data task cancelled.") # 正常停止
+        except Exception as e:
+            # 捕获未知错误，否则任务会崩溃且主循环不知道
+            print(f"Error in process_data: {e}")
 
     @asyncSlot()
     async def stop(self):
         """
         关闭连接并停止接收线程。
         """
-        if not self.is_running:
+        if self.is_running:
+            self.is_running = False
+            self.receive_task.cancel()
+            self.process_task.cancel()
+            self.writer.close()
+            await asyncio.gather(self.receive_task, self.process_task, self.writer.wait_closed(), return_exceptions=True)
             self.connection_status.emit("连接已断开")
-            return
-
-        print("正在关闭连接...")
-        self.is_running = False
-        self.connection_status.emit("连接已断开")
-        print("连接已断开")
 
 class KlipperWorker(QObject):
     """
@@ -335,6 +316,7 @@ class VideoWorker(QObject):
             image_folder = Path(Config.test_image_folder).expanduser().resolve()
             self.cap = ImageStreamer(str(image_folder), fps=fps)
         else: # 真图片流
+            from video_capture import HikVideoCapture    
             self.cap = HikVideoCapture(width=512, height=512, exposure_time=50000, center_roi=True)
             
         self.running = True
@@ -386,7 +368,8 @@ class ProcessingWorker(QObject):
 
     def __init__(self):
         super().__init__()
-        self.image_buffer = asyncio.Queue() 
+        self.image_buffer = asyncio.Queue()
+        self.die_diameter = np.nan
 
     async def run(self):
         await self.process_frame()
@@ -408,7 +391,7 @@ class ProcessingWorker(QObject):
                 diameter_refine = dist_transform[longest_branch].mean() * 2.0
                 proc_frame = draw_filament_contour(gray, longest_branch, diameter_refine)
                 self.proc_frame_signal.emit(proc_frame)
-                self.die_diameter_signal.emit(diameter_refine)
+                self.die_diameter = diameter_refine
             except ValueError as e:
                 # 已知纯色图片会导致检测失败，在此情况下可以不必报错继续运行，将出口直径记为 np.nan 即可
                 print(f"图像无法处理: {e}")
@@ -442,7 +425,6 @@ class ConnectionTester(QObject):
             self.test_msg.emit(f"✅ Ping 成功！主机 {self.host} 在网络上是可达的。")
         else:
             self.test_msg.emit(f"❌ Ping 失败，主机 {self.host} 不可达或阻止了 Ping 请求。")
-            self.fail.emit()
             return
 
         # --- 步骤 2: 异步检查特定 TCP 端口 ---
@@ -454,13 +436,12 @@ class ConnectionTester(QObject):
         else:
             self.test_msg.emit(f"❌ 端口检查失败。主机可达，但端口 {self.port} 已关闭或被防火墙过滤。")
             self.test_msg.emit("数据端口连通性测试失败，请检查数据服务器是否启动")
-            self.fail.emit()
+
 
         # --- 新增步骤 3: 检查 Moonraker API ---
         self.test_msg.emit(f"[步骤 3/4] 正在检查 Moonraker 服务...")
         if not await self._check_moonraker_async():
             self.test_msg.emit(f"❌ Moonraker 服务无响应。")
-            self.fail.emit()
             return
 
         self.test_msg.emit(f"✅ Moonraker 服务 API 响应正常！")
@@ -470,7 +451,6 @@ class ConnectionTester(QObject):
         klipper_ok, klipper_state = await self._check_klipper_async()
         if not klipper_ok:
             self.test_msg.emit(f"❌ Klipper 状态异常: '{klipper_state}'")
-            self.fail.emit()
             return
 
         self.test_msg.emit(f"✅ Klipper 状态为 '{klipper_state}'，一切就绪！")
