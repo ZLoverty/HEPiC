@@ -9,7 +9,7 @@ Tabs widgets for layout management. Contains
 """
 
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSizePolicy,
     QLineEdit, QPushButton, QPlainTextEdit, QLabel, QGridLayout, QMessageBox, QTabWidget, QFileDialog, QTextEdit, QLabel, QStyle
 )
 from PySide6.QtGui import QTextCursor, QTextCharFormat, QColor
@@ -153,20 +153,7 @@ class DataPlotWidget(QWidget):
         layout.addWidget(self.dieswell_plot)
         self.setLayout(layout)
 
-        # 初始化存储数据的变量
-        self.initialize_variables()
-
         self.max_len = 300
-
-    def initialize_variables(self):
-        # initialize variables
-        self.max_len = 100000
-        self.time = deque(maxlen=self.max_len)
-        self.temperature = deque(maxlen=self.max_len)
-        self.extrusion_force = deque(maxlen=self.max_len)
-        self.die_swell = deque(maxlen=self.max_len)
-        self.die_temperature = deque(maxlen=self.max_len)
-        self.t0 = None
     
     @Slot(dict)
     def update_display(self, data):
@@ -182,17 +169,6 @@ class DataPlotWidget(QWidget):
 
         except (IndexError, ValueError):
             self.temp_value_label.setText("解析错误")
-
-    def reset(self):
-        if self.time:
-            self.time.clear()
-        if self.extrusion_force:
-            self.extrusion_force.clear()
-        if self.die_temperature:
-            self.die_temperature.clear()
-        if self.die_swell:
-            self.die_swell.clear()
-        self.t0 = None
 
 class CommandWidget(QWidget):
 
@@ -433,9 +409,9 @@ class GcodeWidget(QWidget):
         self.warning_label.setToolTip(tooltip_text)
         self.gcode_title.setMaximumWidth(300)
         self.gcode_display = QTextEdit()
-        # self.gcode_display.setReadOnly(True)
+        # self.gcode_display.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.open_button = QPushButton("打开")
-        self.clear_button = QPushButton("清除")
+        # self.clear_button = QPushButton("清除")
         self.run_button = QPushButton("运行")
 
         # 布局
@@ -445,20 +421,20 @@ class GcodeWidget(QWidget):
         label_layout.addWidget(self.warning_label)
         label_layout.addStretch(1)
         button_layout1 = QHBoxLayout()
-        button_layout2 = QHBoxLayout()
+        # button_layout2 = QHBoxLayout()
         button_layout1.addWidget(self.open_button)
-        button_layout1.addWidget(self.clear_button)
-        button_layout2.addWidget(self.run_button)
+        # button_layout1.addWidget(self.clear_button)
+        button_layout1.addWidget(self.run_button, stretch=3)
 
         layout.addLayout(label_layout)
-        layout.addWidget(self.gcode_display)
+        layout.addWidget(self.gcode_display, stretch=4)
         layout.addLayout(button_layout1)
-        layout.addLayout(button_layout2)
+        # layout.addLayout(button_layout2)
         self.setLayout(layout)
 
         # 信号槽连接
         self.open_button.clicked.connect(self.on_click_open)
-        self.clear_button.clicked.connect(self.on_click_clear)
+        # self.clear_button.clicked.connect(self.on_click_clear)
         self.gcode_save_signal.connect(self.update_display)
 
     def on_click_open(self):
@@ -573,13 +549,24 @@ class HomeWidget(QWidget):
     def __init__(self):
         super().__init__()
         self.gcode_widget = GcodeWidget()
+        self.gcode_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.data_widget = DataPlotWidget()
         self.status_widget = PlatformStatusWidget()
         self.dieswell_widget = VisionWidget()
         self.ir_roi_widget = VisionWidget()
+        self.start_button = QPushButton("开始")
+        self.stop_button = QPushButton("停止")
+        self.reset_button = QPushButton("重置")
 
         # 布局
         layout = QHBoxLayout()
+        control_layout = QVBoxLayout()
+        control_layout.addWidget(self.gcode_widget)
+        control_button_layout = QHBoxLayout()
+        control_button_layout.addWidget(self.start_button)
+        control_button_layout.addWidget(self.stop_button)
+        control_button_layout.addWidget(self.reset_button)
+        control_layout.addLayout(control_button_layout)
         data_layout = QVBoxLayout()
         status_and_vision_layout = QHBoxLayout()
         status_and_vision_layout.addWidget(self.status_widget)
@@ -587,7 +574,7 @@ class HomeWidget(QWidget):
         status_and_vision_layout.addWidget(self.ir_roi_widget)
         data_layout.addLayout(status_and_vision_layout)
         data_layout.addWidget(self.data_widget)
-        layout.addWidget(self.gcode_widget)
+        layout.addLayout(control_layout)
         layout.addLayout(data_layout)
         self.setLayout(layout)
 

@@ -26,7 +26,6 @@ pg.setConfigOption("foreground", "k")
 # ====================================================================
 class MainWindow(QMainWindow):
     
-    connected = Signal(bool)
     sigNewData = Signal(dict)
 
     def __init__(self):
@@ -38,8 +37,8 @@ class MainWindow(QMainWindow):
         self.timer.timeout.connect(self.on_timer_tick)
         self.data_frequency = Config.data_frequency
         self.time_delay = 1 / self.data_frequency
-        self.ircam_status = False
-        self.hikcam_status = False
+        self.ircam_ok = False
+        self.hikcam_ok = False
         self.init_data()
         self.current_time = 0
         self.autosave_filename = "autosave.csv"
@@ -83,6 +82,8 @@ class MainWindow(QMainWindow):
         self.gcode_widget.run_button.clicked.connect(self.run_gcode)
         self.status_widget.temp_input.returnPressed.connect(self.set_temperature)
         self.sigNewData.connect(self.data_widget.update_display)
+        self.home_widget.start_button.clicked.connect(self.start_recording)
+        self.home_widget.stop_button.clicked.connect(self.stop_recording)
 
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
@@ -124,18 +125,10 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def connect_to_ip(self):
-
-        self.data_widget.reset()  # 重置数据
         # 创建 TCP 连接以接收数据
         self.worker = TCPClient(self.host, self.port)
         # 连接信号槽
-        
-
-        # implement in main function.
-        # self.worker.data_received.connect(self.home_widget.data_widget.update_display) 
-
         self.worker.connection_status.connect(self.update_status)
-        self.worker.run()
         
         # 创建 klipper worker（用于查询平台状态和发送动作指令）
         klipper_port = 7125
@@ -145,13 +138,19 @@ class MainWindow(QMainWindow):
         self.klipper_worker.current_step_signal.connect(self.gcode_widget.highlight_current_line)
         self.klipper_worker.gcode_error.connect(self.update_status)
         self.klipper_worker.hotend_temperature.connect(self.status_widget.update_display_temperature)
-        self.klipper_worker.run()
 
-        
         try:
             # 创建 video worker （用于接收和处理视频信号）
-            self.video_worker = VideoWorker(test_mode=Config.test_mode)
-            
+            self.video_worker = VideoWorker()
+            self.hikcam_ok = True
+        except Exception as e:
+            if Config.test_mode:
+                print("Warning: test_mode on, showing synthetic pictures instead of real capture.")
+                self.video_worker = VideoWorker(test_mode=Config.test_mode)
+            else:
+                print(f"初始化熔体状态相机失败: {e}")
+
+        if self.hikcam_ok or Config.test_mode:
             # 创建 image processing worker 用于处理图像，探测熔体直径
             self.processing_worker = ProcessingWorker()
             # 连接信号槽
@@ -161,41 +160,52 @@ class MainWindow(QMainWindow):
             self.processing_worker.proc_frame_signal.connect(self.vision_page_widget.roi_vision_widget.update_live_display)
             self.processing_worker.proc_frame_signal.connect(self.home_widget.dieswell_widget.update_live_display)
             self.vision_page_widget.sigExpTime.connect(self.video_worker.set_exp_time)
-
-            self.video_worker.run()
-            self.processing_worker.run()
-        except Exception as e:
-            print(f"初始化熔体状态相机失败: {e}")
         
-        
-        try:
-            # 创建 IR image worker 处理红外成像仪图像，探测熔体出口温度
+        try: # 创建 IR image worker 处理红外成像仪图像，探测熔体出口温度   
             self.ir_worker = IRWorker()
+            self.ircam_ok = True
+        except Exception as e:
+            print(f"初始化热成像仪失败，热成像仪不可用: {e}")
+        
+        if self.ircam_ok:
             self.ir_worker.sigNewFrame.connect(self.ir_image_widget.update_live_display)
             self.ir_image_widget.sigRoiChanged.connect(self.ir_worker.set_roi)
             self.ir_worker.sigRoiFrame.connect(self.ir_roi_widget.update_live_display)
+
+        self.show_UI(1) # show main UI anyway
+        
+    @Slot()
+    def start_recording(self):
+        """Let all workers run."""
+        self.worker.run()
+        self.klipper_worker.run()
+        if self.hikcam_ok or Config.test_mode:
+            self.video_worker.run()
+        else:
+            print("WARNING: Failed to initiate camera. Vision module is inactive.")
+
+        if self.ircam_ok:
             self.ir_worker.run()
-            self.ircam_status = True
-        except Exception as e:
-            print(f"初始化热成像仪失败，热成像仪不可用: {e}")
-
-
-        self.connected.emit(True)
-        self.show_UI(1)
+        else:
+            print("WARNING: Failed to initiate IR camera. Die temperature module is inactive.")
+        
         self.timer.start(self.time_delay*1000)
+        print("Recording started ...")
 
     @Slot()
-    def disconnect_from_ip(self):
-        """断开连接时，清理 worker"""
-        if self.worker:
-            self.worker.stop()
-            self.worker = None
-        if self.klipper_worker:
-            self.klipper_worker.stop()
-            self.klipper_worker = None
-        if self.video_worker:
-            self.video_worker.stop()
-        
+    def stop_recording(self):
+        """Let all workers stop."""
+        self.worker.stop()
+        self.klipper_worker.stop()
+        self.video_worker.stop()
+        self.processing_worker.stop()
+        self.ir_worker.stop()
+        self.timer.stop()
+        print("Recording stopped.")
+    
+    def reset_data(self):
+        """Reset the recorded data to prepare a fresh new recording."""
+
     @Slot(str)
     def update_status(self, status):
         """更新状态栏信息"""
@@ -220,7 +230,10 @@ class MainWindow(QMainWindow):
             if item == "extrusion_force_N":
                 self.data_tmp[item].append(self.worker.extrusion_force)
             elif item == "die_temperature_C":
-                self.data_tmp[item].append(self.ir_worker.die_temperature)
+                if self.ircam_ok:
+                    self.data_tmp[item].append(self.ir_worker.die_temperature)
+                else:
+                    self.data_tmp[item].append(np.nan)
             elif item == "time_s":
                 self.data_tmp[item].append(self.current_time)
             else:
