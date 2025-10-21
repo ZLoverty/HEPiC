@@ -37,6 +37,8 @@ class TCPClient(QObject):
         self.port = port
         self.is_running = True
         self.queue = asyncio.Queue()
+        self.extrusion_force = np.nan
+        self.meter_count = np.nan
     
     @asyncSlot()
     async def run(self):
@@ -82,7 +84,7 @@ class TCPClient(QObject):
                 message_str = data.decode('utf-8').strip()
                 try:
                     message_dict = json.loads(message_str)
-                    self.queue.put(message_dict)
+                    await self.queue.put(message_dict)
                 except json.JSONDecodeError:
                     print(f"收到非JSON数据: {message_str}")
     
@@ -384,17 +386,19 @@ class ProcessingWorker(QObject):
 
     def __init__(self):
         super().__init__()
-        self.image_buffer = deque(maxlen=1000)
+        self.image_buffer = asyncio.Queue() 
 
+    async def run(self):
+        await self.process_frame()
+     
     @Slot(np.ndarray)
-    def cache_frame(self, frame):
-        self.image_buffer.append(frame)
+    async def cache_frame(self, frame):
+        await self.image_buffer.put(frame)
 
-    @Slot()
-    def process_frame(self):
+    async def process_frame(self):
         """当收到数据时，将队列里最新的图像取出分析，然后清空队列"""
-        if self.image_buffer:
-            img = self.image_buffer.popleft()
+        while self.is_running:
+            img = await self.image_buffer.get()
             gray = convert_to_grayscale(img) # only process gray images    
             try:
                 diameter, skeleton, dist_transform = filament_diameter(gray)
@@ -549,6 +553,7 @@ class IRWorker(QObject):
 
     sigNewFrame = Signal(np.ndarray)
     sigRoiFrame = Signal(np.ndarray)
+    
 
     def __init__(self, test_mode=False):
 
@@ -557,6 +562,7 @@ class IRWorker(QObject):
         self.is_running = True
         self.roi = None
         self.frame_delay = 1 / fps
+        self.die_temperature = np.nan
 
         if test_mode:  # 调试用图片流
             test_image_folder = Path(Config.test_image_folder).expanduser().resolve()
@@ -576,6 +582,9 @@ class IRWorker(QObject):
                 if self.roi is not None:
                     x, y, w, h = self.roi
                     self.sigRoiFrame.emit(frame[y:y+h, x:x+w])
+                    self.die_temperature = temps[y:y+h, x:x+w].max()
+                else:
+                    self.die_temperature = temps.max()
             else:
                 print("Fail to read frame.")
             

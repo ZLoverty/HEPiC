@@ -156,6 +156,8 @@ class DataPlotWidget(QWidget):
         # 初始化存储数据的变量
         self.initialize_variables()
 
+        self.max_len = 300
+
     def initialize_variables(self):
         # initialize variables
         self.max_len = 100000
@@ -170,24 +172,13 @@ class DataPlotWidget(QWidget):
     def update_display(self, data):
         """处理从工作线程传来的数据"""
         # 在日志中显示原始数据
-        
         try:
-            if self.t0 is None:
-                self.t0 = time.time()
-                t = 0.0
-            else:
-                t = time.time() - self.t0
-
-            self.time.append(t)
-            if "weight" in data:
-                self.extrusion_force.append(data["weight"] * 9.8) 
-                self.force_curve.setData(list(self.time), list(self.extrusion_force))
-            if "die_temperature" in data:
-                self.die_temperature.append(data["die_temperature"])
-                self.dietemp_curve.setData(list(self.time), list(self.die_temperature))
-            if "die_swell" in data:
-                self.die_swell.append(data["die_swell"])
-                self.dieswell_curve.setData(list(self.time), list(self.die_swell))
+            if "extrusion_force_N" in data:
+                self.force_curve.setData(list(data["time_s"])[-self.max_len:], list(data["extrusion_force_N"])[-self.max_len:])
+            if "die_temperature_C" in data:
+                self.dietemp_curve.setData(list(data["time_s"])[-self.max_len:], list(data["die_temperature_C"])[-self.max_len:])
+            if "die_diameter_mm" in data:
+                self.dieswell_curve.setData(list(data["time_s"])[-self.max_len:], list(data["die_diameter_mm"])[-self.max_len:])
 
         except (IndexError, ValueError):
             self.temp_value_label.setText("解析错误")

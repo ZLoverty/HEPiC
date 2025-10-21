@@ -5,10 +5,10 @@ import numpy as np
 try:
     import optris.otcsdk as otc
     OPTRIS_LIB_LOADED = True
-except ImportError:
-    print(f"没找到 optris 红外成像仪的开发包")
+except ImportError as e:
+    print(f"导入 Optris SDK 失败: {e}")
     OPTRIS_LIB_LOADED = False
-import cv2  # 仅用于 get() 方法的常量
+import cv2  
 
 # 确保 SDK 只被初始化一次
 _SDK_INITIALIZED_LOCK = threading.Lock()

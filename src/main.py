@@ -15,6 +15,8 @@ from tab_widgets import ConnectionWidget, PlatformStatusWidget, DataPlotWidget, 
 import asyncio
 from qasync import QEventLoop, asyncSlot
 from config import Config
+import numpy as np
+import pandas as pd
 
 pg.setConfigOption("background", "w")
 pg.setConfigOption("foreground", "k")
@@ -25,6 +27,7 @@ pg.setConfigOption("foreground", "k")
 class MainWindow(QMainWindow):
     
     connected = Signal(bool)
+    sigNewData = Signal(dict)
 
     def __init__(self):
         super().__init__()
@@ -32,10 +35,15 @@ class MainWindow(QMainWindow):
         self.setGeometry(900, 100, 700, 500)
         self.initUI()
         self.timer = QTimer() # set data grabbing frequency
+        self.timer.timeout.connect(self.on_timer_tick)
         self.data_frequency = Config.data_frequency
+        self.time_delay = 1 / self.data_frequency
         self.ircam_status = False
         self.hikcam_status = False
         self.init_data()
+        self.current_time = 0
+        self.autosave_filename = "autosave.csv"
+        self.first_row = True
         
     def initUI(self):
         # --- 创建控件 ---
@@ -74,17 +82,18 @@ class MainWindow(QMainWindow):
         self.connection_widget.ip.connect(self.connection_test)
         self.gcode_widget.run_button.clicked.connect(self.run_gcode)
         self.status_widget.temp_input.returnPressed.connect(self.set_temperature)
-    
+        self.sigNewData.connect(self.data_widget.update_display)
+
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
-        items = ["extrusion_force_N", "die_temperature_C", "die_diameter_mm", "meter_count_mm", "gcode", "hotend_temperature_C", "feedrate_mms", ]
+        items = ["extrusion_force_N", "die_temperature_C", "die_diameter_mm", "meter_count_mm", "gcode", "hotend_temperature_C", "feedrate_mms", "time_s"]
         # should define functions that can fetch the quantities from workers
-        self.extrusion_force_value = 0.0
-        self.meter_count_value = 0.0
-        self.extrusion_force_tmp = deque(maxlen=Config.tmp_data_maxlen)
-        self.meter_count_tmp = deque(maxlen=Config.tmp_data_maxlen)
-        self.extrusion_force = deque(maxlen=Config.final_data_maxlen)
-        self.meter_count = deque(maxlen=Config.final_data_maxlen)
+        self.data = {}
+        self.data_tmp = {}
+
+        for item in items:
+            self.data[item] = deque(maxlen=Config.final_data_maxlen)
+            self.data_tmp[item] = deque(maxlen=Config.tmp_data_maxlen)
 
     @Slot(int)
     def show_UI(self, UI_index):
@@ -142,7 +151,7 @@ class MainWindow(QMainWindow):
         try:
             # 创建 video worker （用于接收和处理视频信号）
             self.video_worker = VideoWorker(test_mode=Config.test_mode)
-            self.video_worker.run()
+            
             # 创建 image processing worker 用于处理图像，探测熔体直径
             self.processing_worker = ProcessingWorker()
             # 连接信号槽
@@ -152,6 +161,9 @@ class MainWindow(QMainWindow):
             self.processing_worker.proc_frame_signal.connect(self.vision_page_widget.roi_vision_widget.update_live_display)
             self.processing_worker.proc_frame_signal.connect(self.home_widget.dieswell_widget.update_live_display)
             self.vision_page_widget.sigExpTime.connect(self.video_worker.set_exp_time)
+
+            self.video_worker.run()
+            self.processing_worker.run()
         except Exception as e:
             print(f"初始化熔体状态相机失败: {e}")
         
@@ -170,7 +182,7 @@ class MainWindow(QMainWindow):
 
         self.connected.emit(True)
         self.show_UI(1)
-        self.timer.start(1/self.data_frequency*1000)
+        self.timer.start(self.time_delay*1000)
 
     @Slot()
     def disconnect_from_ip(self):
@@ -204,17 +216,29 @@ class MainWindow(QMainWindow):
     @Slot()
     def on_timer_tick(self):
         """Record data into tmp queue on every timer tick."""
-        self.extrusion_force_tmp.append(self.worker.extrusion_force)
-        self.meter_count_tmp.append(self.worker.meter_count)
-
-        if len(self.extrusion_force_tmp) >= Config.tmp_data_maxlen:
+        for item in self.data:
+            if item == "extrusion_force_N":
+                self.data_tmp[item].append(self.worker.extrusion_force)
+            elif item == "die_temperature_C":
+                self.data_tmp[item].append(self.ir_worker.die_temperature)
+            elif item == "time_s":
+                self.data_tmp[item].append(self.current_time)
+            else:
+                self.data_tmp[item].append(np.nan)
+        self.sigNewData.emit(self.data)
+        self.current_time += self.time_delay
+        
+        if len(self.data_tmp["extrusion_force_N"]) >= Config.tmp_data_maxlen:
             # construct pd.DataFrame
-            extrusion_force_tmp = self.extrusion_force_tmp.copy()
-            meter_count_tmp = self.meter_count_tmp.copy()
-            # extend final queues
-
-            # clear queue
-
+            df = pd.DataFrame(self.data_tmp)
+            if self.first_row:
+                df.to_csv(self.autosave_filename, index=False)
+                self.first_row = False
+            else:
+                df.to_csv(self.autosave_filename, index=False, header=False, mode="a")
+            for item in self.data_tmp:
+                self.data[item].extend(self.data_tmp[item])
+                self.data_tmp[item].clear()
 
     def closeEvent(self, event):
         event.accept()
