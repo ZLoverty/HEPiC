@@ -143,6 +143,7 @@ class MainWindow(QMainWindow):
             # 创建 video worker （用于接收和处理视频信号）
             self.video_worker = VideoWorker()
             self.hikcam_ok = True
+            print("熔体相机初始化成功！")
         except Exception as e:
             if Config.test_mode:
                 print("Warning: test_mode on, showing synthetic pictures instead of real capture.")
@@ -156,7 +157,7 @@ class MainWindow(QMainWindow):
             # 连接信号槽
             self.vision_page_widget.vision_widget.sigRoiChanged.connect(self.video_worker.set_roi)
             self.video_worker.new_frame_signal.connect(self.vision_page_widget.vision_widget.update_live_display)
-            self.video_worker.roi_frame_signal.connect(self.processing_worker.cache_frame)
+            self.video_worker.roi_frame_signal.connect(self.processing_worker.process_frame)
             self.processing_worker.proc_frame_signal.connect(self.vision_page_widget.roi_vision_widget.update_live_display)
             self.processing_worker.proc_frame_signal.connect(self.home_widget.dieswell_widget.update_live_display)
             self.vision_page_widget.sigExpTime.connect(self.video_worker.set_exp_time)
@@ -198,7 +199,6 @@ class MainWindow(QMainWindow):
         self.worker.stop()
         self.klipper_worker.stop()
         self.video_worker.stop()
-        self.processing_worker.stop()
         self.ir_worker.stop()
         self.timer.stop()
         print("Recording stopped.")
