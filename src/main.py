@@ -26,24 +26,29 @@ pg.setConfigOption("foreground", "k")
 # ====================================================================
 class MainWindow(QMainWindow):
     
-    sigNewData = Signal(dict)
+    sigNewData = Signal(dict) # update data plot
+    sigNewStatus = Signal(dict) # update status panel
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"{Config.name} v{Config.version}")
         self.setGeometry(900, 100, 700, 500)
         self.initUI()
-        self.timer = QTimer() # set data grabbing frequency
+        self.timer = QTimer() # set data appending frequency
+        self.status_timer = QTimer() # set status panel update frequency
         self.timer.timeout.connect(self.on_timer_tick)
+        self.status_timer.timeout.connect(self.on_status_timer_tick)
         self.data_frequency = Config.data_frequency
         self.time_delay = 1 / self.data_frequency
+        self.status_frequency = Config.status_frequency
+        self.time_delay_status = 1 / self.status_frequency
         self.ircam_ok = False
         self.hikcam_ok = False
         self.init_data()
         self.current_time = 0
         self.autosave_filename = "autosave.csv"
         self.first_row = True
-        
+    
     def initUI(self):
         # --- 创建控件 ---
         # 标签栏
@@ -80,23 +85,26 @@ class MainWindow(QMainWindow):
         # --- 连接信号与槽 ---
         self.connection_widget.ip.connect(self.connection_test)
         self.gcode_widget.run_button.clicked.connect(self.run_gcode)
-        self.status_widget.temp_input.returnPressed.connect(self.set_temperature)
+        self.status_widget.hotend_temperature_input.returnPressed.connect(self.set_temperature)
         self.sigNewData.connect(self.data_widget.update_display)
         self.home_widget.start_button.clicked.connect(self.start_recording)
         self.home_widget.stop_button.clicked.connect(self.stop_recording)
         self.home_widget.reset_button.clicked.connect(self.init_data)
+        self.sigNewStatus.connect(self.status_widget.update_display)
+        
 
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
         items = ["extrusion_force_N", "die_temperature_C", "die_diameter_px", "meter_count_mm", "gcode", "hotend_temperature_C", "feedrate_mms", "time_s", "measured_feedrate_mms"]
         # should define functions that can fetch the quantities from workers
         self.data = {}
-        self.data_tmp = {}
+        self.data_tmp = {} # temporary buffer to slow down writing frequency
+        self.data_status = {} # only stores current status of the platform
 
         for item in items:
             self.data[item] = deque(maxlen=Config.final_data_maxlen)
             self.data_tmp[item] = deque(maxlen=Config.tmp_data_maxlen)
-
+            self.data_status[item] = np.nan
     @Slot(int)
     def show_UI(self, UI_index):
         """Show main UI"""
@@ -138,7 +146,6 @@ class MainWindow(QMainWindow):
         self.klipper_worker.connection_status.connect(self.update_status)
         self.klipper_worker.current_step_signal.connect(self.gcode_widget.highlight_current_line)
         self.klipper_worker.gcode_error.connect(self.update_status)
-        self.sigNewData.connect(self.status_widget.update_display)
 
         try:
             # 创建 video worker （用于接收和处理视频信号）
@@ -174,11 +181,7 @@ class MainWindow(QMainWindow):
             self.ir_image_widget.sigRoiChanged.connect(self.ir_worker.set_roi)
             self.ir_worker.sigRoiFrame.connect(self.ir_roi_widget.update_live_display)
 
-        self.show_UI(1) # show main UI anyway
-        
-    @Slot()
-    def start_recording(self):
-        """Let all workers run."""
+        # Let all workers run
         self.worker.run()
         self.klipper_worker.run()
         if self.hikcam_ok or Config.test_mode:
@@ -190,6 +193,13 @@ class MainWindow(QMainWindow):
             self.ir_worker.run()
         else:
             print("WARNING: Failed to initiate IR camera. Die temperature module is inactive.")
+
+        self.show_UI(1) # show main UI anyway
+        self.status_timer.start(self.time_delay_status * 1000)
+
+    @Slot()
+    def start_recording(self):
+        
         
         self.timer.start(self.time_delay*1000)
         print("Recording started ...")
@@ -197,10 +207,10 @@ class MainWindow(QMainWindow):
     @Slot()
     def stop_recording(self):
         """Let all workers stop."""
-        self.worker.stop()
-        self.klipper_worker.stop()
-        self.video_worker.stop()
-        self.ir_worker.stop()
+        # self.worker.stop()
+        # self.klipper_worker.stop()
+        # self.video_worker.stop()
+        # self.ir_worker.stop()
         self.timer.stop()
         print("Recording stopped.")
 
@@ -218,55 +228,19 @@ class MainWindow(QMainWindow):
 
     def set_temperature(self):
         if self.klipper_worker:
-            target = self.status_widget.temp_input.text()
+            target = self.status_widget.hotend_temperature_input.text()
             self.klipper_worker.send_gcode(f"M104 S{target}")
     
     @Slot()
     def on_timer_tick(self):
         """Record data into tmp queue on every timer tick."""
         # set variable to show on the homepage
-        
-        for item in self.data:
-            # NOTE: here we append new data to both data_tmp and data. The idea is to grow both data together, so that in the preview panel we can use data to see the temporal evolution of the numbers at any time, mean time having a good file writing frequency (using the cached data_tmp) file, so that I/O is not a bottleneck.
-            if item == "extrusion_force_N":
-                self.data_tmp[item].append(self.worker.extrusion_force)
-                self.data[item].append(self.worker.extrusion_force)
-            elif item == "meter_count_mm":
-                self.data_tmp[item].append(self.worker.meter_count)
-                self.data[item].append(self.worker.meter_count)
-            elif item == "die_temperature_C":
-                if self.ircam_ok:
-                    self.data_tmp[item].append(self.ir_worker.die_temperature)
-                    self.data[item].append(self.ir_worker.die_temperature)
-                else:
-                    self.data_tmp[item].append(np.nan)
-                    self.data[item].append(np.nan)
-            elif item == "hotend_temperature_C":
-                self.data_tmp[item].append(self.klipper_worker.hotend_temperature)
-                self.data[item].append(self.klipper_worker.hotend_temperature)
-            elif item == "feedrate_mms":
-                self.data_tmp[item].append(self.klipper_worker.active_feedrate_mms)
-                self.data[item].append(self.klipper_worker.active_feedrate_mms)
-            elif item == "measured_feedrate_mms":
-                try:
-                    measured_feedrate = (self.data_tmp["meter_count_mm"][-1]-self.data_tmp["meter_count_mm"][-2]) / self.time_delay
-                except Exception as e:
-                    print(f"未知错误: {e}")
-                    measured_feedrate = np.nan
-                self.data_tmp[item].append(measured_feedrate)
-                self.data[item].append(measured_feedrate)
-            elif item == "time_s":
-                self.data_tmp[item].append(self.current_time)
-                self.data[item].append(self.current_time)
-            elif item == "die_diameter_px":
-                self.data_tmp[item].append(self.processing_worker.die_diameter)
-                self.data[item].append(self.processing_worker.die_diameter)
-            else:
-                self.data_tmp[item].append(np.nan)
-                self.data[item].append(np.nan)
+        self.grab_status()
+        for item in self.data_tmp:
+            self.data_tmp[item].append(self.data_status[item])
+            self.data[item].append(self.data_status[item])
 
         self.sigNewData.emit(self.data) # update all the displays
-
         self.current_time += self.time_delay # current time step forward
         
         # save additional data to file
@@ -278,6 +252,42 @@ class MainWindow(QMainWindow):
                 self.first_row = False
             else:
                 df.to_csv(self.autosave_filename, index=False, header=False, mode="a")
+
+    def on_status_timer_tick(self):
+        """Update status panel"""
+        self.grab_status()
+        self.sigNewStatus.emit(self.data_status)
+
+    def grab_status(self):
+        for item in self.data_status:
+            # NOTE: here we append new data to both data_tmp and data. The idea is to grow both data together, so that in the preview panel we can use data to see the temporal evolution of the numbers at any time, mean time having a good file writing frequency (using the cached data_tmp) file, so that I/O is not a bottleneck.
+            if item == "extrusion_force_N":
+                self.data_status[item] = self.worker.extrusion_force
+            elif item == "meter_count_mm":
+                self.data_status[item] = self.worker.meter_count
+            elif item == "die_temperature_C":
+                if self.ircam_ok:
+                    self.data_status[item] = self.ir_worker.die_temperature
+                else:
+                    self.data_status[item] = np.nan
+            elif item == "hotend_temperature_C":
+                self.data_status[item] = self.klipper_worker.hotend_temperature
+            elif item == "feedrate_mms":
+                self.data_status[item] = self.klipper_worker.active_feedrate_mms
+            elif item == "measured_feedrate_mms":
+                try:
+                    measured_feedrate = (self.data_tmp["meter_count_mm"][-1]-self.data_tmp["meter_count_mm"][-2]) / self.time_delay
+                except Exception as e:
+                    print(f"未知错误: {e}")
+                    measured_feedrate = np.nan
+                self.data_status[item] = measured_feedrate
+            elif item == "time_s":
+                self.data_status[item] = self.current_time
+            elif item == "die_diameter_px":
+                self.data_status[item] = self.processing_worker.die_diameter
+            else:
+                self.data_status[item] = np.nan
+
 
     def closeEvent(self, event):
         event.accept()

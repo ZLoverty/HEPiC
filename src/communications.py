@@ -309,7 +309,7 @@ class VideoWorker(QObject):
             if true, enable test mode, which utilizes a sequence of local images to simulate a video stream from a camera.
         """
         super().__init__()
-       
+        self.test_mode = test_mode
         if test_mode:  # 调试用图片流
             image_folder = Path(Config.test_image_folder).expanduser().resolve()
             self.cap = ImageStreamer(str(image_folder), fps=fps)
@@ -356,8 +356,12 @@ class VideoWorker(QObject):
         """
         self.cap.release()
         while self.cap._is_opened:
-            await asyncio.sleep(1)
-        self.cap = HikVideoCapture(width=512, height=512, exposure_time=exp_time*1000, center_roi=True)
+            await asyncio.sleep(.1)
+        if self.test_mode:
+            print("Test mode: exposure time setting will not have any effect.")
+        else:
+            from video_capture import HikVideoCapture  
+            self.cap = HikVideoCapture(width=512, height=512, exposure_time=exp_time*1000, center_roi=True)
 
 class ProcessingWorker(QObject):
     """处理图像的逻辑：如果ROI没有被设置，则只在视觉页更新未处理的图像；如果ROI已经设置，则在更新视觉页未处理图像同时，更新处理过的ROI图像。"""
