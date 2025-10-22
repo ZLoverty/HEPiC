@@ -562,3 +562,6 @@ class IRWorker(QObject):
     @Slot(tuple)
     def set_roi(self, roi):
         self.roi = roi
+
+    def stop(self):
+        self.is_running = False

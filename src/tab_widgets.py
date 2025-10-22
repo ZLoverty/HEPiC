@@ -270,7 +270,8 @@ class VisionWidget(pg.GraphicsLayoutWidget):
 
         self.roi = None
         self.roi_start_pos = None
-        # self.mouse_enabled = True
+        self.mouse_enabled = True
+
         # 告诉布局管理器，让ViewBox占据所有可用空间，从而最小化边距
         self.ci.layout.setContentsMargins(0, 0, 0, 0)
 
@@ -300,7 +301,7 @@ class VisionWidget(pg.GraphicsLayoutWidget):
     
     def mousePressEvent(self, event):
         # pyqtgraph 内部会处理好 PyQt/PySide 的差异，所以这部分逻辑不变
-        if event.button() == pg.QtCore.Qt.MouseButton.LeftButton:
+        if event.button() == pg.QtCore.Qt.MouseButton.LeftButton and self.mouse_enabled:
             if self.roi:
                 self.plot_item.removeItem(self.roi)
                 self.roi = None
@@ -332,7 +333,7 @@ class VisionWidget(pg.GraphicsLayoutWidget):
             super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if self.roi and event.buttons() == pg.QtCore.Qt.MouseButton.LeftButton:
+        if self.roi and event.buttons() == pg.QtCore.Qt.MouseButton.LeftButton and self.mouse_enabled:
             current_pos = self.plot_item.getViewBox().mapSceneToView(event.scenePosition())
             # 更新ROI的位置和大小，以确保拖拽行为符合直觉
             # min()确保左上角坐标正确，abs()确保宽高为正
@@ -350,7 +351,7 @@ class VisionWidget(pg.GraphicsLayoutWidget):
             super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        if self.roi and event.button() == pg.QtCore.Qt.MouseButton.LeftButton:
+        if self.roi and event.button() == pg.QtCore.Qt.MouseButton.LeftButton and self.mouse_enabled:
             self.roi.sigRegionChangeFinished.connect(self.on_roi_changed)
             self.on_roi_changed() # 首次绘制完成时，主动触发一次
             self.roi_start_pos = None
@@ -382,6 +383,7 @@ class VisionPageWidget(QWidget):
         self.exp_time_unit = QLabel("ms")
         self.vision_widget = VisionWidget()
         self.roi_vision_widget = VisionWidget()
+        self.roi_vision_widget.mouse_enabled = False
         layout = QHBoxLayout(self)
         control_layout = QVBoxLayout()
         button_layout = QHBoxLayout()
@@ -566,8 +568,10 @@ class HomeWidget(QWidget):
         self.gcode_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.data_widget = DataPlotWidget()
         self.status_widget = PlatformStatusWidget()
-        self.dieswell_widget = VisionWidget()
+        self.dieswell_widget = VisionWidget() # hik cam roi
+        self.dieswell_widget.mouse_enabled = False
         self.ir_roi_widget = VisionWidget()
+        self.ir_roi_widget.mouse_enabled = False
         self.start_button = QPushButton("开始")
         self.stop_button = QPushButton("停止")
         self.reset_button = QPushButton("重置")

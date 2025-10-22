@@ -84,6 +84,7 @@ class MainWindow(QMainWindow):
         self.sigNewData.connect(self.data_widget.update_display)
         self.home_widget.start_button.clicked.connect(self.start_recording)
         self.home_widget.stop_button.clicked.connect(self.stop_recording)
+        self.home_widget.reset_button.clicked.connect(self.init_data)
 
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
@@ -202,9 +203,6 @@ class MainWindow(QMainWindow):
         self.ir_worker.stop()
         self.timer.stop()
         print("Recording stopped.")
-    
-    def reset_data(self):
-        """Reset the recorded data to prepare a fresh new recording."""
 
     @Slot(str)
     def update_status(self, status):
