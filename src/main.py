@@ -87,8 +87,7 @@ class MainWindow(QMainWindow):
         self.gcode_widget.run_button.clicked.connect(self.run_gcode)
         self.status_widget.hotend_temperature_input.returnPressed.connect(self.set_temperature)
         self.sigNewData.connect(self.data_widget.update_display)
-        self.home_widget.start_button.clicked.connect(self.start_recording)
-        self.home_widget.stop_button.clicked.connect(self.stop_recording)
+        self.home_widget.play_pause_button.toggled.connect(self.on_toggle_play_pause)
         self.home_widget.reset_button.clicked.connect(self.init_data)
         self.sigNewStatus.connect(self.status_widget.update_display)
         
@@ -159,9 +158,10 @@ class MainWindow(QMainWindow):
             else:
                 print(f"初始化熔体状态相机失败: {e}")
 
+        # 创建 image processing worker 用于处理图像，探测熔体直径
+        self.processing_worker = ProcessingWorker()
+        
         if self.hikcam_ok or Config.test_mode:
-            # 创建 image processing worker 用于处理图像，探测熔体直径
-            self.processing_worker = ProcessingWorker()
             # 连接信号槽
             self.vision_page_widget.vision_widget.sigRoiChanged.connect(self.video_worker.set_roi)
             self.video_worker.new_frame_signal.connect(self.vision_page_widget.vision_widget.update_live_display)
@@ -197,22 +197,16 @@ class MainWindow(QMainWindow):
         self.show_UI(1) # show main UI anyway
         self.status_timer.start(self.time_delay_status * 1000)
 
-    @Slot()
-    def start_recording(self):
-        
-        
-        self.timer.start(self.time_delay*1000)
-        print("Recording started ...")
-
-    @Slot()
-    def stop_recording(self):
-        """Let all workers stop."""
-        # self.worker.stop()
-        # self.klipper_worker.stop()
-        # self.video_worker.stop()
-        # self.ir_worker.stop()
-        self.timer.stop()
-        print("Recording stopped.")
+    @Slot(bool)
+    def on_toggle_play_pause(self, checked):
+        if checked: 
+            self.timer.start(self.time_delay*1000)
+            self.home_widget.play_pause_button.setIcon(self.home_widget.pause_icon)
+            print("Recording started ...")
+        else:
+            self.timer.stop()
+            self.home_widget.play_pause_button.setIcon(self.home_widget.play_icon)
+            print("Recording stopped.")
 
     @Slot(str)
     def update_status(self, status):
