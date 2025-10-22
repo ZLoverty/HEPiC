@@ -368,35 +368,27 @@ class ProcessingWorker(QObject):
 
     def __init__(self):
         super().__init__()
-        self.image_buffer = asyncio.Queue()
         self.die_diameter = np.nan
-
-    async def run(self):
-        await self.process_frame()
-     
+        
     @Slot(np.ndarray)
-    async def cache_frame(self, frame):
-        await self.image_buffer.put(frame)
-
-    async def process_frame(self):
+    def process_frame(self, img):
         """当收到数据时，将队列里最新的图像取出分析，然后清空队列"""
-        while self.is_running:
-            img = await self.image_buffer.get()
-            gray = convert_to_grayscale(img) # only process gray images    
-            try:
-                diameter, skeleton, dist_transform = filament_diameter(gray)
-                skeleton[dist_transform < dist_transform.max()*0.9] = False
-                longest_branch = find_longest_branch(skeleton)
-                # filter the pixels on skeleton where dt is smaller than 0.9 of the max
-                diameter_refine = dist_transform[longest_branch].mean() * 2.0
-                proc_frame = draw_filament_contour(gray, longest_branch, diameter_refine)
-                self.proc_frame_signal.emit(proc_frame)
-                self.die_diameter = diameter_refine
-            except ValueError as e:
-                # 已知纯色图片会导致检测失败，在此情况下可以不必报错继续运行，将出口直径记为 np.nan 即可
-                print(f"图像无法处理: {e}")
-                self.die_diameter_signal.emit(np.nan)
-                self.proc_frame_signal.emit(gray)
+
+        gray = convert_to_grayscale(img) # only process gray images    
+        try:
+            diameter, skeleton, dist_transform = filament_diameter(gray)
+            skeleton[dist_transform < dist_transform.max()*0.9] = False
+            longest_branch = find_longest_branch(skeleton)
+            # filter the pixels on skeleton where dt is smaller than 0.9 of the max
+            diameter_refine = dist_transform[longest_branch].mean() * 2.0
+            proc_frame = draw_filament_contour(gray, longest_branch, diameter_refine)
+            self.proc_frame_signal.emit(proc_frame)
+            self.die_diameter = diameter_refine
+        except ValueError as e:
+            # 已知纯色图片会导致检测失败，在此情况下可以不必报错继续运行，将出口直径记为 np.nan 即可
+            print(f"图像无法处理: {e}")
+            self.die_diameter_signal.emit(np.nan)
+            self.proc_frame_signal.emit(gray)
    
     
 class ConnectionTester(QObject):
@@ -436,6 +428,7 @@ class ConnectionTester(QObject):
         else:
             self.test_msg.emit(f"❌ 端口检查失败。主机可达，但端口 {self.port} 已关闭或被防火墙过滤。")
             self.test_msg.emit("数据端口连通性测试失败，请检查数据服务器是否启动")
+            return
 
 
         # --- 新增步骤 3: 检查 Moonraker API ---
