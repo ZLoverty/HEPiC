@@ -87,7 +87,7 @@ class MainWindow(QMainWindow):
 
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
-        items = ["extrusion_force_N", "die_temperature_C", "die_diameter_mm", "meter_count_mm", "gcode", "hotend_temperature_C", "feedrate_mms", "time_s"]
+        items = ["extrusion_force_N", "die_temperature_C", "die_diameter_px", "meter_count_mm", "gcode", "hotend_temperature_C", "feedrate_mms", "time_s", "measured_feedrate_mms"]
         # should define functions that can fetch the quantities from workers
         self.data = {}
         self.data_tmp = {}
@@ -137,7 +137,7 @@ class MainWindow(QMainWindow):
         self.klipper_worker.connection_status.connect(self.update_status)
         self.klipper_worker.current_step_signal.connect(self.gcode_widget.highlight_current_line)
         self.klipper_worker.gcode_error.connect(self.update_status)
-        self.klipper_worker.hotend_temperature.connect(self.status_widget.update_display_temperature)
+        self.sigNewData.connect(self.status_widget.update_display)
 
         try:
             # 创建 video worker （用于接收和处理视频信号）
@@ -226,21 +226,52 @@ class MainWindow(QMainWindow):
     @Slot()
     def on_timer_tick(self):
         """Record data into tmp queue on every timer tick."""
+        # set variable to show on the homepage
+        
         for item in self.data:
+            # NOTE: here we append new data to both data_tmp and data. The idea is to grow both data together, so that in the preview panel we can use data to see the temporal evolution of the numbers at any time, mean time having a good file writing frequency (using the cached data_tmp) file, so that I/O is not a bottleneck.
             if item == "extrusion_force_N":
                 self.data_tmp[item].append(self.worker.extrusion_force)
+                self.data[item].append(self.worker.extrusion_force)
+            elif item == "meter_count_mm":
+                self.data_tmp[item].append(self.worker.meter_count)
+                self.data[item].append(self.worker.meter_count)
             elif item == "die_temperature_C":
                 if self.ircam_ok:
                     self.data_tmp[item].append(self.ir_worker.die_temperature)
+                    self.data[item].append(self.ir_worker.die_temperature)
                 else:
                     self.data_tmp[item].append(np.nan)
+                    self.data[item].append(np.nan)
+            elif item == "hotend_temperature_C":
+                self.data_tmp[item].append(self.klipper_worker.hotend_temperature)
+                self.data[item].append(self.klipper_worker.hotend_temperature)
+            elif item == "feedrate_mms":
+                self.data_tmp[item].append(self.klipper_worker.active_feedrate_mms)
+                self.data[item].append(self.klipper_worker.active_feedrate_mms)
+            elif item == "measured_feedrate_mms":
+                try:
+                    measured_feedrate = (self.data_tmp["meter_count_mm"][-1]-self.data_tmp["meter_count_mm"][-2]) / self.time_delay
+                except Exception as e:
+                    print(f"未知错误: {e}")
+                    measured_feedrate = np.nan
+                self.data_tmp[item].append(measured_feedrate)
+                self.data[item].append(measured_feedrate)
             elif item == "time_s":
                 self.data_tmp[item].append(self.current_time)
+                self.data[item].append(self.current_time)
+            elif item == "die_diameter_px":
+                self.data_tmp[item].append(self.processing_worker.die_diameter)
+                self.data[item].append(self.processing_worker.die_diameter)
             else:
                 self.data_tmp[item].append(np.nan)
-        self.sigNewData.emit(self.data)
-        self.current_time += self.time_delay
+                self.data[item].append(np.nan)
+
+        self.sigNewData.emit(self.data) # update all the displays
+
+        self.current_time += self.time_delay # current time step forward
         
+        # save additional data to file
         if len(self.data_tmp["extrusion_force_N"]) >= Config.tmp_data_maxlen:
             # construct pd.DataFrame
             df = pd.DataFrame(self.data_tmp)
@@ -249,9 +280,6 @@ class MainWindow(QMainWindow):
                 self.first_row = False
             else:
                 df.to_csv(self.autosave_filename, index=False, header=False, mode="a")
-            for item in self.data_tmp:
-                self.data[item].extend(self.data_tmp[item])
-                self.data_tmp[item].clear()
 
     def closeEvent(self, event):
         event.accept()

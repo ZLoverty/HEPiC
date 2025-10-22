@@ -127,9 +127,23 @@ class PlatformStatusWidget(QWidget):
         
         self.setLayout(layout)
 
-    @Slot(float)
-    def update_display_temperature(self, temperature):
-        self.temp_value_label.setText(f"{temperature:5.1f} /")
+    @Slot(dict)
+    def update_display(self, data):
+        for item in data:
+            if item == "hotend_temperature_C":
+                temperature = data[item][-1]
+                self.temp_value_label.setText(f"{temperature:5.1f} /")
+            elif item == "extrusion_force_N":
+                extrusion_force = data[item][-1]
+                self.force_value_label.setText(f"{extrusion_force:5.1f} N")
+            elif item == "meter_count_mm":
+                meter_count = data[item][-1]
+                self.meter_value_label.setText(f"{meter_count:5.1f} mm")
+            elif item == "feedrate_mms":
+                feedrate = data[item][-1]
+                self.velocity_value_label.setText(f"{feedrate:5.1f} mm/s")
+
+
 
 class DataPlotWidget(QWidget):
 
@@ -138,9 +152,9 @@ class DataPlotWidget(QWidget):
         super().__init__()
 
         # 创建 pyqtgraph widgets
-        self.force_plot = pg.PlotWidget(title="挤出力")
-        self.dietemp_plot = pg.PlotWidget(title="出口温度")
-        self.dieswell_plot = pg.PlotWidget(title="胀大比")
+        self.force_plot = pg.PlotWidget(title="挤出力(N)")
+        self.dietemp_plot = pg.PlotWidget(title="出口熔体温度(C)")
+        self.dieswell_plot = pg.PlotWidget(title="出口熔体直径(px)")
         pen = pg.mkPen(color=(0, 120, 215), width=2)
         self.force_curve = self.force_plot.plot(pen=pen) # 在图表上添加一条曲线
         self.dietemp_curve = self.dietemp_plot.plot(pen=pen) # 在图表上添加一条曲线
@@ -164,8 +178,8 @@ class DataPlotWidget(QWidget):
                 self.force_curve.setData(list(data["time_s"])[-self.max_len:], list(data["extrusion_force_N"])[-self.max_len:])
             if "die_temperature_C" in data:
                 self.dietemp_curve.setData(list(data["time_s"])[-self.max_len:], list(data["die_temperature_C"])[-self.max_len:])
-            if "die_diameter_mm" in data:
-                self.dieswell_curve.setData(list(data["time_s"])[-self.max_len:], list(data["die_diameter_mm"])[-self.max_len:])
+            if "die_diameter_px" in data:
+                self.dieswell_curve.setData(list(data["time_s"])[-self.max_len:], list(data["die_diameter_px"])[-self.max_len:])
 
         except (IndexError, ValueError):
             self.temp_value_label.setText("解析错误")

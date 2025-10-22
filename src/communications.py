@@ -130,10 +130,9 @@ class KlipperWorker(QObject):
         self.message_queue = asyncio.Queue() # klipper 的消息队列
         self.gcode_queue = asyncio.Queue() # gcode 的消息队列
         self.uri = f"ws://{self.host}:{self.port}/websocket"
-
-        self.active_feedrate_mms = 0
+        self.active_feedrate_mms = np.nan
+        self.hotend_temperature = np.nan
         
-
     @asyncSlot()
     async def run(self):
         """Asyncio 事件循环，处理 WebSocket 连接和通信"""
@@ -204,7 +203,7 @@ class KlipperWorker(QObject):
                 if g_regex.search(gcode_upper):
                     # 是 G0 或 G1，所以 "活动" 速度就是当前的模态速度
                     self.active_feedrate_mms = self.modal_feedrate_mms
-                elif gcode_upper:
+                else:
                     # 不是移动指令 (例如 M104, G28, G90)
                     # 这些指令没有 feedrate，所以 "活动" 速度为 0
                     self.active_feedrate_mms = 0.0
@@ -258,10 +257,9 @@ class KlipperWorker(QObject):
             if "method" in data: 
                 if data["method"] == "notify_status_update": # 判断是否是状态回执
                     try:
-                        temp = data["params"][0]["extruder"]["temperature"]
-                    except:
-                        temp = np.nan
-                    self.hotend_temperature.emit(temp)
+                        self.hotend_temperature = data["params"][0]["extruder"]["temperature"]
+                    except Exception as e:
+                        print(f"未知错误: {e}")
                 elif data["method"] == "printer.gcode.script": # 发送 G-code
                     async with websockets.connect(self.uri) as websocket:
                         await websocket.send(json.dumps(data))
@@ -363,17 +361,16 @@ class VideoWorker(QObject):
 
 class ProcessingWorker(QObject):
     """处理图像的逻辑：如果ROI没有被设置，则只在视觉页更新未处理的图像；如果ROI已经设置，则在更新视觉页未处理图像同时，更新处理过的ROI图像。"""
-    die_diameter_signal = Signal(float)
+
     proc_frame_signal = Signal(np.ndarray)
 
     def __init__(self):
         super().__init__()
         self.die_diameter = np.nan
-        
+
     @Slot(np.ndarray)
     def process_frame(self, img):
-        """当收到数据时，将队列里最新的图像取出分析，然后清空队列"""
-
+        """Find filament in image and update the `self.die_diameter` variable with detected filament diameter."""
         gray = convert_to_grayscale(img) # only process gray images    
         try:
             diameter, skeleton, dist_transform = filament_diameter(gray)
@@ -387,7 +384,6 @@ class ProcessingWorker(QObject):
         except ValueError as e:
             # 已知纯色图片会导致检测失败，在此情况下可以不必报错继续运行，将出口直径记为 np.nan 即可
             print(f"图像无法处理: {e}")
-            self.die_diameter_signal.emit(np.nan)
             self.proc_frame_signal.emit(gray)
    
     
