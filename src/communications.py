@@ -12,14 +12,20 @@ import websockets
 import json
 from qasync import QEventLoop, asyncSlot
 import numpy as np
-from vision import filament_diameter, convert_to_grayscale, draw_filament_contour, find_longest_branch, ImageStreamer
+from vision import binarize, filament_diameter, convert_to_grayscale, draw_filament_contour, find_longest_branch, ImageStreamer
 from collections import deque
 import platform
 import aiohttp
 from pathlib import Path
-
+import sys
 from config import Config
 import re
+import os
+if not Config.test_mode:
+    if os.name == "nt":
+        from hikcam_win import HikVideoCapture
+    else:
+        from video_capture import HikVideoCapture   
 
 class TCPClient(QObject):
     # --- 信号 ---
@@ -314,7 +320,6 @@ class VideoWorker(QObject):
             image_folder = Path(Config.test_image_folder).expanduser().resolve()
             self.cap = ImageStreamer(str(image_folder), fps=fps)
         else: # 真图片流
-            from video_capture import HikVideoCapture    
             self.cap = HikVideoCapture(width=512, height=512, exposure_time=50000, center_roi=True)
             
         self.running = True
@@ -355,12 +360,11 @@ class VideoWorker(QObject):
             exposure time in ms.
         """
         self.cap.release()
-        while self.cap._is_opened:
+        while self.cap.is_open:
             await asyncio.sleep(.1)
         if self.test_mode:
             print("Test mode: exposure time setting will not have any effect.")
         else:
-            from video_capture import HikVideoCapture  
             self.cap = HikVideoCapture(width=512, height=512, exposure_time=exp_time*1000, center_roi=True)
 
 class ProcessingWorker(QObject):
@@ -377,8 +381,9 @@ class ProcessingWorker(QObject):
         """Find filament in image and update the `self.die_diameter` variable with detected filament diameter."""
         gray = convert_to_grayscale(img) # only process gray images    
         try:
-            diameter, skeleton, dist_transform = filament_diameter(gray)
-            skeleton[dist_transform < dist_transform.max()*0.9] = False
+            binary = binarize(gray)
+            diameter, skeleton, dist_transform = filament_diameter(binary)
+            skeleton[dist_transform < dist_transform.mean()] = False
             longest_branch = find_longest_branch(skeleton)
             # filter the pixels on skeleton where dt is smaller than 0.9 of the max
             diameter_refine = dist_transform[longest_branch].mean() * 2.0
@@ -388,7 +393,7 @@ class ProcessingWorker(QObject):
         except ValueError as e:
             # 已知纯色图片会导致检测失败，在此情况下可以不必报错继续运行，将出口直径记为 np.nan 即可
             print(f"图像无法处理: {e}")
-            self.proc_frame_signal.emit(gray)
+            self.proc_frame_signal.emit(binary)
    
     
 class ConnectionTester(QObject):

@@ -26,7 +26,7 @@ class HikVideoCapture:
     def __init__(self, width: int | None = None, height: int | None = None, exposure_time: float | None = None, center_roi: bool = True):
         
         self.cam: Camera | None = None
-        self._is_opened = False
+        self.is_open = False
         self.frame_queue = queue.Queue(maxsize=2)
 
         try:
@@ -82,14 +82,14 @@ class HikVideoCapture:
             self.cam.trigger_enable(False)
             self.cam.start()
             
-            self._is_opened = True
+            self.is_open = True
             print(f"相机 {self.cam.info.model} ({self.cam.info.serialno}) 已成功打开并开始采集。")
 
         except Exception as e:
             print(f"初始化相机时出错: {e}")
             if self.cam:
                 self.cam.close()
-            self._is_opened = False
+            self.is_open = False
 
     def _frame_callback(self, frame, cam) -> None:
         if self.frame_queue.full():
@@ -107,7 +107,7 @@ class HikVideoCapture:
             pass
 
     def isOpened(self) -> bool:
-        return self._is_opened
+        return self.is_open
 
     def read(self) -> tuple[bool, np.ndarray | None]:
         if not self.isOpened():
@@ -124,7 +124,7 @@ class HikVideoCapture:
             print("正在释放相机资源...")
             self.cam.stop()
             self.cam.close()
-        self._is_opened = False
+        self.is_open = False
 
 # --- 如何使用 ---
 if __name__ == '__main__':

@@ -15,15 +15,28 @@ from collections import deque
 import os
 import glob
 
-def filament_diameter(img):
+def binarize(img):
+    """Convert gray image to binary using a threshold filter.
+    img : np.ndarray"""
+    assert img.ndim == 2, "Input image must be grayscale"
+
+    img = to8bit(img) # convert to 8-bit if necessary, maximaize the contrast
+
+    blur = cv2.GaussianBlur(img, (5, 5), 0)
+
+    _, binary = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    return binary
+
+def filament_diameter(binary):
     """Calculate the diameter of a filament in an image. 
     The filament is assumed to be brighter than the background.
     The method uses distance transform and skeletonization to estimate the diameter.
     
     Parameters:
     -----------
-    img : np.ndarray
-        Input image containing the filament.
+    binary : np.ndarray
+        binarized image of dtype bool.
         
     Returns:
     --------
@@ -34,14 +47,6 @@ def filament_diameter(img):
     dist_transform: np.ndarray
         Gray scale image showing distance transform results. 
     """
-
-    assert img.ndim == 2, "Input image must be grayscale"
-
-    img = to8bit(img) # convert to 8-bit if necessary, maximaize the contrast
-
-    blur = cv2.GaussianBlur(img, (5, 5), 0)
-
-    _, binary = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
     dist_transform = cv2.distanceTransform(binary, cv2.DIST_L2, 5)
 
@@ -120,9 +125,11 @@ def draw_filament_contour(img, skeleton, diameter):
         try:
             cv2.circle(reconstructed_mask, center, int(round(diameter//2)), 255, thickness=-1)
         except ValueError as e:
-            return img
+            # return img
+            pass
         except Exception as e:
-            print(f"未知错误: {e}")
+            # print(f"未知错误: {e}")
+            pass
 
     contours, _ = cv2.findContours(reconstructed_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 

@@ -272,7 +272,6 @@ class MainWindow(QMainWindow):
                 try:
                     measured_feedrate = (self.data_tmp["meter_count_mm"][-1]-self.data_tmp["meter_count_mm"][-2]) / self.time_delay
                 except Exception as e:
-                    print(f"未知错误: {e}")
                     measured_feedrate = np.nan
                 self.data_status[item] = measured_feedrate
             elif item == "time_s":
