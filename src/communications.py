@@ -333,7 +333,7 @@ class VideoWorker(QObject):
     async def run(self):
         
         while self.running:
-            ret, frame = self.cap.read()
+            ret, frame = await asyncio.to_thread(self.cap.read)
             if ret:
                 self.new_frame_signal.emit(frame)
                 if self.roi is None:
@@ -345,7 +345,7 @@ class VideoWorker(QObject):
             else:
                 print("Fail to read frame.")
             
-            await asyncio.sleep(0.001)
+            # await asyncio.sleep(0.001)
 
     @Slot(tuple)
     def set_roi(self, roi):
