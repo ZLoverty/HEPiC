@@ -609,6 +609,7 @@ class HomeWidget(QWidget):
         self.play_icon = style.standardIcon(QStyle.StandardPixmap.SP_MediaPlay)
         self.pause_icon = style.standardIcon(QStyle.StandardPixmap.SP_MediaPause)
         self.play_pause_button = QPushButton()
+        self.play_pause_button.setCheckable(True)
         self.play_pause_button.setIcon(self.play_icon)
         button_size = 80
         self.play_pause_button.setFixedSize(button_size, button_size)
