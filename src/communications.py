@@ -311,7 +311,7 @@ class VideoWorker(QObject):
     roi_frame_signal = Signal(np.ndarray)
     finished = Signal()
 
-    def __init__(self, test_mode=False, image_folder="~/Documents/GitHub/etp_ctl/test/filament_images_simulated", fps=10):
+    def __init__(self, test_mode=False):
         """
         Parameters
         ----------
@@ -322,14 +322,12 @@ class VideoWorker(QObject):
         self.test_mode = test_mode
         if test_mode:  # 调试用图片流
             image_folder = Path(Config.test_image_folder).expanduser().resolve()
-            self.cap = ImageStreamer(str(image_folder), fps=fps)
+            self.cap = ImageStreamer(str(image_folder), fps=10)
         else: # 真图片流
             self.cap = HikVideoCapture(width=512, height=512, exposure_time=50000, center_roi=True)
             
         self.running = True
-        self.frame_delay = 1 / fps  
         self.roi = None
-        self.invert = False
 
     @asyncSlot()
     async def run(self):
@@ -347,7 +345,7 @@ class VideoWorker(QObject):
             else:
                 print("Fail to read frame.")
             
-            await asyncio.sleep(self.frame_delay)
+            await asyncio.sleep(0.001)
 
     @Slot(tuple)
     def set_roi(self, roi):
@@ -383,7 +381,8 @@ class ProcessingWorker(QObject):
     def __init__(self):
         super().__init__()
         self.die_diameter = np.nan
-
+        self.invert = False
+        
     @Slot(np.ndarray)
     def process_frame(self, img):
         """Find filament in image and update the `self.die_diameter` variable with detected filament diameter."""

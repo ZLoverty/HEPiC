@@ -9,7 +9,7 @@ Tabs widgets for layout management. Contains
 """
 
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSizePolicy,
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSizePolicy, QCheckBox,
     QLineEdit, QPushButton, QPlainTextEdit, QLabel, QGridLayout, QMessageBox, QTabWidget, QFileDialog, QTextEdit, QLabel, QStyle
 )
 from PySide6.QtGui import QTextCursor, QTextCharFormat, QColor
@@ -414,6 +414,7 @@ class VisionPageWidget(QWidget):
         self.vision_widget = VisionWidget()
         self.roi_vision_widget = VisionWidget()
         self.roi_vision_widget.mouse_enabled = False
+        self.invert_button = QCheckBox("黑白反转")
         layout = QHBoxLayout(self)
         control_layout = QVBoxLayout()
         button_layout = QHBoxLayout()
@@ -422,6 +423,7 @@ class VisionPageWidget(QWidget):
         button_layout.addWidget(self.exp_time_unit)
         button_layout.addStretch(1)
         control_layout.addLayout(button_layout)
+        control_layout.addWidget(self.invert_button)
         # control_layout.addStretch(1)
         control_layout.addWidget(self.roi_vision_widget, 4)
         layout.addWidget(self.vision_widget)

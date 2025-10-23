@@ -169,6 +169,7 @@ class MainWindow(QMainWindow):
             self.processing_worker.proc_frame_signal.connect(self.vision_page_widget.roi_vision_widget.update_live_display)
             self.processing_worker.proc_frame_signal.connect(self.home_widget.dieswell_widget.update_live_display)
             self.vision_page_widget.sigExpTime.connect(self.video_worker.set_exp_time)
+            self.vision_page_widget.invert_button.toggled.connect(self.processing_worker.invert_toggle)
         
         try: # 创建 IR image worker 处理红外成像仪图像，探测熔体出口温度   
             self.ir_worker = IRWorker()

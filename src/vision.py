@@ -187,7 +187,9 @@ class ImageStreamer:
         # 获取并排序图片文件
         self.image_files = sorted(glob.glob(os.path.join(self.image_folder, '*.[pP][nN][gG]')) + 
                                   glob.glob(os.path.join(self.image_folder, '*.[jJ][pP][gG]')) +
-                                  glob.glob(os.path.join(self.image_folder, '*.[jJ][pP][eE][gG]')))
+                                  glob.glob(os.path.join(self.image_folder, '*.[jJ][pP][eE][gG]')) +
+                                  glob.glob(os.path.join(self.image_folder, '*.[bB][mM][pP]')))
+        
         
         if not self.image_files:
             raise FileNotFoundError(f"No images found in the directory: {self.image_folder}")
@@ -230,7 +232,8 @@ class ImageStreamer:
         # 处理循环
         if self.loop and self.current_frame_index >= self.num_frames:
             self.current_frame_index = 0
-            
+        
+        cv2.waitKey(int(1000//self.fps))
         return (True, frame)
 
     def release(self):
