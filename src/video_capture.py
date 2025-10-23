@@ -2,7 +2,10 @@ import cv2
 import queue
 import time
 import numpy as np
-from hikrobotcamlib import Camera, DeviceList, Frame, DeviceTransport 
+try:
+    from hikrobotcamlib import Camera, DeviceList, Frame, DeviceTransport 
+except Exception as e:
+    raise f"导入 hikrobotcamlib 失败: {e}"
 
 class HikVideoCapture:
     """
