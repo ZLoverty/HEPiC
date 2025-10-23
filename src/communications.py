@@ -44,16 +44,16 @@ class TCPClient(QObject):
         super().__init__()
         self.host = host
         self.port = port
-        self.is_running = False
+        self.is_running = True
         self.queue = asyncio.Queue()
         self.extrusion_force = np.nan
         self.meter_count = np.nan
-    
+        
     @asyncSlot()
     async def run(self):
-        self.is_running = True
-        try:
-            self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.host, self.port), timeout=2.0)
+        self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.host, self.port), timeout=2.0)
+        try:        
+            await self.send_data("start")
             self.receive_task = asyncio.create_task(self.receive_data())
             self.process_task = asyncio.create_task(self.process_data())
             await asyncio.gather(self.receive_task, self.process_task)
@@ -65,7 +65,23 @@ class TCPClient(QObject):
             self.receive_task.cancel()
             self.process_task.cancel()
             await asyncio.gather(self.receive_task, self.process_task, return_exceptions=True)
-            
+
+    async def send_data(self, message):
+        """向服务器发送一条消息"""
+        if not self.is_running or not self.writer:
+            print("连接未建立，无法发送消息。")
+            return
+
+        try:
+            # 客户端发送时也最好加上换行符，以方便服务器按行读取
+            data_to_send = (message + '\n').encode('utf-8')
+            self.writer.write(data_to_send)
+            await self.writer.drain()
+            print(f"已发送 -> {message}")
+        except Exception as e:
+            print(f"发送消息时出错: {e}")
+            self.is_running = False
+
     async def receive_data(self):
         """
         这个函数在后台线程中运行，持续接收数据。
@@ -114,13 +130,8 @@ class TCPClient(QObject):
         """
         关闭连接并停止接收线程。
         """
-        if self.is_running:
-            self.is_running = False
-            self.receive_task.cancel()
-            self.process_task.cancel()
-            self.writer.close()
-            await asyncio.gather(self.receive_task, self.process_task, self.writer.wait_closed(), return_exceptions=True)
-            self.connection_status.emit("连接已断开")
+        self.is_running = False
+     
 
 class KlipperWorker(QObject):
     """
