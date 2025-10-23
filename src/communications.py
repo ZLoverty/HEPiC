@@ -21,10 +21,14 @@ import sys
 from config import Config
 import re
 import os
+import cv2
+
 if not Config.test_mode:
     if os.name == "nt":
+        # if on windows OS, import the windows camera library
         from hikcam_win import HikVideoCapture
     else:
+        # on Mac / Linux, use a different library
         from video_capture import HikVideoCapture   
 
 class TCPClient(QObject):
@@ -325,6 +329,7 @@ class VideoWorker(QObject):
         self.running = True
         self.frame_delay = 1 / fps  
         self.roi = None
+        self.invert = False
 
     @asyncSlot()
     async def run(self):
@@ -333,7 +338,10 @@ class VideoWorker(QObject):
             ret, frame = self.cap.read()
             if ret:
                 self.new_frame_signal.emit(frame)
-                if self.roi is not None:
+                if self.roi is None:
+                    # if ROI is not set, show the whole frame in the ROI panel
+                    self.roi_frame_signal.emit(frame)
+                else:
                     x, y, w, h = self.roi
                     self.roi_frame_signal.emit(frame[y:y+h, x:x+w])
             else:
@@ -368,7 +376,7 @@ class VideoWorker(QObject):
             self.cap = HikVideoCapture(width=512, height=512, exposure_time=exp_time*1000, center_roi=True)
 
 class ProcessingWorker(QObject):
-    """处理图像的逻辑：如果ROI没有被设置，则只在视觉页更新未处理的图像；如果ROI已经设置，则在更新视觉页未处理图像同时，更新处理过的ROI图像。"""
+    """基于 distance transform 计算前景图案的尺寸。"""
 
     proc_frame_signal = Signal(np.ndarray)
 
@@ -382,18 +390,27 @@ class ProcessingWorker(QObject):
         gray = convert_to_grayscale(img) # only process gray images    
         try:
             binary = binarize(gray)
+            if self.invert:
+                binary = cv2.bitwise_not(binary)
             diameter, skeleton, dist_transform = filament_diameter(binary)
-            skeleton[dist_transform < dist_transform.mean()] = False
-            longest_branch = find_longest_branch(skeleton)
+            skel_px = dist_transform[skeleton]
+            skeleton_refine = skeleton.copy()
+            skeleton_refine[dist_transform < skel_px.mean()] = False
             # filter the pixels on skeleton where dt is smaller than 0.9 of the max
-            diameter_refine = dist_transform[longest_branch].mean() * 2.0
-            proc_frame = draw_filament_contour(gray, longest_branch, diameter_refine)
+            diameter_refine = dist_transform[skeleton_refine].mean() * 2.0
+            proc_frame = draw_filament_contour(gray, skeleton_refine, diameter_refine)
             self.proc_frame_signal.emit(proc_frame)
             self.die_diameter = diameter_refine
         except ValueError as e:
             # 已知纯色图片会导致检测失败，在此情况下可以不必报错继续运行，将出口直径记为 np.nan 即可
             print(f"图像无法处理: {e}")
             self.proc_frame_signal.emit(binary)
+    
+    @Slot(bool)
+    def invert_toggle(self, checked):
+        """Sometimes the filament is the darker part of the image and background is brighter. In such cases, we may invert the binary image to make the algorithm work correctly. This is a toggle for the user to manually switch on/off whether to invert."""
+        self.invert = checked
+
    
     
 class ConnectionTester(QObject):
@@ -536,15 +553,13 @@ class IRWorker(QObject):
     def __init__(self, test_mode=False):
 
         super().__init__()
-        fps = 10
         self.is_running = True
         self.roi = None
-        self.frame_delay = 1 / fps
         self.die_temperature = np.nan
 
         if test_mode:  # 调试用图片流
             test_image_folder = Path(Config.test_image_folder).expanduser().resolve()
-            self.cap = ImageStreamer(str(test_image_folder), fps=fps)
+            self.cap = ImageStreamer(str(test_image_folder), fps=10)
         else:
             from optris_camera import OptrisCamera
             self.cap = OptrisCamera(serial_number=0)
@@ -557,16 +572,18 @@ class IRWorker(QObject):
             ret_temp, temps = self.cap.read_temp(timeout=0.1)
             if ret_img and ret_temp:
                 self.sigNewFrame.emit(frame)
-                if self.roi is not None:
+                if self.roi is None:
+                    # if ROI is not set, use the whole frame as ROI
+                    self.sigRoiFrame.emit(frame)
+                    self.die_temperature = temps.max()
+                else:
                     x, y, w, h = self.roi
                     self.sigRoiFrame.emit(frame[y:y+h, x:x+w])
                     self.die_temperature = temps[y:y+h, x:x+w].max()
-                else:
-                    self.die_temperature = temps.max()
             else:
                 print("Fail to read frame.")
             
-            await asyncio.sleep(self.frame_delay)
+            await asyncio.sleep(0.001)
 
     @Slot(tuple)
     def set_roi(self, roi):
