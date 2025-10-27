@@ -2,6 +2,13 @@ import sys
 import threading
 import queue  # 使用队列进行线程安全的数据交换
 import numpy as np
+import os
+if os.name == "nt":
+    sdk_path = r"C:\Program Files\Optris\otcsdk\bindings\python3"
+else:
+    raise NotImplementedError
+sys.path.append(sdk_path)
+
 try:
     import optris.otcsdk as otc
     OPTRIS_LIB_LOADED = True

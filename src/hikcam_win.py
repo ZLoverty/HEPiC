@@ -3,15 +3,18 @@ import os
 import numpy as np
 import cv2
 from ctypes import *
+from pathlib import Path
 
 # 确保 MvImport 路径正确
+
+if os.name == 'nt': # Windows
+    sdk_path = str(Path(os.getenv('MVCAM_COMMON_RUNENV')) / "Samples" / "Python" / "MvImport")
+    os.add_dll_directory(r"C:\Program Files (x86)\Common Files\MVS\Runtime\Win64_x64")
+else: # Linux/Mac
+    sdk_path = "/opt/MVS/Samples/Python/MvImport"
+sys.path.append(sdk_path)
+print(sys.path)
 try:
-    if os.name == 'nt': # Windows
-        sdk_path = os.getenv('MVCAM_COMMON_RUNENV') + "/Samples/Python/MvImport"
-    else: # Linux/Mac
-        sdk_path = "/opt/MVS/Samples/Python/MvImport"
-        
-    sys.path.append(sdk_path)
     from MvCameraControl_class import *
 except Exception as e:
     print(f"无法导入 MvCameraControl_class。请确保 SDK 已安装，并且路径正确。")
@@ -75,6 +78,7 @@ class HikVideoCapture:
         # 3. 打开设备
         ret = self.cam.MV_CC_OpenDevice(MV_ACCESS_Exclusive, 0)
         if ret != MV_OK:
+            print("请检查电脑和相机是否在同段IP。")
             raise Exception(f"打开设备失败! ret[0x{ret:x}]")
         self.is_open = True # 标记为已打开，以便 _set_camera_props 可以工作
 
