@@ -5,9 +5,10 @@ import numpy as np
 import os
 if os.name == "nt":
     sdk_path = r"C:\Program Files\Optris\otcsdk\bindings\python3"
+    sys.path.append(sdk_path)
 else:
-    raise NotImplementedError
-sys.path.append(sdk_path)
+    # raise NotImplementedError
+    pass
 
 try:
     import optris.otcsdk as otc
