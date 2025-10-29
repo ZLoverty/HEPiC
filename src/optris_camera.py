@@ -70,11 +70,25 @@ if OPTRIS_LIB_LOADED:
                 self._imager.addClient(self)
                 self._imager.connect(serial_number)
                 
+                # 确保相机硬件工作在正确的档位
+                # 0: -20..100 C,  1: 0..250 C,  2: 150..900 C
+                # 我们选择档位 1 (0-250 C) 或 2 (150-900 C)
+                # !! 注意: setMeasRange 可能需要一点时间来切换
+                # !! 检查您的 Xi 400 型号支持的档位
+                target_range_index = 1 # 目标：0-250 C
+                self._imager.setMeasRange(target_range_index)
+                print(f"Setting hardware measuring range to index {target_range_index}...")
+
                 # --- 6. 初始化伪色图像构建器 ---
                 self._builder = otc.ImageBuilder(
                     colorFormat=otc.ColorFormat_BGR, 
                     widthAlignment=otc.WidthAlignment_OneByte
                 )
+
+                # --- 关键修复 2: 解决 125°C 锁定问题 ---
+                # 告诉 ImageBuilder 使用自动调色板缩放
+                # 它会自动将色标拉伸到当前帧的最低温和最高温
+                self._builder.setPaletteScaling(otc.ScalingMethod_MinMax)
                 
                 # --- 7. 启动 SDK 运行线程 ---
                 self._running = True
