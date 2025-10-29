@@ -75,9 +75,9 @@ if OPTRIS_LIB_LOADED:
                 # 我们选择档位 1 (0-250 C) 或 2 (150-900 C)
                 # !! 注意: setMeasRange 可能需要一点时间来切换
                 # !! 检查您的 Xi 400 型号支持的档位
-                target_range_index = 1 # 目标：0-250 C
-                self._imager.setMeasRange(target_range_index)
-                print(f"Setting hardware measuring range to index {target_range_index}...")
+                # target_range_index = 1 # 目标：0-250 C
+                # self._imager.setMeasRange(target_range_index)
+                # print(f"Setting hardware measuring range to index {target_range_index}...")
 
                 # --- 6. 初始化伪色图像构建器 ---
                 self._builder = otc.ImageBuilder(
