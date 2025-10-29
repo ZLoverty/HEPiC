@@ -89,7 +89,7 @@ if OPTRIS_LIB_LOADED:
                 # --- 关键修复 2: 解决 125°C 锁定问题 ---
                 # 告诉 ImageBuilder 使用自动调色板缩放
                 # 它会自动将色标拉伸到当前帧的最低温和最高温
-                self._builder.setPaletteScaling(otc.ScalingMethod_MinMax)
+                # self._builder.setPaletteScaling(otc.ScalingMethod_MinMax)
                 
                 # --- 7. 启动 SDK 运行线程 ---
                 self._running = True
