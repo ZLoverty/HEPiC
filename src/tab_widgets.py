@@ -498,54 +498,54 @@ class GcodeWidget(QWidget):
             print(f"选择的文件路径是: {file_path}")
             with open(file_path, "r") as f:
                 gcode = f.read()
-            self.gcode = self.clean_gcode(gcode)
-            self.update_display()
+            # self.gcode = self.clean_gcode(gcode)
+            self.update_display(gcode)
         else:
             print("没有选择任何文件")
             return
         
-    def on_click_clear(self):
-        """清理 gcode 显示，重置 gcode 变量"""
-        self.gcode = None
-        self.update_display()
+    # def on_click_clear(self):
+    #     """清理 gcode 显示，重置 gcode 变量"""
+    #     self.gcode = None
+    #     self.update_display()
 
-    def clean_gcode(self, gcode):
-        """移除 gcode 注释，返回干净的 gcode
+    # def clean_gcode(self, gcode):
+    #     """移除 gcode 注释，返回干净的 gcode
         
-        Parameters
-        ----------
-        gcode : string
-            Original gcode text
+    #     Parameters
+    #     ----------
+    #     gcode : string
+    #         Original gcode text
         
-        Returns
-        -------
-        string
-            cleaned gcode text
-        """
-        gcode_list = []
-        for line in gcode.split("\n"):
-            # 查找注释字符';'的位置
-            comment_index = line.find(';')
+    #     Returns
+    #     -------
+    #     string
+    #         cleaned gcode text
+    #     """
+    #     gcode_list = []
+    #     for line in gcode.split("\n"):
+    #         # 查找注释字符';'的位置
+    #         comment_index = line.find(';')
 
-            # 如果找到了注释
-            if comment_index != -1:
-                # 截取分号之前的部分
-                command_part = line[:comment_index]
-            else:
-                # 如果没有注释，则保留整行
-                command_part = line
+    #         # 如果找到了注释
+    #         if comment_index != -1:
+    #             # 截取分号之前的部分
+    #             command_part = line[:comment_index]
+    #         else:
+    #             # 如果没有注释，则保留整行
+    #             command_part = line
 
-            # 去除处理后字符串两端的空白字符（如空格、换行符）
-            cleaned_line = command_part.strip()
+    #         # 去除处理后字符串两端的空白字符（如空格、换行符）
+    #         cleaned_line = command_part.strip()
 
-            if cleaned_line:
-                gcode_list.append(cleaned_line)
+    #         if cleaned_line:
+    #             gcode_list.append(cleaned_line)
         
-        return "\n".join(gcode_list)
+    #     return "\n".join(gcode_list)
     
     @Slot()
-    def update_display(self):
-        self.gcode_display.setPlainText(self.gcode)
+    def update_display(self, gcode):
+        self.gcode_display.setPlainText(gcode)
 
     @Slot(int)
     def highlight_current_line(self, line_number):
