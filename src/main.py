@@ -192,6 +192,7 @@ class MainWindow(QMainWindow):
             for item in self.ir_worker.ranges:
                 self.ir_widget.mode_menu.addItem(f"{item["min_temp"]} - {item["max_temp"]}")
             self.ir_widget.mode_menu.currentIndexChanged.connect(self.ir_worker.set_range)
+            self.ir_page_widget.focus_bar.valueChanged.connect(self.ir_worker.set_position)
 
         # Let all workers run
         self.worker.run()

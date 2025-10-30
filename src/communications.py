@@ -629,5 +629,10 @@ class IRWorker(QObject):
         if self.cap and self._timer:
             self._timer.start(0)
 
+    @Slot(int)
+    def set_position(self, position):
+        if self.cap:
+            self.cap.set_focus(position)
+
     def stop(self):
         self.is_running = False

@@ -682,6 +682,8 @@ class IRPageWidget(QWidget):
         # widgets
         self.mode_menu = QComboBox()
         self.focus_bar = QScrollBar(Qt.Horizontal)
+        self.focus_bar.setMinimum(0)
+        self.focus_bar.setMaximum(100)
         self.image_widget = VisionWidget()
         control_layout = QHBoxLayout()
         control_layout.addWidget(self.mode_menu)
@@ -717,6 +719,8 @@ if __name__ == "__main__":
         ir_widget.mode_menu.addItem(f"{item["min_temp"]} - {item["max_temp"]}")
     ir_widget.mode_menu.currentIndexChanged.connect(ir_worker.set_range)
 
+    ## change focus 
+    ir_widget.focus_bar.valueChanged.connect(ir_worker.set_position)
     ir_thread.start()
     window.show()
     
