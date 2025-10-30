@@ -134,6 +134,9 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def connect_to_ip(self):
+        """Create connection with the klipper host:
+        1. TCP connection with the data server on Raspberry Pi
+        2. Websocket connection with the Klipper host (via Moonraker) on Raspberry Pi"""
         # 创建 TCP 连接以接收数据
         self.worker = TCPClient(self.host, self.port)
         # 连接信号槽
@@ -148,6 +151,16 @@ class MainWindow(QMainWindow):
         self.klipper_worker.gcode_error.connect(self.update_status)
         self.home_widget.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
 
+        # Let all workers run
+        self.worker.run()
+        self.klipper_worker.run()
+        self.initiate_camera()
+        self.initiate_ir_imager()
+
+    @Slot()
+    def initiate_camera(self):
+        """Try to initiate the Hikrobot camera. 
+        Ideally, if the camera lost connect by accident, the software should attempt reconnection a few times. This should be handled in the camera class."""
         try:
             # 创建 video worker （用于接收和处理视频信号）
             self.video_worker = VideoWorker()
@@ -172,7 +185,15 @@ class MainWindow(QMainWindow):
             self.processing_worker.proc_frame_signal.connect(self.home_widget.dieswell_widget.update_live_display)
             self.vision_page_widget.sigExpTime.connect(self.video_worker.set_exp_time)
             self.vision_page_widget.invert_button.toggled.connect(self.processing_worker.invert_toggle)
-        
+
+        if self.hikcam_ok or Config.test_mode:
+            self.video_worker.run()
+        else:
+            print("WARNING: Failed to initiate camera. Vision module is inactive.")
+
+    @Slot()
+    def initiate_ir_imager(self):
+        """Try to initiate the IR image. If failed, the status flag should be marked False. Ideally, the software should attempt reconnection a few times if connection is lost. This should be handled in the IR imager class."""
         try: # 创建 IR image worker 处理红外成像仪图像，探测熔体出口温度   
             self.ir_worker = IRWorker()
             self.ir_thread = QThread()
@@ -182,26 +203,29 @@ class MainWindow(QMainWindow):
             print(f"初始化热成像仪失败，热成像仪不可用: {e}")
         
         if self.ircam_ok:
-            # connect signals and slots
+            # when IR worker receives a new frame, send it to the IR page to shown on the canvas
             self.ir_worker.sigNewFrame.connect(self.ir_image_widget.update_live_display)
+
+            # if user draw an ROI on the canvas, send the ROI info to the IR worker, so that in the future, the worker can crop the later frames
             self.ir_image_widget.sigRoiChanged.connect(self.ir_worker.set_roi)
+
+            # cropped frames inside ROI will be sent to the preview widget in home page
             self.ir_worker.sigRoiFrame.connect(self.ir_roi_widget.update_live_display)
+
+            # use a thread to handle the image reading and showing loop
             self.ir_thread.started.connect(self.ir_worker.run)
             self.ir_thread.finished.connect(self.ir_thread.deleteLater)
             self.ir_worker.sigFinished.connect(self.ir_worker.deleteLater)
-            ## change temp range
+
+            # the Optris Xi 400 camera comes with 6 different temperature ranges (-20~100, 0~250, 150~900). Smaller ranges, intuitively, have better precision, while larger ranges do not. Here, we read out all the available temperature range options and put them in a drop down menu for users to select.
             for item in self.ir_worker.ranges:
                 self.ir_page_widget.mode_menu.addItem(f"{item["min_temp"]} - {item["max_temp"]}")
+            
+            # if a temperature range is chosen, set it to the IR worker, so that it can re-initiate a camera object with updated params. 
             self.ir_page_widget.mode_menu.currentIndexChanged.connect(self.ir_worker.set_range)
-            self.ir_page_widget.focus_bar.valueChanged.connect(self.ir_worker.set_position)
 
-        # Let all workers run
-        self.worker.run()
-        self.klipper_worker.run()
-        if self.hikcam_ok or Config.test_mode:
-            self.video_worker.run()
-        else:
-            print("WARNING: Failed to initiate camera. Vision module is inactive.")
+            # a scrollbar that allows focus adjustment.
+            self.ir_page_widget.focus_bar.valueChanged.connect(self.ir_worker.set_position)
 
         if self.ircam_ok:
             self.ir_thread.start()

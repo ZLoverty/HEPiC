@@ -453,7 +453,7 @@ class ConnectionTester(QObject):
     """初次连接时应进行一个网络自检，确定必要的硬件都已开启，且服务、端口都正确配置。这个自检应当用阻塞函数实现，因为如果自检不通过，运行之后的代码将毫无意义。因此，单独写这个自检函数。"""
     test_msg = Signal(str)
     # 【保持不变或按需修改】如果希望传递 host，就用 Signal(str)
-    success = Signal(str) 
+    success = Signal() 
     fail = Signal()
 
     def __init__(self, host, port):
@@ -475,6 +475,7 @@ class ConnectionTester(QObject):
             self.test_msg.emit(f"✅ Ping 成功！主机 {self.host} 在网络上是可达的。")
         else:
             self.test_msg.emit(f"❌ Ping 失败，主机 {self.host} 不可达或阻止了 Ping 请求。")
+            self.fail.emit()
             return
 
         # --- 步骤 2: 异步检查特定 TCP 端口 ---
@@ -486,6 +487,7 @@ class ConnectionTester(QObject):
         else:
             self.test_msg.emit(f"❌ 端口检查失败。主机可达，但端口 {self.port} 已关闭或被防火墙过滤。")
             self.test_msg.emit("数据端口连通性测试失败，请检查数据服务器是否启动")
+            self.fail.emit()
             return
 
 
@@ -493,6 +495,7 @@ class ConnectionTester(QObject):
         self.test_msg.emit(f"[步骤 3/4] 正在检查 Moonraker 服务...")
         if not await self._check_moonraker_async():
             self.test_msg.emit(f"❌ Moonraker 服务无响应。")
+            self.fail.emit()
             return
 
         self.test_msg.emit(f"✅ Moonraker 服务 API 响应正常！")
@@ -502,11 +505,12 @@ class ConnectionTester(QObject):
         klipper_ok, klipper_state = await self._check_klipper_async()
         if not klipper_ok:
             self.test_msg.emit(f"❌ Klipper 状态异常: '{klipper_state}'")
+            self.fail.emit()
             return
 
         self.test_msg.emit(f"✅ Klipper 状态为 '{klipper_state}'，一切就绪！")
         self.test_msg.emit("所有检查通过，准备连接...")
-        self.success.emit(self.host)
+        self.success.emit()
         
     # 2. 实现异步的 ping 方法
     async def _is_host_reachable_async(self, host: str, timeout: int = 2) -> bool:
