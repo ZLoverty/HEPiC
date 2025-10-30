@@ -6,21 +6,26 @@ from ctypes import *
 from pathlib import Path
 
 # 确保 MvImport 路径正确
-
-if os.name == 'nt': # Windows
-    sdk_path = str(Path(os.getenv('MVCAM_COMMON_RUNENV')) / "Samples" / "Python" / "MvImport")
-    os.add_dll_directory(r"C:\Program Files (x86)\Common Files\MVS\Runtime\Win64_x64")
-else: # Linux/Mac
-    sdk_path = "/opt/MVS/Samples/Python/MvImport"
-sys.path.append(sdk_path)
-print(sys.path)
 try:
-    from MvCameraControl_class import *
+    if os.name == 'nt': # Windows
+        sdk_path = str(Path(os.getenv('MVCAM_COMMON_RUNENV')) / "Samples" / "Python" / "MvImport")
+        os.add_dll_directory(r"C:\Program Files (x86)\Common Files\MVS\Runtime\Win64_x64")
+    else: # Linux/Mac
+        sdk_path = "/opt/MVS/Samples/Python/MvImport"
+    sys.path.append(sdk_path)
+    CAM_LIB_LOADED = True
 except Exception as e:
-    print(f"无法导入 MvCameraControl_class。请确保 SDK 已安装，并且路径正确。")
-    print(f"SDK 路径: {sdk_path}")
-    print(f"错误: {e}")
-    sys.exit(-1)
+    print(f"ERROR: Camera lib failed to load! Camera will not work.")
+    CAM_LIB_LOADED = False
+
+if CAM_LIB_LOADED:
+    try:
+        from MvCameraControl_class import *
+    except Exception as e:
+        print(f"无法导入 MvCameraControl_class。请确保 SDK 已安装，并且路径正确。")
+        print(f"SDK 路径: {sdk_path}")
+        print(f"错误: {e}")
+        print(f"ERROR: Camera failed to initiate!")
 
 
 class HikVideoCapture:

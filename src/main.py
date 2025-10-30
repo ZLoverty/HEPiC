@@ -104,6 +104,7 @@ class MainWindow(QMainWindow):
             self.data[item] = deque(maxlen=Config.final_data_maxlen)
             self.data_tmp[item] = deque(maxlen=Config.tmp_data_maxlen)
             self.data_status[item] = np.nan
+
     @Slot(int)
     def show_UI(self, UI_index):
         """Show main UI"""
@@ -173,14 +174,25 @@ class MainWindow(QMainWindow):
         
         try: # 创建 IR image worker 处理红外成像仪图像，探测熔体出口温度   
             self.ir_worker = IRWorker()
+            self.ir_thread = QThread()
+            self.ir_worker.moveToThread(self.ir_thread)
             self.ircam_ok = True
         except Exception as e:
             print(f"初始化热成像仪失败，热成像仪不可用: {e}")
         
         if self.ircam_ok:
+            # connect signals and slots
             self.ir_worker.sigNewFrame.connect(self.ir_image_widget.update_live_display)
             self.ir_image_widget.sigRoiChanged.connect(self.ir_worker.set_roi)
             self.ir_worker.sigRoiFrame.connect(self.ir_roi_widget.update_live_display)
+            self.ir_thread.started.connect(self.ir_worker.run)
+            self.ir_thread.finished.connect(self.ir_thread.deleteLater)
+            self.ir_worker.sigFinished.connect(self.ir_worker.deleteLater)
+            ## change temp range
+            for item in self.ir_worker.ranges:
+                self.ir_widget.mode_menu.addItem(f"{item["min_temp"]} - {item["max_temp"]}")
+            self.ir_widget.mode_menu.currentIndexChanged.connect(self.ir_worker.set_range)
+            self.ir_page_widget.focus_bar.valueChanged.connect(self.ir_worker.set_position)
 
         # Let all workers run
         self.worker.run()
@@ -191,7 +203,7 @@ class MainWindow(QMainWindow):
             print("WARNING: Failed to initiate camera. Vision module is inactive.")
 
         if self.ircam_ok:
-            self.ir_worker.run()
+            self.ir_thread.start()
         else:
             print("WARNING: Failed to initiate IR camera. Die temperature module is inactive.")
 
