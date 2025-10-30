@@ -22,6 +22,7 @@ from config import Config
 import re
 import os
 import cv2
+from gcode_mapper import GcodePositionMapper
 
 if not Config.test_mode:
     if os.name == "nt":
@@ -264,8 +265,12 @@ class KlipperWorker(QObject):
             },
         }
 
-        await websockets.send(gcode_message)
+        async with websockets.connect(self.uri, open_timeout=2.0) as websocket:
+            await websocket.send(gcode_message)
 
+        # create mapper
+        self.gcode_mapper = GcodePositionMapper(self.gcode)
+       
     async def data_processor(self):
         """
         消费者：从队列中等待并获取数据，然后进行处理。本函数需要处理多种与 Klipper 的通讯信息，至少包含 i) 订阅回执，ii) gcode 发送。
@@ -321,6 +326,19 @@ class KlipperWorker(QObject):
     async def stop(self):
         """停止线程"""
         self.is_running = False
+
+    @asyncSlot(float)
+    async def set_temperature(self, target):
+        gcode_message = {
+            "jsonrpc": "2.0",
+            "id": 104, 
+            "method": "printer.gcode.script",
+            "params": {
+                "script": f"M104 S{target}",
+            },
+        }
+        async with websockets.connect(self.uri, open_timeout=2.0) as websocket:
+            await websocket.send(gcode_message)
 
 class VideoWorker(QObject):
     """

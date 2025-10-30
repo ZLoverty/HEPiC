@@ -146,6 +146,7 @@ class MainWindow(QMainWindow):
         self.klipper_worker.connection_status.connect(self.update_status)
         self.klipper_worker.current_step_signal.connect(self.gcode_widget.highlight_current_line)
         self.klipper_worker.gcode_error.connect(self.update_status)
+        self.home_widget.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
 
         try:
             # 创建 video worker （用于接收和处理视频信号）
@@ -266,6 +267,7 @@ class MainWindow(QMainWindow):
         """Update status panel"""
         self.grab_status()
         self.sigNewStatus.emit(self.data_status)
+        # update gcode highlight if 
 
     def grab_status(self):
         for item in self.data_status:
