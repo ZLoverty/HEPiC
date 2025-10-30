@@ -230,8 +230,8 @@ class MainWindow(QMainWindow):
     def run_gcode(self):
         """运行从文本框里来的 gcode """
         if self.klipper_worker:
-            self.gcode_widget.gcode = self.gcode_widget.gcode_display.toPlainText()
-            self.klipper_worker.send_gcode(self.gcode_widget.gcode)
+            gcode = self.gcode_widget.gcode_display.toPlainText()
+            self.klipper_worker.send_gcode(gcode)
 
     def set_temperature(self):
         if self.klipper_worker:
