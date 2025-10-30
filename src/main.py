@@ -190,8 +190,8 @@ class MainWindow(QMainWindow):
             self.ir_worker.sigFinished.connect(self.ir_worker.deleteLater)
             ## change temp range
             for item in self.ir_worker.ranges:
-                self.ir_widget.mode_menu.addItem(f"{item["min_temp"]} - {item["max_temp"]}")
-            self.ir_widget.mode_menu.currentIndexChanged.connect(self.ir_worker.set_range)
+                self.ir_page_widget.mode_menu.addItem(f"{item["min_temp"]} - {item["max_temp"]}")
+            self.ir_page_widget.mode_menu.currentIndexChanged.connect(self.ir_worker.set_range)
             self.ir_page_widget.focus_bar.valueChanged.connect(self.ir_worker.set_position)
 
         # Let all workers run
@@ -259,6 +259,8 @@ class MainWindow(QMainWindow):
                 self.first_row = False
             else:
                 df.to_csv(self.autosave_filename, index=False, header=False, mode="a")
+            for item in self.data_tmp:
+                self.data_tmp[item].clear()
 
     def on_status_timer_tick(self):
         """Update status panel"""
