@@ -159,6 +159,7 @@ class KlipperWorker(QObject):
         self.gcode_queue = asyncio.Queue(maxsize=10) # gcode 的消息队列
         self.uri = f"ws://{self.host}:{self.port}/websocket"
         self.active_feedrate_mms = np.nan
+        self.active_gcode = None
         self.hotend_temperature = np.nan
         self.previous_step_completed = True
         
@@ -207,6 +208,9 @@ class KlipperWorker(QObject):
                 # 将收到的原始数据放入队列，交给消费者处理
                 await self.message_queue.put(data)
 
+    def get_filament_velocity_from_gcode(self):
+        raise NotImplementedError
+
     async def gcode_sender(self, websocket):
 
         # 编译正则表达式以便复用
@@ -214,7 +218,7 @@ class KlipperWorker(QObject):
         g_regex = re.compile(r'^(G0|G1)\s', re.IGNORECASE)
 
         # 发送用户输入的gcode消息
-        while self.is_running and self.previous_step_completed:
+        while self.is_running:
             self.gcode = await self.gcode_queue.get()
 
             # 从 G code 中解析进线速度
@@ -254,8 +258,6 @@ class KlipperWorker(QObject):
             }
             print(f"Step {self.current_step}: {self.gcode}")
             await websocket.send(json.dumps(gcode_message))
-
-            self.previous_step_completed = False 
 
     @asyncSlot(str)
     async def send_gcode(self, command):
@@ -579,7 +581,7 @@ class IRWorker(QObject):
         self.die_temperature = np.nan
         self._timer = None
 
-        if test_mode or OPTRIS_LIB_LOADED == False:  # 调试用图片流
+        if test_mode:  # 调试用图片流
             test_image_folder = Path(Config.test_image_folder).expanduser().resolve()
             self.cap = ImageStreamer(str(test_image_folder), fps=10)
         else:
