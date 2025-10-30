@@ -178,7 +178,9 @@ class KlipperWorker(QObject):
                     "method": "printer.objects.subscribe",
                     "params": {
                         "objects": {
-                            "extruder": ["temperature"]
+                            "extruder": ["temperature"],
+                            "virtual_sdcard": ["file_position", "progress"],
+                            "gcode_move": ["speed"]
                         }
                     },
                     "id": 1 # 一个随机的ID
@@ -208,39 +210,39 @@ class KlipperWorker(QObject):
                 # 将收到的原始数据放入队列，交给消费者处理
                 await self.message_queue.put(data)
 
-    def get_filament_velocity_from_gcode(self):
+    # def get_filament_velocity_from_gcode(self):
 
-        # 编译正则表达式以便复用
-        f_regex = re.compile(r'F([0-9.-]+)', re.IGNORECASE)
-        g_regex = re.compile(r'^(G0|G1)\s', re.IGNORECASE)
+    #     # 编译正则表达式以便复用
+    #     f_regex = re.compile(r'F([0-9.-]+)', re.IGNORECASE)
+    #     g_regex = re.compile(r'^(G0|G1)\s', re.IGNORECASE)
 
-        # 发送用户输入的gcode消息
-        while self.is_running:
-            # 从 G code 中解析进线速度
-            gcode_upper = self.gcode.upper().strip() # 标准化 G-code
+    #     # 发送用户输入的gcode消息
+    #     while self.is_running:
+    #         # 从 G code 中解析进线速度
+    #         gcode_upper = self.gcode.upper().strip() # 标准化 G-code
 
-            # --- 关键逻辑：在发送前，解析并更新状态 ---
-            try:
-                # 1. 检查此行是否设置了新的 F 值
-                f_match = f_regex.search(gcode_upper)
-                if f_match:
-                    # G-code 的 F 单位是 mm/min，我们转为 mm/s
-                    self.modal_feedrate_mms = float(f_match.group(1)) / 60.0
+    #         # --- 关键逻辑：在发送前，解析并更新状态 ---
+    #         try:
+    #             # 1. 检查此行是否设置了新的 F 值
+    #             f_match = f_regex.search(gcode_upper)
+    #             if f_match:
+    #                 # G-code 的 F 单位是 mm/min，我们转为 mm/s
+    #                 self.modal_feedrate_mms = float(f_match.group(1)) / 60.0
 
-                # 2. 检查此行是否是移动指令
-                if g_regex.search(gcode_upper):
-                    # 是 G0 或 G1，所以 "活动" 速度就是当前的模态速度
-                    self.active_feedrate_mms = self.modal_feedrate_mms
-                else:
-                    # 不是移动指令 (例如 M104, G28, G90)
-                    # 这些指令没有 feedrate，所以 "活动" 速度为 0
-                    self.active_feedrate_mms = 0.0
+    #             # 2. 检查此行是否是移动指令
+    #             if g_regex.search(gcode_upper):
+    #                 # 是 G0 或 G1，所以 "活动" 速度就是当前的模态速度
+    #                 self.active_feedrate_mms = self.modal_feedrate_mms
+    #             else:
+    #                 # 不是移动指令 (例如 M104, G28, G90)
+    #                 # 这些指令没有 feedrate，所以 "活动" 速度为 0
+    #                 self.active_feedrate_mms = 0.0
                 
-                # 如果是空行，什么也不做，保持上一个状态
+    #             # 如果是空行，什么也不做，保持上一个状态
 
-            except Exception as e:
-                print(f"Feedrate 解析出错: {e}")
-                self.active_feedrate_mms = 0.0 # 出错时归零
+    #         except Exception as e:
+    #             print(f"Feedrate 解析出错: {e}")
+    #             self.active_feedrate_mms = 0.0 # 出错时归零
 
     @asyncSlot(str)
     async def send_gcode(self, gcode):
@@ -279,9 +281,22 @@ class KlipperWorker(QObject):
             if "method" in data: 
                 if data["method"] == "notify_status_update": # 判断是否是状态回执
                     try:
-                        self.hotend_temperature = data["params"][0]["extruder"]["temperature"]
+                        self.hotend_temperature = data["params"][0]["extruder"]["temperature"]      
                     except Exception as e:
-                        print(f"未知错误: {e}")
+                        print(f"读取热端温度出现未知错误: {e}")
+                    try:
+                        self.file_position = data["params"][0]["virtual_sdcard"]["file_position"]
+                    except Exception as e:
+                        print(f"读取文件位置发生未知错误: {e}")
+                    try:
+                        self.progress = data["params"][0]["virtual_sdcard"]["progress"]
+                    except Exception as e:
+                        print(f"读取打印进度发生未知错误: {e}")
+                    try:
+                        self.active_feedrate_mms = data["params"][0]["gcode_move"]["speed"]
+                    except Exception as e:
+                        print(f"读取打印速度发生未知错误: {e}")
+
                 elif data["method"] == "printer.gcode.script": # 发送 G-code
                     async with websockets.connect(self.uri) as websocket:
                         await websocket.send(json.dumps(data))
@@ -291,15 +306,8 @@ class KlipperWorker(QObject):
                     self.gcode_error.emit(data["params"][0])
                 else:
                     print(data)
-            elif "id" in data:
-                # print(data)
-                self.previous_step_completed = True
-                if "result" in data:
-                    # print(f"--> Feedback: step {data["id"]}")
-                    # 高亮当前正在执行的 G-code
-                    self.current_step_signal.emit(data["id"])
-                elif "error" in data:
-                    # print(data)
+            elif "result" in data:
+                if "error" in data:
                     self.gcode_error.emit(f"{data["error"]["code"]}: {data["error"]["message"]}")
                 else:
                     pass
@@ -308,8 +316,6 @@ class KlipperWorker(QObject):
 
             # 标记任务完成，这对于优雅退出很重要
             self.message_queue.task_done()
-
-    
 
     @asyncSlot()
     async def stop(self):
