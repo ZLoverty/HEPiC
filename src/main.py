@@ -233,11 +233,6 @@ class MainWindow(QMainWindow):
         if self.klipper_worker:
             gcode = self.gcode_widget.gcode_display.toPlainText()
             self.klipper_worker.send_gcode(gcode)
-
-    def set_temperature(self):
-        if self.klipper_worker:
-            target = self.status_widget.hotend_temperature_input.text()
-            self.klipper_worker.send_gcode(f"M104 S{target}")
     
     @Slot()
     def on_timer_tick(self):
