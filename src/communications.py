@@ -252,7 +252,7 @@ class KlipperWorker(QObject):
                     "script": self.gcode + "\nM400"
                 },
             }
-            # print(f"Step {self.current_step}: {gcode}")
+            print(f"Step {self.current_step}: {self.gcode}")
             await websocket.send(json.dumps(gcode_message))
 
             self.previous_step_completed = False 
@@ -302,11 +302,11 @@ class KlipperWorker(QObject):
                     print(data)
             elif "id" in data:
                 # print(data)
+                self.previous_step_completed = True
                 if "result" in data:
                     # print(f"--> Feedback: step {data["id"]}")
                     # 高亮当前正在执行的 G-code
                     self.current_step_signal.emit(data["id"])
-                    self.previous_step_completed = True
                 elif "error" in data:
                     # print(data)
                     self.gcode_error.emit(f"{data["error"]["code"]}: {data["error"]["message"]}")
