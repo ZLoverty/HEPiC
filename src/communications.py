@@ -209,9 +209,6 @@ class KlipperWorker(QObject):
                 await self.message_queue.put(data)
 
     def get_filament_velocity_from_gcode(self):
-        raise NotImplementedError
-
-    async def gcode_sender(self, websocket):
 
         # 编译正则表达式以便复用
         f_regex = re.compile(r'F([0-9.-]+)', re.IGNORECASE)
@@ -219,8 +216,6 @@ class KlipperWorker(QObject):
 
         # 发送用户输入的gcode消息
         while self.is_running:
-            self.gcode = await self.gcode_queue.get()
-
             # 从 G code 中解析进线速度
             gcode_upper = self.gcode.upper().strip() # 标准化 G-code
 
@@ -247,33 +242,27 @@ class KlipperWorker(QObject):
                 print(f"Feedrate 解析出错: {e}")
                 self.active_feedrate_mms = 0.0 # 出错时归零
 
-            self.current_step += 1
-            gcode_message = {
-                "jsonrpc": "2.0",
-                "id": self.current_step, 
-                "method": "printer.gcode.script",
-                "params": {
-                    "script": self.gcode + "\nM400"
-                },
-            }
-            print(f"Step {self.current_step}: {self.gcode}")
-            await websocket.send(json.dumps(gcode_message))
-
     @asyncSlot(str)
-    async def send_gcode(self, command):
-        """接收来自主线程的命令，并放入队列。command 可以是多行 gcode，行用换行符隔开，此函数会将多行命令分割为单行依次送入执行队列，以便追踪命令执行进度。
+    async def send_gcode(self, gcode):
+        """接收来自主线程的 gcode，并发给 Klipper。本程序会将整个 gcode 文本一次性发送给 Klipper.
         
         Parameters
         ----------
-        command : str
+        gcode : str
             gcode string, can be one-liner or multi-liner
         """
+        self.gcode = gcode
+        
+        gcode_message = {
+            "jsonrpc": "2.0",
+            "id": 12345, 
+            "method": "printer.gcode.script",
+            "params": {
+                "script": self.gcode,
+            },
+        }
 
-        self.current_step = 0 # 用于标记 gcode 回执
-        self.current_step_signal.emit(self.current_step)
-        command_list = command.split("\n")
-        for cmd in command_list:
-            await self.gcode_queue.put(cmd)
+        await websockets.send(gcode_message)
 
     async def data_processor(self):
         """
