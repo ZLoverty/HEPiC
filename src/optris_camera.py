@@ -302,28 +302,89 @@ if OPTRIS_LIB_LOADED:
             except queue.Empty: return False, None
             except Exception as e: print(f"Error reading temp frame: {e}"); return False, None
 
+        # def release(self):
+        #     if not self._running and not (self._thread and self._thread.is_alive()): return
+        #     print(f"Releasing Optris camera S/N {self._actual_serial}...")
+        #     self._running = False
+        #     if self._imager:
+        #         try:
+        #             if self._imager.isRunning(): self._imager.stopRunning()
+        #         except Exception as e: print(f"Error stopping imager: {e}")
+        #     self._cleanup_queues()
+        #     if self._thread and self._thread.is_alive():
+        #         self._thread.join(timeout=2.0)
+        #         if self._thread.is_alive(): print("Warning: SDK thread join timeout.")
+        #     self._thread = None
+        #     if self._imager:
+        #         try: self._imager.removeClient(self)
+        #         except Exception as e: print(f"Error removing client: {e}")
+        #         try:
+        #             if self._imager.isConnected(): self._imager.disconnect()
+        #         except Exception as e: print(f"Error disconnecting: {e}")
+        #         finally: self._imager = None
+        #     self._builder = None
+        #     print(f"Optris camera S/N {self._actual_serial} released.")
+
+        # (这个方法属于 OptrisCamera 类, 不是 IRWorker)
         def release(self):
-            if not self._running and not (self._thread and self._thread.is_alive()): return
-            print(f"Releasing Optris camera S/N {self._actual_serial}...")
-            self._running = False
+            """
+            一个更健壮、更耐心的 release 版本
+            """
+            if not self._running:
+                return
+
+            print(f"Releasing Optris camera (S/N {self._actual_serial})...")
+            self._running = False # 1. 告诉回调函数停止处理新帧
+
             if self._imager:
                 try:
-                    if self._imager.isRunning(): self._imager.stopRunning()
-                except Exception as e: print(f"Error stopping imager: {e}")
-            self._cleanup_queues()
+                    print("  Calling _imager.stopRunning()...")
+                    self._imager.stopRunning() # 2. 告诉 SDK 停止
+                except Exception as e:
+                    print(f"  Error in stopRunning(): {e}")
+
+            # 3. 清理队列 (这一步是好的)
+            try:
+                self._color_frame_queue.put_nowait(None)
+                self._temp_frame_queue.put_nowait(None)
+            except queue.Full:
+                pass 
+
             if self._thread and self._thread.is_alive():
-                self._thread.join(timeout=2.0)
-                if self._thread.is_alive(): print("Warning: SDK thread join timeout.")
-            self._thread = None
+                print("  Waiting for internal thread to join()... (必须等待)")
+                
+                # 4. 【关键修复 1】移除 timeout
+                #    我们必须 100% 确认此线程已退出，无论花多久
+                self._thread.join() 
+                
+                print("  Internal thread successfully joined.")
+
             if self._imager:
-                try: self._imager.removeClient(self)
-                except Exception as e: print(f"Error removing client: {e}")
                 try:
-                    if self._imager.isConnected(): self._imager.disconnect()
-                except Exception as e: print(f"Error disconnecting: {e}")
-                finally: self._imager = None
+                    print("  Removing client from _imager...")
+                    self._imager.removeClient(self)
+                except Exception as e:
+                    print(f"  Error in removeClient(): {e}")
+                
+                # 5. 【关键修复 2】尝试强制 C++ 析构
+                print("  Deleting _imager object...")
+                try:
+                    del self._imager
+                except Exception as e:
+                    print(f"  Error in del _imager: {e}")
+                
+                self._imager = None
+            
             self._builder = None
-            print(f"Optris camera S/N {self._actual_serial} released.")
+            
+            # 6. 【关键修复 3】
+            #    在返回之前，强制暂停 1 秒钟
+            #    给 Windows/Linux 操作系统足够的时间来释放 USB 设备句柄
+            print("  Release complete. Waiting 1s for OS handle...")
+            import time
+            time.sleep(4.0) 
+            
+            print(f"Optris camera S/N {self._actual_serial} fully released.")
 
         def force_flag_event(self):
             if self._imager and self.isOpened():
@@ -407,6 +468,35 @@ if OPTRIS_LIB_LOADED:
                 except queue.Full: pass
             # print("Frame queues cleaned.") # 可以取消注释以进行调试
 
+        def set_focus(self, position):
+            """
+            设置马达对焦的位置。
+            
+            参数:
+                position (int): 焦距马达的目标位置 (步数)。
+                                 这个值的有效范围 (例如 0-1000) 取决于您的镜头。
+            """
+            if self._imager and self._running:
+                try:
+                    self._imager.setFocusMotorPosition(position)
+                    return True
+                except Exception as e:
+                    print(f"Error setting focus position: {e}")
+                    return False
+            return False
+
+        def get_focus(self):
+            """
+            获取当前马达对焦的位置 (int)。
+            """
+            if self._imager and self._running:
+                try:
+                    position = self._imager.getFocusMotorPosition()
+                    return position
+                except Exception as e:
+                    print(f"Error getting focus position: {e}")
+                    return None
+            return None
 
 # --- 用法示例 ---
 def main():
