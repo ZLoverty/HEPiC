@@ -149,10 +149,11 @@ class KlipperWorker(QObject):
         self.port = port
         self.is_running = True
         self.message_queue = asyncio.Queue() # klipper 的消息队列
-        self.gcode_queue = asyncio.Queue() # gcode 的消息队列
+        self.gcode_queue = asyncio.Queue(maxsize=10) # gcode 的消息队列
         self.uri = f"ws://{self.host}:{self.port}/websocket"
         self.active_feedrate_mms = np.nan
         self.hotend_temperature = np.nan
+        self.previous_step_completed = True
         
     @asyncSlot()
     async def run(self):
@@ -206,7 +207,7 @@ class KlipperWorker(QObject):
         g_regex = re.compile(r'^(G0|G1)\s', re.IGNORECASE)
 
         # 发送用户输入的gcode消息
-        while self.is_running:
+        while self.is_running and self.previous_step_completed:
             self.gcode = await self.gcode_queue.get()
 
             # 从 G code 中解析进线速度
@@ -245,7 +246,9 @@ class KlipperWorker(QObject):
                 },
             }
             # print(f"Step {self.current_step}: {gcode}")
-            await websocket.send(json.dumps(gcode_message)) 
+            await websocket.send(json.dumps(gcode_message))
+
+            self.previous_step_completed = False 
 
     @asyncSlot(str)
     async def send_gcode(self, command):
@@ -296,6 +299,7 @@ class KlipperWorker(QObject):
                     # print(f"--> Feedback: step {data["id"]}")
                     # 高亮当前正在执行的 G-code
                     self.current_step_signal.emit(data["id"])
+                    self.previous_step_completed = True
                 elif "error" in data:
                     # print(data)
                     self.gcode_error.emit(f"{data["error"]["code"]}: {data["error"]["message"]}")
