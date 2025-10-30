@@ -293,11 +293,25 @@ class MainWindow(QMainWindow):
                 self.data_status[item] = self.current_time
             elif item == "die_diameter_px":
                 self.data_status[item] = self.processing_worker.die_diameter
+            elif item == "gcode":
+                self.data_status[item] = self.klipper_worker.active_gcode
             else:
                 self.data_status[item] = np.nan
 
-
     def closeEvent(self, event):
+        print("正在关闭应用程序...")
+        if self.worker:
+            self.worker.stop()
+            self.worker.deleteLater()
+        if self.klipper_worker:
+            self.klipper_worker.stop()
+            self.klipper_worker.deleteLater()
+        if self.video_worker:
+            self.video_worker.stop()
+            self.video_worker.deleteLater()
+        if self.ir_worker:
+            self.ir_worker.stop()
+            self.ir_worker.deleteLater()
         event.accept()
 
     # def closeEvent(self, event):
