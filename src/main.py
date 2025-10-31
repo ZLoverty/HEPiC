@@ -48,6 +48,10 @@ class MainWindow(QMainWindow):
         self.current_time = 0
         self.autosave_filename = "autosave.csv"
         self.first_row = True
+        self.video_worker = None
+        self.ir_worker = None
+        self.video_thread = None
+        self.ir_thread = None
     
     def initUI(self):
         # --- 创建控件 ---
