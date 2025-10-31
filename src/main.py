@@ -28,15 +28,16 @@ class MainWindow(QMainWindow):
     
     sigNewData = Signal(dict) # update data plot
     sigNewStatus = Signal(dict) # update status panel
+    sigQueryRequest = Signal() # signal to query klipper status
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"{Config.name} v{Config.version}")
         self.setGeometry(900, 100, 700, 500)
         self.initUI()
-        self.timer = QTimer() # set data appending frequency
-        self.status_timer = QTimer() # set status panel update frequency
-        self.timer.timeout.connect(self.on_timer_tick)
+        self._timer = QTimer(self) # set data appending frequency
+        self.status_timer = QTimer(self) # set status panel update frequency
+        self._timer.timeout.connect(self.on_timer_tick)
         self.status_timer.timeout.connect(self.on_status_timer_tick)
         self.data_frequency = Config.data_frequency
         self.time_delay = 1 / self.data_frequency
@@ -94,6 +95,8 @@ class MainWindow(QMainWindow):
         self.home_widget.play_pause_button.toggled.connect(self.on_toggle_play_pause)
         self.home_widget.reset_button.clicked.connect(self.init_data)
         self.sigNewStatus.connect(self.status_widget.update_display)
+        
+        
         
 
     def init_data(self):
@@ -154,6 +157,7 @@ class MainWindow(QMainWindow):
         self.klipper_worker.current_step_signal.connect(self.gcode_widget.highlight_current_line)
         self.klipper_worker.gcode_error.connect(self.update_status)
         self.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
+        self.sigQueryRequest.connect(self.klipper_worker.query_status)
 
         # Let all workers run
         self.worker.run()
@@ -261,11 +265,11 @@ class MainWindow(QMainWindow):
     @Slot(bool)
     def on_toggle_play_pause(self, checked):
         if checked: 
-            self.timer.start(self.time_delay*1000)
+            self._timer.start(self.time_delay*1000)
             self.home_widget.play_pause_button.setIcon(self.home_widget.pause_icon)
             print("Recording started ...")
         else:
-            self.timer.stop()
+            self._timer.stop()
             self.home_widget.play_pause_button.setIcon(self.home_widget.play_icon)
             print("Recording stopped.")
 
@@ -309,6 +313,7 @@ class MainWindow(QMainWindow):
         """Update status panel"""
         self.grab_status()
         self.sigNewStatus.emit(self.data_status)
+        # self.sigQueryRequest.emit()
         # update gcode highlight if 
 
     def grab_status(self):
