@@ -149,8 +149,7 @@ class MainWindow(QMainWindow):
         self.klipper_worker.connection_status.connect(self.update_status)
         self.klipper_worker.current_step_signal.connect(self.gcode_widget.highlight_current_line)
         self.klipper_worker.gcode_error.connect(self.update_status)
-        self.home_widget.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
-        self.status_widget.hotend_temperature_input.returnPressed.connect(self.klipper_worker.set_temperature)
+        self.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
 
         # Let all workers run
         self.worker.run()

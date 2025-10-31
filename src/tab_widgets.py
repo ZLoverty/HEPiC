@@ -148,6 +148,9 @@ class PlatformStatusWidget(QWidget):
         
         self.setLayout(layout)
 
+        # when enter is pressed, emit the text in hotend_temperature_input as float
+        self.hotend_temperature_input.returnPressed.connect(self.on_temp_enter_pressed)
+
     @Slot(dict)
     def update_display(self, data):
         for item in data:
@@ -173,7 +176,8 @@ class PlatformStatusWidget(QWidget):
                 die_diameter = data[item]
                 self.die_diameter_value.setText(f"{die_diameter:5.1f} px")
 
-
+    def on_temp_enter_pressed(self):
+        self.set_temperature.emit(float(self.hotend_temperature_input.text()))
 
 class DataPlotWidget(QWidget):
 

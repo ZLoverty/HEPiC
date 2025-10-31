@@ -192,7 +192,7 @@ class KlipperWorker(QObject):
                 print("已发送状态订阅请求...")
 
                 listener_task = asyncio.create_task(self.message_listener(websocket))
-                processor_task = asyncio.create_task(self.data_processor())
+                processor_task = asyncio.create_task(self.data_processor(websocket))
 
                 await asyncio.gather(listener_task, processor_task)
 
@@ -203,13 +203,26 @@ class KlipperWorker(QObject):
             self.connection_status.emit("Klipper 连接超时，检查服务器是否开启")
 
     async def message_listener(self, websocket):
-        # 监听来自服务器的消息
-        while self.is_running:
+        print("--- [DEBUG] 消息监听器已启动 ---")
+        try:
             async for message in websocket:
-                data = json.loads(message)
-                # 将收到的原始数据放入队列，交给消费者处理
-                await self.message_queue.put(data)
+                # print(f"--- [DEBUG] 收到原始消息: {message}") # <--- 增加原始打印
+                try:
+                    data = json.loads(message)
+                    await self.message_queue.put(data)
+                except json.JSONDecodeError as e:
+                    print(f"!!! [ERROR] JSON 解析失败: {e}. 消息体: {message}")
+                except Exception as e:
+                    print(f"!!! [ERROR] 放入队列时出错: {e}")
 
+        except websockets.exceptions.ConnectionClosed as e:
+            print(f"--- [DEBUG] 监听器: WebSocket 连接已关闭 (代码: {e.code}, 原因: {e.reason}) ---")
+        except Exception as e:
+            # 捕获其他所有未知错误
+            print(f"!!! [ERROR] 消息监听器崩溃: {e}")
+        finally:
+            print("--- [DEBUG] 消息监听器已退出 ---")
+            self.is_running = False # 确保其他循环也能退出
     # def get_filament_velocity_from_gcode(self):
 
     #     # 编译正则表达式以便复用
@@ -264,13 +277,12 @@ class KlipperWorker(QObject):
             },
         }
 
-        async with websockets.connect(self.uri, open_timeout=2.0) as websocket:
-            await websocket.send(gcode_message)
+        await self.message_queue.put(gcode_message)
 
         # create mapper
         self.gcode_mapper = GcodePositionMapper(self.gcode)
        
-    async def data_processor(self):
+    async def data_processor(self, websocket):
         """
         消费者：从队列中等待并获取数据，然后进行处理。本函数需要处理多种与 Klipper 的通讯信息，至少包含 i) 订阅回执，ii) gcode 发送。
         """
@@ -279,42 +291,45 @@ class KlipperWorker(QObject):
             # 核心：在这里await，等待队列中有新数据
             data = await self.message_queue.get()
 
-            # Moonraker的数据有两种主要类型：
+            # Moonraker的数据的主要类型：
             # 1. 对你请求的响应 (包含 "result" 键)
             # 2. 服务器主动推送的状态更新 (方法为 "notify_status_update")
+            # 3. 我发送的 gcode 请求，包含 "method" 键，方法为 "printer.gcode.script"
             if "method" in data: 
                 if data["method"] == "notify_status_update": # 判断是否是状态回执
                     try:
                         self.hotend_temperature = data["params"][0]["extruder"]["temperature"]      
                     except Exception as e:
                         print(f"读取热端温度出现未知错误: {e}")
-                    try:
-                        self.file_position = data["params"][0]["virtual_sdcard"]["file_position"]
-                    except Exception as e:
-                        print(f"读取文件位置发生未知错误: {e}")
-                    try:
-                        self.progress = data["params"][0]["virtual_sdcard"]["progress"]
-                    except Exception as e:
-                        print(f"读取打印进度发生未知错误: {e}")
-                    try:
-                        self.active_feedrate_mms = data["params"][0]["gcode_move"]["speed"]
-                    except Exception as e:
-                        print(f"读取打印速度发生未知错误: {e}")
 
                 elif data["method"] == "printer.gcode.script": # 发送 G-code
-                    async with websockets.connect(self.uri) as websocket:
-                        await websocket.send(json.dumps(data))
+                    await websocket.send(json.dumps(data))
                 elif data["method"] == "notify_proc_stat_update":
                     pass
                 elif data["method"] == "notify_gcode_response":
+                    print(data)
                     self.gcode_error.emit(data["params"][0])
                 else:
                     print(data)
             elif "result" in data:
-                if "error" in data:
+                print(data)
+                if "id" in data:
+                    pass
+                elif "error" in data:
                     self.gcode_error.emit(f"{data["error"]["code"]}: {data["error"]["message"]}")
                 else:
-                    pass
+                    try:
+                        self.file_position = data["result"]["status"]["virtual_sdcard"]["file_position"]
+                    except Exception as e:
+                        print(f"读取文件位置发生未知错误: {e}")
+                    try:
+                        self.progress = data["result"]["status"]["virtual_sdcard"]["progress"]
+                    except Exception as e:
+                        print(f"读取打印进度发生未知错误: {e}")
+                    try:
+                        self.active_feedrate_mms = data["result"]["status"]["gcode_move"]["speed"]
+                    except Exception as e:
+                        print(f"读取打印速度发生未知错误: {e}")
             else:
                 print(data)
 
@@ -336,8 +351,7 @@ class KlipperWorker(QObject):
                 "script": f"M104 S{target}",
             },
         }
-        async with websockets.connect(self.uri, open_timeout=2.0) as websocket:
-            await websocket.send(gcode_message)
+        await self.message_queue.put(gcode_message)
 
 class VideoWorker(QObject):
     """
