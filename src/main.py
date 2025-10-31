@@ -85,7 +85,7 @@ class MainWindow(QMainWindow):
         # --- 连接信号与槽 ---
         self.connection_widget.ip.connect(self.connection_test)
         self.gcode_widget.run_button.clicked.connect(self.run_gcode)
-        self.status_widget.hotend_temperature_input.returnPressed.connect(self.set_temperature)
+        
         self.sigNewData.connect(self.data_widget.update_display)
         self.home_widget.play_pause_button.toggled.connect(self.on_toggle_play_pause)
         self.home_widget.reset_button.clicked.connect(self.init_data)
@@ -150,6 +150,7 @@ class MainWindow(QMainWindow):
         self.klipper_worker.current_step_signal.connect(self.gcode_widget.highlight_current_line)
         self.klipper_worker.gcode_error.connect(self.update_status)
         self.home_widget.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
+        self.status_widget.hotend_temperature_input.returnPressed.connect(self.klipper_worker.set_temperature)
 
         # Let all workers run
         self.worker.run()
@@ -164,6 +165,8 @@ class MainWindow(QMainWindow):
         try:
             # 创建 video worker （用于接收和处理视频信号）
             self.video_worker = VideoWorker()
+            self.video_thread = QThread()
+            self.video_worker.moveToThread(self.video_thread)
             self.hikcam_ok = True
             print("熔体相机初始化成功！")
         except Exception as e:
@@ -177,17 +180,34 @@ class MainWindow(QMainWindow):
         self.processing_worker = ProcessingWorker()
         
         if self.hikcam_ok or Config.test_mode:
-            # 连接信号槽
-            self.vision_page_widget.vision_widget.sigRoiChanged.connect(self.video_worker.set_roi)
+            # when a new frame is read by the video worker, send it over to the UI to display.
             self.video_worker.new_frame_signal.connect(self.vision_page_widget.vision_widget.update_live_display)
+
+            # if ROI has been changed in the UI, send it to the video worker, so that it can crop later images accordingly.
+            self.vision_page_widget.vision_widget.sigRoiChanged.connect(self.video_worker.set_roi)
+            
+            # send cropped images to the processing worker for image analysis.
             self.video_worker.roi_frame_signal.connect(self.processing_worker.process_frame)
+
+            # the processed frame shall be sent to the home page of the UI for user to monitor.
             self.processing_worker.proc_frame_signal.connect(self.vision_page_widget.roi_vision_widget.update_live_display)
+
+            # the result of the image analysis, here specifically the die melt diameter, shall be sent to the home page to display
             self.processing_worker.proc_frame_signal.connect(self.home_widget.dieswell_widget.update_live_display)
+
+            # allow user to set the exposure time of the camera
             self.vision_page_widget.sigExpTime.connect(self.video_worker.set_exp_time)
+
+            # allow user to invert the black and white to meet the image processing need in specific experiment.
             self.vision_page_widget.invert_button.toggled.connect(self.processing_worker.invert_toggle)
 
+            # thread management: when the thread is started, call the run() method; when the thread is finished, call the deleteLater() method for both video_thread and video_worker.
+            self.video_thread.started.connect(self.video_worker.run)
+            self.video_thread.finished.connect(self.video_worker.deleteLater)
+            self.video_thread.finished.connect(self.video_thread.deleteLater)
+
         if self.hikcam_ok or Config.test_mode:
-            self.video_worker.run()
+            self.video_thread.start()
         else:
             print("WARNING: Failed to initiate camera. Vision module is inactive.")
 
