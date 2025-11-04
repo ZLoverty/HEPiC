@@ -100,10 +100,13 @@ class PlatformStatusWidget(QWidget):
         self.feedrate_label = QLabel("进线速度:")
         self.measured_feedrate_value = QLabel(f"{placeholder}/")
         self.feedrate_value = QLabel(f"{placeholder} mm/s")
-        self.die_temperature_label = QLabel("出口熔体温度")
+        self.die_temperature_label = QLabel("出口熔体温度:")
         self.die_temperature_value = QLabel(f"{placeholder}")
-        self.die_diameter_label = QLabel("出口熔体直径")
+        self.die_diameter_label = QLabel("出口熔体直径:")
         self.die_diameter_value = QLabel(f"{placeholder}")
+        self.progress_label = QLabel("任务进度:")
+        self.print_duration_label = QLabel(f"{placeholder} / ")
+        self.total_duration_label = QLabel(f"{placeholder} s")
 
         # 布局
         layout = QVBoxLayout()
@@ -113,6 +116,7 @@ class PlatformStatusWidget(QWidget):
         row_layout_4 = QHBoxLayout()
         die_temperature_row_layout = QHBoxLayout()
         die_diameter_row_layout = QHBoxLayout()
+        progress_row_layout = QHBoxLayout()
 
         # temperature row
         row_layout_1.addWidget(self.hotend_temperature_label)
@@ -138,6 +142,10 @@ class PlatformStatusWidget(QWidget):
         # die diameter row
         die_diameter_row_layout.addWidget(self.die_diameter_label)
         die_diameter_row_layout.addWidget(self.die_diameter_value)
+        # progress row
+        progress_row_layout.addWidget(self.progress_label)
+        progress_row_layout.addWidget(self.print_duration_label)
+        progress_row_layout.addWidget(self.total_duration_label)
 
         layout.addLayout(row_layout_1)
         layout.addLayout(row_layout_2)
@@ -145,6 +153,7 @@ class PlatformStatusWidget(QWidget):
         layout.addLayout(row_layout_4)
         layout.addLayout(die_temperature_row_layout)
         layout.addLayout(die_diameter_row_layout)
+        layout.addLayout(progress_row_layout)
         
         self.setLayout(layout)
 
@@ -156,7 +165,8 @@ class PlatformStatusWidget(QWidget):
         for item in data:
             if item == "hotend_temperature_C":
                 temperature = data[item]
-                self.hotend_temperature_value.setText(f"{temperature:5.1f} /")
+                if temperature:
+                    self.hotend_temperature_value.setText(f"{temperature:5.1f} /")
             elif item == "extrusion_force_N":
                 extrusion_force = data[item]
                 self.extrusion_force_value.setText(f"{extrusion_force:5.1f} N")
@@ -168,7 +178,8 @@ class PlatformStatusWidget(QWidget):
                 self.measured_feedrate_value.setText(f"{meansured_feedrate:5.1f} /")
             elif item == "feedrate_mms":
                 feedrate = data[item]
-                self.feedrate_value.setText(f"{feedrate:5.1f} mm/s")
+                if feedrate:
+                    self.feedrate_value.setText(f"{feedrate:5.1f} mm/s")
             elif item == "die_temperature_C":
                 die_temperature = data[item]
                 self.die_temperature_value.setText(f"{die_temperature:5.1f} C")
@@ -178,6 +189,11 @@ class PlatformStatusWidget(QWidget):
 
     def on_temp_enter_pressed(self):
         self.set_temperature.emit(float(self.hotend_temperature_input.text()))
+
+    @Slot(dict)
+    def update_progress(self, progress):
+        self.print_duration_label.setText(progress["print_duration"])
+        self.total_duration_label.setText(progress["total_duration"])
 
 class DataPlotWidget(QWidget):
 
