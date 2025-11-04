@@ -150,6 +150,7 @@ class KlipperWorker(QObject):
     hotend_temperature = Signal(float)
     current_step_signal = Signal(int)
     gcode_error = Signal(str)
+    sigPrintStats = Signal(dict)
 
     def __init__(self, host, port):
         super().__init__()
@@ -179,10 +180,11 @@ class KlipperWorker(QObject):
                     "method": "printer.objects.subscribe",
                     "params": {
                         "objects": {
-                            "extruder": ["temperature", "target"],
-                            "print_stats": ["state", "filename", "progress"],
-                            "toolhead": ["position", "extruder"],
-                            "virtual_sdcard": ["file_position", "progress"]
+                            "extruder": None,
+                            "print_stats": None,
+                            "motion_report": None,
+                            "toolhead": None,
+                            "virtual_sdcard": None
                         }
                     },
                     "id": 1
@@ -207,7 +209,7 @@ class KlipperWorker(QObject):
         print("--- [DEBUG] 消息监听器已启动 ---")
         try:
             async for message in websocket:
-                print(f"--- [DEBUG] 收到原始消息: {message}") # <--- 增加原始打印
+                # print(f"--- [DEBUG] 收到原始消息: {message}") # <--- 增加原始打印
                 try:
                     data = json.loads(message)
                     await self.message_queue.put(data)
@@ -266,12 +268,23 @@ class KlipperWorker(QObject):
             
             if "method" in data: 
                 if data["method"] == "notify_status_update": # 判断是否是状态回执
-                    print(data)
                     try:
-                        self.hotend_temperature = data["params"][0]["extruder"]["temperature"]      
+                        sub_msg = data["params"][0]
+                        print(sub_msg)
                     except Exception as e:
-                        print(f"读取热端温度出现未知错误: {e}")
+                        print(f"Unknown error: {e}")
+                        continue
 
+                    hotend_temperature = sub_msg.get("extruder", {}).get("temperature")    
+                    if hotend_temperature:
+                        self.hotend_temperature = hotend_temperature
+
+                    active_feedrate_mms = sub_msg.get("motion_report", {}).get("live_extruder_velocity")
+                    if active_feedrate_mms:
+                        self.active_feedrate_mms = active_feedrate_mms
+                    
+                    if "print_stats" in sub_msg:
+                        self.sigPrintStats.emit(sub_msg["print_stats"])
                 elif data["method"] == "printer.gcode.script": # 发送 G-code
                     await websocket.send(json.dumps(data))
                 elif data["method"] == "printer.objects.subscribe": # 发送查询请求
@@ -279,7 +292,6 @@ class KlipperWorker(QObject):
                 elif data["method"] == "notify_proc_stat_update":
                     pass
                 elif data["method"] == "notify_gcode_response":
-                    print(data)
                     self.gcode_error.emit(data["params"][0])
                 else:
                     print(data)
