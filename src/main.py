@@ -17,6 +17,9 @@ from qasync import QEventLoop, asyncSlot
 from config import Config
 import numpy as np
 import pandas as pd
+from pathlib import Path
+import time
+from datetime import datetime
 
 pg.setConfigOption("background", "w")
 pg.setConfigOption("foreground", "k")
@@ -47,7 +50,7 @@ class MainWindow(QMainWindow):
         self.hikcam_ok = False
         self.init_data()
         self.current_time = 0
-        self.autosave_filename = "autosave.csv"
+        
         self.first_row = True
         self.video_worker = None
         self.ir_worker = None
@@ -158,6 +161,7 @@ class MainWindow(QMainWindow):
         self.klipper_worker.gcode_error.connect(self.update_status)
         self.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
         self.sigQueryRequest.connect(self.klipper_worker.query_status)
+        self.klipper_worker.sigPrintStats.connect(self.status_widget.update_progress)
 
         # Let all workers run
         self.worker.run()
@@ -267,11 +271,15 @@ class MainWindow(QMainWindow):
         if checked: 
             self._timer.start(self.time_delay*1000)
             self.home_widget.play_pause_button.setIcon(self.home_widget.pause_icon)
+            self.autosave_filename = Path(f"{datetime.now().strftime("%Y%m%d_%H%M%S")}_autosave.csv").resolve()
             print("Recording started ...")
+            self.statusBar().showMessage(f"Autosave file at {self.autosave_filename}")
         else:
             self._timer.stop()
             self.home_widget.play_pause_button.setIcon(self.home_widget.play_icon)
             print("Recording stopped.")
+            self.autosave_filename = None
+            self.first_row = True
 
     @Slot(str)
     def update_status(self, status):
