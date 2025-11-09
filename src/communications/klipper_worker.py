@@ -44,26 +44,13 @@ class KlipperWorker(QObject):
     async def run(self):
         """Asyncio 事件循环，处理 WebSocket 连接和通信"""
         try:
-            print(f"正在连接 Klipper {self.uri} ...")
+            self.logger.info(f"正在连接 Klipper {self.uri} ...")
             self.connection_status.emit(f"正在连接 Klipper {self.uri} ...")
             # async with asyncio.wait_for(websockets.connect(self.uri), timeout=2.0) as websocket:
             async with websockets.connect(self.uri, open_timeout=2.0) as websocket:
-                print("Klipper 连接成功！")
+                self.logger.info("Klipper 连接成功！")
                 self.connection_status.emit("Klipper 连接成功！")
-                subscribe_message = {
-                    "jsonrpc": "2.0",
-                    "method": "printer.objects.subscribe",
-                    "params": {
-                        "objects": {
-                            "extruder": None,
-                            "print_stats": None,
-                            "motion_report": None,
-                            "toolhead": None,
-                            "virtual_sdcard": None
-                        }
-                    },
-                    "id": 1
-                }
+                
 
                 # 发送订阅请求
                 await websocket.send(json.dumps(subscribe_message))
@@ -210,19 +197,20 @@ class KlipperWorker(QObject):
         }
         await self.message_queue.put(gcode_message)
 
-    @asyncSlot()
-    async def query_status(self):
+    async def subscribe_printer_status(self):
         subscribe_message = {
             "jsonrpc": "2.0",
             "method": "printer.objects.subscribe",
             "params": {
                 "objects": {
-                    "extruder": ["temperature"],
-                    "virtual_sdcard": ["file_position", "progress"],
-                    "gcode_move": ["speed"]
+                    "extruder": None,
+                    "print_stats": None,
+                    "motion_report": None,
+                    "toolhead": None,
+                    "virtual_sdcard": None
                 }
             },
-            "id": 1 # 一个随机的ID
+            "id": 1
         }
         await self.message_queue.put(subscribe_message)
 
@@ -338,13 +326,20 @@ def _test_gcode_mapper():
 
     print("\n--- 模拟结束 ---")
 
+def _test_klipper_worker():
+    HOST = "127.0.0.1"
+    PORT = 7125
+    klipper_worker = KlipperWorker(HOST, PORT)
+
+
+
 async def main():
     print("test gcode mapper ...")
     _test_gcode_mapper()
 
     await asyncio.sleep(1)
     print("test klipper worker ...")
-
+    _test_klipper_worker()
     
 
 if __name__ == "__main__":

@@ -71,8 +71,9 @@ class MockMoonrakerServer:
             await self.server.wait_closed()
             log.info("Mock Moonraker 服务器已停止。")
 
-    async def handler(self, websocket, path):
+    async def handler(self, websocket):
         """处理单个客户端连接"""
+        
         client_id = websocket.remote_address
         log.info(f"客户端 {client_id} 已连接。")
         self.client_subscriptions[websocket] = set()

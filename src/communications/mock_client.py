@@ -40,7 +40,7 @@ async def receive_loop(websocket):
             try:
                 data = json.loads(message)
                 # 使用 indent=2 漂亮地打印收到的 JSON，便于调试
-                log.info(f"收到 S->C:\n{json.dumps(data, indent=2)}")
+                log.info(f"收到 S->C:\n{data}")
             except json.JSONDecodeError:
                 log.warning(f"收到无效的JSON: {message}")
     except asyncio.CancelledError:
