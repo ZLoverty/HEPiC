@@ -4,21 +4,19 @@ etp_ctl: A PySide6 GUI application for the Extrusion Test Platform experiment co
 
 import sys
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QPushButton, QPlainTextEdit, QLabel, QGridLayout, QMessageBox, QTabWidget, QStackedWidget
+    QApplication, QMainWindow, QTabWidget, QStackedWidget
 )
 from PySide6.QtCore import Signal, Slot, QThread, QTimer
 import pyqtgraph as pg
 from collections import deque
 from communications import TCPClient, KlipperWorker, VideoWorker, ProcessingWorker, ConnectionTester, IRWorker
-from tab_widgets import ConnectionWidget, PlatformStatusWidget, DataPlotWidget, CommandWidget, LogWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget
+from tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget
 import asyncio
-from qasync import QEventLoop, asyncSlot
+from qasync import QEventLoop
 from config import Config
 import numpy as np
 import pandas as pd
 from pathlib import Path
-import time
 from datetime import datetime
 
 pg.setConfigOption("background", "w")
@@ -31,7 +29,7 @@ class MainWindow(QMainWindow):
     
     sigNewData = Signal(dict) # update data plot
     sigNewStatus = Signal(dict) # update status panel
-    sigQueryRequest = Signal() # signal to query klipper status
+    # sigQueryRequest = Signal() # signal to query klipper status
 
     def __init__(self):
         super().__init__()
@@ -160,7 +158,7 @@ class MainWindow(QMainWindow):
         self.klipper_worker.current_step_signal.connect(self.gcode_widget.highlight_current_line)
         self.klipper_worker.gcode_error.connect(self.update_status)
         self.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
-        self.sigQueryRequest.connect(self.klipper_worker.query_status)
+        # self.sigQueryRequest.connect(self.klipper_worker.query_status)
         self.klipper_worker.sigPrintStats.connect(self.status_widget.update_progress)
 
         # Let all workers run
