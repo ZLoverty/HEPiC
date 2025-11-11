@@ -15,13 +15,11 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QTextCursor, QTextCharFormat, QColor
 from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt, QSize, QPointF
 import pyqtgraph as pg
-import time
 from collections import deque
 import numpy as np
-import cv2
-from PySide6.QtGui import QImage, QPixmap
 import json
 from config import Config
+
 
 class ConnectionWidget(QWidget):
 
@@ -83,6 +81,8 @@ class ConnectionWidget(QWidget):
 class PlatformStatusWidget(QWidget):
 
     set_temperature = Signal(float)
+    sigMeterCountZero = Signal()
+    sigExtrusionForceZero = Signal()
 
     def __init__(self):
         
@@ -95,8 +95,10 @@ class PlatformStatusWidget(QWidget):
         self.hotend_temperature_input.setMaximumWidth(60)
         self.extrusion_force_label = QLabel("挤出力:")
         self.extrusion_force_value = QLabel(f"{placeholder}")
+        self.extrusion_force_zero_button = QPushButton("0️⃣")
         self.meter_count_label = QLabel("当前进料量:")
         self.meter_count_value = QLabel(f"{placeholder}")
+        self.meter_count_zero_button = QPushButton("0️⃣")
         self.feedrate_label = QLabel("进线速度:")
         self.measured_feedrate_value = QLabel(f"{placeholder}/")
         self.feedrate_value = QLabel(f"{placeholder} mm/s")
@@ -127,10 +129,12 @@ class PlatformStatusWidget(QWidget):
         row_layout_2.addWidget(self.extrusion_force_label)
         row_layout_2.addWidget(self.extrusion_force_value)
         row_layout_2.addStretch(1)
+        row_layout_2.addWidget(self.extrusion_force_zero_button)
         # meter count row
         row_layout_3.addWidget(self.meter_count_label)
         row_layout_3.addWidget(self.meter_count_value)
         row_layout_3.addStretch(1)
+        row_layout_3.addWidget(self.meter_count_zero_button)
         # feedrate row
         row_layout_4.addWidget(self.feedrate_label)
         row_layout_4.addWidget(self.measured_feedrate_value)
@@ -194,6 +198,12 @@ class PlatformStatusWidget(QWidget):
     def update_progress(self, progress):
         self.print_duration_label.setText(progress["print_duration"])
         self.total_duration_label.setText(progress["total_duration"])
+    
+    def on_extrusion_force_zero_clicked(self):
+        self.sigExtrusionForceZero.emit()
+    
+    def on_meter_count_zero_clicked(self):
+        self.sigMeterCountZero.emit()
 
 class DataPlotWidget(QWidget):
 

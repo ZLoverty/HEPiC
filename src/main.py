@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
+import logging
 
 pg.setConfigOption("background", "w")
 pg.setConfigOption("foreground", "k")
@@ -149,6 +150,8 @@ class MainWindow(QMainWindow):
         self.worker = TCPClient(self.host, self.port)
         # 连接信号槽
         self.worker.connection_status.connect(self.update_status)
+        self.status_widget.sigMeterCountZero.connect(self.worker.set_meter_count_offset)
+        self.status_widget.sigExtrusionForceZero.connect(self.worker.set_extrusion_force_offset)
         
         # 创建 klipper worker（用于查询平台状态和发送动作指令）
         klipper_port = 7125

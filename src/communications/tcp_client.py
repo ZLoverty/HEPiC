@@ -22,6 +22,10 @@ class TCPClient(QObject):
         self.is_running = True
         self.queue = asyncio.Queue()
         self.extrusion_force = None
+        self.extrusion_force_offset = 0.0
+        self.extrusion_force_raw = None
+        self.meter_count_raw = None
+        self.meter_count_offset = 0.0
         self.meter_count = None
         self.logger = logger or logging.getLogger(__name__)
         
@@ -91,16 +95,36 @@ class TCPClient(QObject):
             while self.is_running:   
                 message_dict = await self.queue.get()
                 if "extrusion_force" in message_dict:
-                    self.extrusion_force = message_dict["extrusion_force"]
+                    self.extrusion_force_raw = message_dict["extrusion_force"]
+                    self.extrusion_force = self.extrusion_force_raw - self.extrusion_force_offset
                 if "meter_count" in message_dict:
-                    self.meter_count = message_dict["meter_count"]
+                    self.meter_count_raw = message_dict["meter_count"]
+                    self.meter_count = self.meter_count_raw - self.meter_count_offset
             # 标记队列任务已完成（好习惯）
                 self.queue.task_done()
+
         except asyncio.CancelledError:
             self.logger.info("Process data task cancelled.") # 正常停止
         except Exception as e:
             # 捕获未知错误，否则任务会崩溃且主循环不知道
             self.logger.error(f"Error in process_data: {e}")
+
+    def set_extrusion_force_offset(self):
+        """将当前的挤出力读数设为零点偏移"""
+        if self.extrusion_force_raw is not None:
+            self.extrusion_force_offset = self.extrusion_force_raw
+            self.logger.info(f"挤出力零点已设为 {self.extrusion_force_offset}")
+            print("set 0")
+        else:
+            self.logger.warning("无法设定挤出力零点，当前无读数。")
+    
+    def set_meter_count_offset(self):
+        """将当前的米数读数设为零点偏移"""
+        if self.meter_count_raw is not None:
+            self.meter_count_offset = self.meter_count_raw
+            self.logger.info(f"米数零点已设为 {self.meter_count_offset}")
+        else:
+            self.logger.warning("无法设定米数零点，当前无读数。")
 
     @asyncSlot()
     async def stop(self):
@@ -119,6 +143,9 @@ class TCPClient(QObject):
         # 我们也可以在这里关闭 writer 以更快地中止 receive_task
         if hasattr(self, 'writer') and self.writer:
             self.writer.close()
+
+
+
 
 async def mock_data_sender(reader, writer):
     """This function listens on host:port and send data to any client that connect to this address. Its main purpose is to test the logic in the TCPClient class."""
