@@ -251,11 +251,9 @@ class ImageStreamer:
 
 if __name__ == "__main__":
     # an example showing the two step approach 
-    from pathlib import Path
     import matplotlib.pyplot as plt
 
-    folder = Path("../test/filament_images_simulated")
-    img = cv2.imread(folder / "curly_50px.png", cv2.IMREAD_GRAYSCALE)
+    img = cv2.imread(r"test\filament_images_simulated\curly_50px.png", cv2.IMREAD_GRAYSCALE)
     diameter, skeleton, dist_transform = filament_diameter(img) # the rough estimate
     print(f"Rough estimate: {diameter} px")
     longest_branch = find_longest_branch(skeleton)
@@ -267,3 +265,4 @@ if __name__ == "__main__":
     label_refine = draw_filament_contour(img, longest_branch, diameter_refine)
     ax[0].imshow(label_rough)
     ax[1].imshow(label_refine)
+    plt.show()
