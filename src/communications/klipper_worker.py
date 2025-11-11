@@ -1,3 +1,15 @@
+"""
+klipper_worker.py
+=================
+
+Sample feedback
+---------------
+
+{'jsonrpc': '2.0', 'result': {'eventtime': 64.911992214, 'status': {'extruder': {'temperature': 26.77, 'target': 0.0, 'power': 0.0, 'can_extrude': False, 'pressure_advance': 0.0, 'smooth_time': 0.04, 'motion_queue': None}, 'print_stats': {'filename': '', 'total_duration': 0.0, 'print_duration': 0.0, 'filament_used': 0.0, 'state': 'standby', 'message': '', 'info': {'total_layer': None, 'current_layer': None}}, 'motion_report': {'live_position': [0.0, 0.0, 0.0, 0.0], 'live_velocity': 0.0, 'live_extruder_velocity': 0.0, 'steppers': ['extruder'], 'trapq': ['extruder', 'toolhead']}, 'toolhead': {'homed_axes': '', 'axis_minimum': [0.0, 0.0, 0.0, 0.0], 'axis_maximum': [0.0, 0.0, 0.0, 0.0], 'print_time': 5999.206816, 'stalls': 0, 'estimated_print_time': 6043.5786015, 'extruder': 'extruder', 'position': [0.0, 0.0, 0.0, 0.0], 'max_velocity': 100.0, 'max_accel': 100.0, 'minimum_cruise_ratio': 0.5, 'square_corner_velocity': 5.0}, 'virtual_sdcard': {'file_path': None, 'progress': 0.0, 'is_active': False, 'file_position': 0, 'file_size': 0}}}, 'id': 1}
+
+
+"""
+
 from qasync import asyncSlot
 from PySide6.QtCore import QObject, Signal
 import asyncio
@@ -287,7 +299,7 @@ def _test_gcode_mapper():
 
     ; 一个包含非 ASCII 字符的注释 (测试 UTF-8)
     ; 注释：你好世界
-    G28 ; 归位
+     G28 ; 归位
 
     M140 S60 ; 设置热床 (不等待)
     G1 X10 Y10 F3000
