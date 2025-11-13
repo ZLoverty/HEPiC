@@ -32,7 +32,7 @@ class MainWindow(QMainWindow):
     sigNewStatus = Signal(dict) # update status panel
     # sigQueryRequest = Signal() # signal to query klipper status
 
-    def __init__(self):
+    def __init__(self, logger=None):
         super().__init__()
         self.setWindowTitle(f"{Config.name} v{Config.version}")
         self.setGeometry(900, 100, 700, 500)
@@ -55,7 +55,11 @@ class MainWindow(QMainWindow):
         self.ir_worker = None
         self.video_thread = None
         self.ir_thread = None
-    
+
+        self.is_recording = False
+        # logger
+        self.logger = logger or logging.getLogger(__name__)
+
     def initUI(self):
         # --- 创建控件 ---
         # 标签栏
@@ -266,21 +270,22 @@ class MainWindow(QMainWindow):
 
         self.show_UI(1) # show main UI anyway
         self.status_timer.start(self.time_delay_status * 1000)
+        self._timer.start(self.time_delay*1000)
 
     @Slot(bool)
     def on_toggle_play_pause(self, checked):
         if checked: 
-            self._timer.start(self.time_delay*1000)
             self.home_widget.play_pause_button.setIcon(self.home_widget.pause_icon)
             self.autosave_filename = Path(f"{datetime.now().strftime("%Y%m%d_%H%M%S")}_autosave.csv").resolve()
             print("Recording started ...")
             self.statusBar().showMessage(f"Autosave file at {self.autosave_filename}")
+            self.is_recording = True
         else:
-            self._timer.stop()
             self.home_widget.play_pause_button.setIcon(self.home_widget.play_icon)
             print("Recording stopped.")
             self.autosave_filename = None
             self.first_row = True
+            self.is_recording = False
 
     @Slot(str)
     def update_status(self, status):
@@ -307,7 +312,7 @@ class MainWindow(QMainWindow):
         self.current_time += self.time_delay # current time step forward
         
         # save additional data to file
-        if len(self.data_tmp["extrusion_force_N"]) >= Config.tmp_data_maxlen:
+        if len(self.data_tmp["extrusion_force_N"]) >= Config.tmp_data_maxlen and self.is_recording:
             # construct pd.DataFrame
             df = pd.DataFrame(self.data_tmp)
             if self.first_row:
@@ -343,8 +348,9 @@ class MainWindow(QMainWindow):
                 self.data_status[item] = self.klipper_worker.active_feedrate_mms
             elif item == "measured_feedrate_mms":
                 try:
-                    measured_feedrate = (self.data_tmp["meter_count_mm"][-1]-self.data_tmp["meter_count_mm"][-2]) / self.time_delay
+                    measured_feedrate = ( list(self.data_tmp["meter_count_mm"])[-1] - list(self.data_tmp["meter_count_mm"])[-2] ) / self.time_delay
                 except Exception as e:
+                    self.logger.error(f"Feedrate calculation error: {e}")
                     measured_feedrate = np.nan
                 self.data_status[item] = measured_feedrate
             elif item == "time_s":
@@ -381,6 +387,11 @@ class MainWindow(QMainWindow):
 # 3. 应用程序入口
 # ====================================================================
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)] # 确保输出到 stdout
+    )
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()

@@ -157,12 +157,14 @@ class PlatformStatusWidget(QWidget):
         layout.addLayout(row_layout_4)
         layout.addLayout(die_temperature_row_layout)
         layout.addLayout(die_diameter_row_layout)
-        layout.addLayout(progress_row_layout)
+        # layout.addLayout(progress_row_layout)
         
         self.setLayout(layout)
 
-        # when enter is pressed, emit the text in hotend_temperature_input as float
+        # connect signals and slots
         self.hotend_temperature_input.returnPressed.connect(self.on_temp_enter_pressed)
+        self.extrusion_force_zero_button.clicked.connect(self.on_extrusion_force_zero_clicked)
+        self.meter_count_zero_button.clicked.connect(self.on_meter_count_zero_clicked)
 
     @Slot(dict)
     def update_display(self, data):

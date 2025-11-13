@@ -8,6 +8,7 @@ import bisect
 import time
 import random
 import sys
+import numpy as np
 
 class KlipperWorker(QObject):
     """
@@ -32,9 +33,9 @@ class KlipperWorker(QObject):
         
         # status / flags
         self.is_running = True
-        self.active_feedrate_mms = None
+        self.active_feedrate_mms = 0
         self.active_gcode = None
-        self.hotend_temperature = None
+        self.hotend_temperature = np.nan
 
         # message queue
         self.message_queue = asyncio.Queue()
@@ -53,6 +54,9 @@ class KlipperWorker(QObject):
                 self.logger.info("Klipper 连接成功！")
                 self.connection_status.emit("Klipper 连接成功！")
                 
+                await self.subscribe_printer_status()
+                self.logger.info("已发送状态订阅请求...")
+
                 listener_task = asyncio.create_task(self.message_listener(websocket))
                 processor_task = asyncio.create_task(self.data_processor(websocket))
 
@@ -217,7 +221,6 @@ class KlipperWorker(QObject):
             "id": 1
         }
         
-
         await self.message_queue.put(subscribe_message)
 
 class GcodePositionMapper:

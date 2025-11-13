@@ -5,6 +5,7 @@ import json
 import random
 import logging
 import sys
+import numpy as np
 
 class TCPClient(QObject):
     # --- 信号 ---
@@ -21,12 +22,12 @@ class TCPClient(QObject):
         self.port = port
         self.is_running = True
         self.queue = asyncio.Queue()
-        self.extrusion_force = None
+        self.extrusion_force = np.nan
         self.extrusion_force_offset = 0.0
-        self.extrusion_force_raw = None
-        self.meter_count_raw = None
+        self.extrusion_force_raw = np.nan
+        self.meter_count_raw = np.nan
         self.meter_count_offset = 0.0
-        self.meter_count = None
+        self.meter_count = np.nan
         self.logger = logger or logging.getLogger(__name__)
         
     @asyncSlot()
