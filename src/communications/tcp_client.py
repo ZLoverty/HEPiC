@@ -28,6 +28,10 @@ class TCPClient(QObject):
         self.meter_count_raw = np.nan
         self.meter_count_offset = 0.0
         self.meter_count = np.nan
+        self.steps_total = 1000 # rotary encoder total steps
+        self.wheel_diameter = 28.6
+
+
         self.logger = logger or logging.getLogger(__name__)
         
     @asyncSlot()
@@ -100,7 +104,7 @@ class TCPClient(QObject):
                     self.extrusion_force = self.extrusion_force_raw - self.extrusion_force_offset
                 if "meter_count" in message_dict:
                     self.meter_count_raw = message_dict["meter_count"]
-                    self.meter_count = self.meter_count_raw - self.meter_count_offset
+                    self.meter_count = (self.meter_count_raw - self.meter_count_offset) / self.steps_total * np.pi * self.wheel_diameter
             # 标记队列任务已完成（好习惯）
                 self.queue.task_done()
 
