@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QLabel, QLabel
+    QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QLabel, QLabel, QPushButton
 )
 from PySide6.QtCore import Signal, Slot
 import pyqtgraph as pg
@@ -7,6 +7,8 @@ import pyqtgraph as pg
 class PlatformStatusWidget(QWidget):
 
     set_temperature = Signal(float)
+    sigMeterCountZero = Signal()
+    sigExtrusionForceZero = Signal()
 
     def __init__(self):
         
@@ -19,8 +21,10 @@ class PlatformStatusWidget(QWidget):
         self.hotend_temperature_input.setMaximumWidth(60)
         self.extrusion_force_label = QLabel("挤出力:")
         self.extrusion_force_value = QLabel(f"{placeholder}")
+        self.extrusion_force_zero_button = QPushButton("0️⃣")
         self.meter_count_label = QLabel("当前进料量:")
         self.meter_count_value = QLabel(f"{placeholder}")
+        self.meter_count_zero_button = QPushButton("0️⃣")
         self.feedrate_label = QLabel("进线速度:")
         self.measured_feedrate_value = QLabel(f"{placeholder}/")
         self.feedrate_value = QLabel(f"{placeholder} mm/s")
@@ -51,10 +55,12 @@ class PlatformStatusWidget(QWidget):
         row_layout_2.addWidget(self.extrusion_force_label)
         row_layout_2.addWidget(self.extrusion_force_value)
         row_layout_2.addStretch(1)
+        row_layout_2.addWidget(self.extrusion_force_zero_button)
         # meter count row
         row_layout_3.addWidget(self.meter_count_label)
         row_layout_3.addWidget(self.meter_count_value)
         row_layout_3.addStretch(1)
+        row_layout_3.addWidget(self.meter_count_zero_button)
         # feedrate row
         row_layout_4.addWidget(self.feedrate_label)
         row_layout_4.addWidget(self.measured_feedrate_value)
@@ -77,12 +83,14 @@ class PlatformStatusWidget(QWidget):
         layout.addLayout(row_layout_4)
         layout.addLayout(die_temperature_row_layout)
         layout.addLayout(die_diameter_row_layout)
-        layout.addLayout(progress_row_layout)
+        # layout.addLayout(progress_row_layout)
         
         self.setLayout(layout)
 
-        # when enter is pressed, emit the text in hotend_temperature_input as float
+        # connect signals and slots
         self.hotend_temperature_input.returnPressed.connect(self.on_temp_enter_pressed)
+        self.extrusion_force_zero_button.clicked.connect(self.on_extrusion_force_zero_clicked)
+        self.meter_count_zero_button.clicked.connect(self.on_meter_count_zero_clicked)
 
     @Slot(dict)
     def update_display(self, data):
@@ -118,6 +126,12 @@ class PlatformStatusWidget(QWidget):
     def update_progress(self, progress):
         self.print_duration_label.setText(progress["print_duration"])
         self.total_duration_label.setText(progress["total_duration"])
+    
+    def on_extrusion_force_zero_clicked(self):
+        self.sigExtrusionForceZero.emit()
+    
+    def on_meter_count_zero_clicked(self):
+        self.sigMeterCountZero.emit()
 
 if __name__ == "__main__":
     import sys
