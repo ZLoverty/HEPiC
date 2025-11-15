@@ -12,7 +12,7 @@ from .vision import ImageStreamer
 
 OPTRIS_LIB_LOADED = False
 try:
-    from optris_camera import OptrisCamera
+    from vision.optris_camera import OptrisCamera
     OPTRIS_LIB_LOADED = True
 except Exception as e:
     print(f"Fail to load Optris camera lib.")

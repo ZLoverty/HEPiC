@@ -9,7 +9,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Signal, Slot, QThread, QTimer
 import pyqtgraph as pg
 from collections import deque
-from communications import TCPClient, KlipperWorker, VideoWorker, ProcessingWorker, ConnectionTester, IRWorker
+from communications import TCPClient, KlipperWorker, ConnectionTester
+from vision import VideoWorker, ProcessingWorker, IRWorker
 from tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget
 import asyncio
 from qasync import QEventLoop

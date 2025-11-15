@@ -12,7 +12,7 @@ if not Config.test_mode:
         from hikcam_win import HikVideoCapture
     else:
         # on Mac / Linux, use a different library
-        from video_capture import HikVideoCapture  
+        from .video_capture import HikVideoCapture  
 
 class VideoWorker(QObject):
     """
