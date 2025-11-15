@@ -7,4 +7,4 @@ from .connection_widget import ConnectionWidget
 from .log_widget import LogWidget
 from .home_widget import HomeWidget
 from .vision_page_widget import VisionPageWidget
-from .ir_widget import IRWidget
+from .ir_widget import IRPageWidget
