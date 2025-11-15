@@ -5,6 +5,7 @@ from config import Config
 import os
 from .vision import binarize, filament_diameter, convert_to_grayscale, draw_filament_contour, find_longest_branch, ImageStreamer
 import time
+import cv2
 
 if not Config.test_mode:
     if os.name == "nt":
