@@ -13,13 +13,13 @@ from communications import TCPClient, KlipperWorker, ConnectionTester
 from vision import VideoWorker, ProcessingWorker, IRWorker
 from tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget
 import asyncio
-from qasync import QEventLoop
-from config import Config
+from qasync import asyncSlot, QEventLoop
 import numpy as np
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
 import logging
+import json
 
 pg.setConfigOption("background", "w")
 pg.setConfigOption("foreground", "k")
@@ -35,16 +35,31 @@ class MainWindow(QMainWindow):
 
     def __init__(self, logger=None):
         super().__init__()
-        self.setWindowTitle(f"{Config.name} v{Config.version}")
+        self.logger = logger or logging.getLogger(__name__)
+        self.load_config()
+        self.setWindowTitle(f"{self.app_name} v{self.config.get("version")}")
         self.setGeometry(900, 100, 700, 500)
+
+        # 1. (关键) 给主窗口设置一个唯一的对象名称
+        self.setObjectName("MyMainWindow") 
+
+        # 2. (关键) 使用 QSS 并通过 #objectName 来指定样式
+        # 这样可以确保样式只应用到主窗口，而不会"泄露"给子控件
+        if self.test_mode:
+            self.setStyleSheet("""
+                QMainWindow#MyMainWindow {
+                    background-color: #D2DCB6; 
+                }
+            """)
+
         self.initUI()
         self._timer = QTimer(self) # set data appending frequency
         self.status_timer = QTimer(self) # set status panel update frequency
         self._timer.timeout.connect(self.on_timer_tick)
         self.status_timer.timeout.connect(self.on_status_timer_tick)
-        self.data_frequency = Config.data_frequency
+        
         self.time_delay = 1 / self.data_frequency
-        self.status_frequency = Config.status_frequency
+        
         self.time_delay_status = 1 / self.status_frequency
         self.ircam_ok = False
         self.hikcam_ok = False
@@ -58,8 +73,24 @@ class MainWindow(QMainWindow):
         self.ir_thread = None
 
         self.is_recording = False
-        # logger
-        self.logger = logger or logging.getLogger(__name__)
+    
+    def load_config(self, config_file="config.json"):
+        with open(config_file, "r") as f:
+            self.config = json.load(f)
+        
+        self.logger.debug(f"Loaded config: {self.config}")
+
+        # set config values
+        self.app_name = self.config.get("name", "HEPiC")
+        self.app_version = self.config.get("version", "0.0.0")
+        self.data_frequency = self.config.get("data_frequency", 10)
+        self.status_frequency = self.config.get("status_frequency", 5)
+        self.host = self.config.get("hepic_host", "192.168.0.81")
+        self.port = self.config.get("hepic_port", 10001)
+        self.hepic_refresh_interval_ms = self.config.get("hepic_refresh_interval_ms", 100)
+        self.test_mode = self.config.get("test_mode", False)
+        self.tmp_data_maxlen = self.config.get("tmp_data_maxlen", 100)
+        self.final_data_maxlen = self.config.get("final_data_maxlen", 1000000)
 
     def initUI(self):
         # --- 创建控件 ---
@@ -71,7 +102,7 @@ class MainWindow(QMainWindow):
         self.tabs.setTabPosition(QTabWidget.TabPosition.West) # 关键！把标签放到左边
         self.tabs.setMovable(True) # 让标签页可以拖动排序
         # 标签页们
-        self.connection_widget = ConnectionWidget()  
+        self.connection_widget = ConnectionWidget(host=self.host)  
         self.home_widget = HomeWidget()
         self.vision_page_widget = VisionPageWidget()
         self.status_widget = self.home_widget.status_widget
@@ -95,7 +126,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("准备就绪")
 
         # --- 连接信号与槽 ---
-        self.connection_widget.ip.connect(self.connection_test)
+        self.connection_widget.host.connect(self.update_host_and_connect)
         self.gcode_widget.run_button.clicked.connect(self.run_gcode)
         
         self.sigNewData.connect(self.data_widget.update_display)
@@ -103,9 +134,6 @@ class MainWindow(QMainWindow):
         self.home_widget.reset_button.clicked.connect(self.init_data)
         self.sigNewStatus.connect(self.status_widget.update_display)
         
-        
-        
-
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
         items = ["extrusion_force_N", "die_temperature_C", "die_diameter_px", "meter_count_mm", "gcode", "hotend_temperature_C", "feedrate_mms", "time_s", "measured_feedrate_mms"]
@@ -115,8 +143,8 @@ class MainWindow(QMainWindow):
         self.data_status = {} # only stores current status of the platform
 
         for item in items:
-            self.data[item] = deque(maxlen=Config.final_data_maxlen)
-            self.data_tmp[item] = deque(maxlen=Config.tmp_data_maxlen)
+            self.data[item] = deque(maxlen=self.config.get("final_data_maxlen", 1000000))
+            self.data_tmp[item] = deque(maxlen=self.config.get("tmp_data_maxlen", 100))
             self.data_status[item] = np.nan
 
     @Slot(int)
@@ -124,16 +152,14 @@ class MainWindow(QMainWindow):
         """Show main UI"""
         self.stacked_widget.setCurrentIndex(UI_index)
 
-    @Slot(str)
-    def connection_test(self, host):
+    @asyncSlot()
+    async def connection_test(self):
         # 树莓派服务器的 IP 地址和端口
         # IP 地址随时可能变化，所以以后应加一块屏幕方便随时读取
         # 数据端口暂定 10001
-        self.host = host
-        self.port = 10001
 
         # 1. 创建异步 Worker 实例
-        self.connection_tester = ConnectionTester(host, self.port)
+        self.connection_tester = ConnectionTester(self.host, self.port)
 
         # 2. 连接信号和槽
         self.connection_tester.test_msg.connect(self.connection_widget.update_self_test)
@@ -144,15 +170,16 @@ class MainWindow(QMainWindow):
         self.connection_tester.fail.connect(self.connection_tester.deleteLater)
         
         # 4. 直接调用 @asyncSlot 方法，qasync 会自动在事件循环中调度它
-        self.connection_tester.run()
+        await self.connection_tester.run()
 
-    @Slot()
-    def connect_to_ip(self):
+    @asyncSlot()
+    async def connect_to_ip(self):
         """Create connection with the klipper host:
         1. TCP connection with the data server on Raspberry Pi
         2. Websocket connection with the Klipper host (via Moonraker) on Raspberry Pi"""
         # 创建 TCP 连接以接收数据
-        self.worker = TCPClient(self.host, self.port)
+        self.worker = TCPClient(self.host, self.port, logger=self.logger, refresh_interval_ms=self.hepic_refresh_interval_ms)
+        
         # 连接信号槽
         self.worker.connection_status.connect(self.update_status)
         self.status_widget.sigMeterCountZero.connect(self.worker.set_meter_count_offset)
@@ -170,10 +197,12 @@ class MainWindow(QMainWindow):
         self.klipper_worker.sigPrintStats.connect(self.status_widget.update_progress)
 
         # Let all workers run
-        self.worker.run()
-        self.klipper_worker.run()
+        tcp_task = self.worker.run()
+        klipper_task = self.klipper_worker.run()
         self.initiate_camera()
         self.initiate_ir_imager()
+
+        await asyncio.gather(tcp_task, klipper_task)
 
     @Slot()
     def initiate_camera(self):
@@ -181,28 +210,19 @@ class MainWindow(QMainWindow):
         Ideally, if the camera lost connect by accident, the software should attempt reconnection a few times. This should be handled in the camera class."""
         try:
             # 创建 video worker （用于接收和处理视频信号）
-            self.video_worker = VideoWorker()
+            self.video_worker = VideoWorker(test_mode=self.test_mode, test_image_folder=self.config.get("test_image_folder", ""))
             self.video_thread = QThread()
             self.video_worker.moveToThread(self.video_thread)
             self.hikcam_ok = True
-            print("熔体相机初始化成功！")
-        except Exception as e:
-            if Config.test_mode:
-                print("Warning: test_mode on, showing synthetic pictures instead of real capture.")
-                self.video_worker = VideoWorker(test_mode=Config.test_mode)
-            else:
-                print(f"初始化熔体状态相机失败: {e}")
-
-        # 创建 image processing worker 用于处理图像，探测熔体直径
-        self.processing_worker = ProcessingWorker()
-        
-        if self.hikcam_ok or Config.test_mode:
             # when a new frame is read by the video worker, send it over to the UI to display.
             self.video_worker.new_frame_signal.connect(self.vision_page_widget.vision_widget.update_live_display)
 
             # if ROI has been changed in the UI, send it to the video worker, so that it can crop later images accordingly.
             self.vision_page_widget.vision_widget.sigRoiChanged.connect(self.video_worker.set_roi)
             
+            # 创建 image processing worker 用于处理图像，探测熔体直径
+            self.processing_worker = ProcessingWorker()
+
             # send cropped images to the processing worker for image analysis.
             self.video_worker.roi_frame_signal.connect(self.processing_worker.process_frame)
 
@@ -223,11 +243,16 @@ class MainWindow(QMainWindow):
             self.video_thread.finished.connect(self.video_worker.deleteLater)
             self.video_thread.finished.connect(self.video_thread.deleteLater)
 
-        if self.hikcam_ok or Config.test_mode:
             self.video_thread.start()
-        else:
+
+            print("熔体相机初始化成功！")
+        except Exception as e:
+            print(f"初始化熔体状态相机失败: {e}")
             print("WARNING: Failed to initiate camera. Vision module is inactive.")
 
+        
+        
+    
     @Slot()
     def initiate_ir_imager(self):
         """Try to initiate the IR image. If failed, the status flag should be marked False. Ideally, the software should attempt reconnection a few times if connection is lost. This should be handled in the IR imager class."""
@@ -236,10 +261,7 @@ class MainWindow(QMainWindow):
             self.ir_thread = QThread()
             self.ir_worker.moveToThread(self.ir_thread)
             self.ircam_ok = True
-        except Exception as e:
-            print(f"初始化热成像仪失败，热成像仪不可用: {e}")
-        
-        if self.ircam_ok:
+
             # when IR worker receives a new frame, send it to the IR page to shown on the canvas
             self.ir_worker.sigNewFrame.connect(self.ir_image_widget.update_live_display)
 
@@ -264,14 +286,17 @@ class MainWindow(QMainWindow):
             # a scrollbar that allows focus adjustment.
             self.ir_page_widget.focus_bar.valueChanged.connect(self.ir_worker.set_position)
 
-        if self.ircam_ok:
             self.ir_thread.start()
-        else:
+
+
+        except Exception as e:
+            print(f"初始化热成像仪失败，热成像仪不可用: {e}")
             print("WARNING: Failed to initiate IR camera. Die temperature module is inactive.")
+            
 
         self.show_UI(1) # show main UI anyway
-        self.status_timer.start(self.time_delay_status * 1000)
-        self._timer.start(self.time_delay*1000)
+        self.status_timer.start(int(self.time_delay_status * 1000))
+        self._timer.start(int(self.time_delay*1000))
 
     @Slot(bool)
     def on_toggle_play_pause(self, checked):
@@ -293,12 +318,12 @@ class MainWindow(QMainWindow):
         """更新状态栏信息"""
         self.statusBar().showMessage(status)
 
-    @Slot()
-    def run_gcode(self):
+    @asyncSlot()
+    async def run_gcode(self):
         """运行从文本框里来的 gcode """
         if self.klipper_worker:
             gcode = self.gcode_widget.gcode_display.toPlainText()
-            self.klipper_worker.send_gcode(gcode)
+            await self.klipper_worker.send_gcode(gcode)
     
     @Slot()
     def on_timer_tick(self):
@@ -313,7 +338,7 @@ class MainWindow(QMainWindow):
         self.current_time += self.time_delay # current time step forward
         
         # save additional data to file
-        if len(self.data_tmp["extrusion_force_N"]) >= Config.tmp_data_maxlen and self.is_recording:
+        if len(self.data_tmp["extrusion_force_N"]) >= self.tmp_data_maxlen and self.is_recording:
             # construct pd.DataFrame
             df = pd.DataFrame(self.data_tmp)
             if self.first_row:
@@ -363,13 +388,18 @@ class MainWindow(QMainWindow):
             else:
                 self.data_status[item] = np.nan
 
-    def closeEvent(self, event):
+    @asyncSlot(str)
+    async def update_host_and_connect(self, host):
+        self.host = host
+        await self.connection_test()
+
+    async def closeEvent(self, event):
         print("正在关闭应用程序...")
         if self.worker:
-            self.worker.stop()
+            await self.worker.stop()
             self.worker.deleteLater()
         if self.klipper_worker:
-            self.klipper_worker.stop()
+            await self.klipper_worker.stop()
             self.klipper_worker.deleteLater()
         if self.video_worker:
             self.video_worker.stop()
@@ -389,7 +419,7 @@ class MainWindow(QMainWindow):
 # ====================================================================
 if __name__ == "__main__":
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         format="%(asctime)s - %(levelname)s - %(message)s",
         handlers=[logging.StreamHandler(sys.stdout)] # 确保输出到 stdout
     )

@@ -57,10 +57,10 @@ class KlipperWorker(QObject):
                 await self.subscribe_printer_status()
                 self.logger.info("已发送状态订阅请求...")
 
-                listener_task = asyncio.create_task(self.message_listener(websocket))
-                processor_task = asyncio.create_task(self.data_processor(websocket))
+                self.listener_task = asyncio.create_task(self.message_listener(websocket))
+                self.processor_task = asyncio.create_task(self.data_processor(websocket))
 
-                await asyncio.gather(listener_task, processor_task)
+                await asyncio.gather(self.listener_task, self.processor_task)
 
         except (websockets.exceptions.ConnectionClosedError, ConnectionRefusedError) as e:
             self.logger.error(f"Klipper 连接失败")

@@ -1,4 +1,4 @@
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, QTimer
 import asyncio
 from qasync import asyncSlot
 import json
@@ -6,6 +6,7 @@ import random
 import logging
 import sys
 import numpy as np
+from collections import deque
 
 class TCPClient(QObject):
     # --- 信号 ---
@@ -16,7 +17,14 @@ class TCPClient(QObject):
     extrusion_force_signal = Signal(float)
     meter_count_signal = Signal(float)
 
-    def __init__(self, host, port, logger=None):
+    def __init__(self, 
+                 host: str, 
+                 port: int, 
+                 logger = None,
+                 rotary_encoder_steps_total: int = 1000,
+                 rotary_encoder_wheel_diameter: float = 28.6,
+                 meter_count_cache_size: int = 10,
+                 refresh_interval_ms: int = 100):
         super().__init__()
         self.host = host
         self.port = port
@@ -28,15 +36,23 @@ class TCPClient(QObject):
         self.meter_count_raw = np.nan
         self.meter_count_offset = 0.0
         self.meter_count = np.nan
-        self.steps_total = 1000 # rotary encoder total steps
-        self.wheel_diameter = 28.6
-
+        self.steps_total = rotary_encoder_steps_total
+        self.wheel_diameter = rotary_encoder_wheel_diameter
+        self.filament_velocity = 0.0
+        self.cache_size = meter_count_cache_size
+        self.meter_count_cache = deque(maxlen=self.cache_size) # cache for computing velocity
+        self._timer = QTimer()
+        self.refresh_interval_ms = refresh_interval_ms
+        self._timer.timeout.connect(self.compute_filament_velocity)
 
         self.logger = logger or logging.getLogger(__name__)
         
     @asyncSlot()
     async def run(self):
         self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.host, self.port), timeout=2.0)
+
+        self._timer.start(self.refresh_interval_ms)
+
         try:        
             await self.send_data("start")
             self.receive_task = asyncio.create_task(self.receive_data())
@@ -77,7 +93,7 @@ class TCPClient(QObject):
                 # 读取一行数据
                 data = await self.reader.readline()
                 message_str = data.decode('utf-8').strip()
-                self.logger.debug(f"receive message: {message_str}")
+                # self.logger.debug(f"receive message: {message_str}")
                 message_dict = json.loads(message_str)
                 await self.queue.put(message_dict)
         except (ConnectionResetError, ConnectionAbortedError):
@@ -130,6 +146,20 @@ class TCPClient(QObject):
             self.logger.info(f"米数零点已设为 {self.meter_count_offset}")
         else:
             self.logger.warning("无法设定米数零点，当前无读数。")
+
+    def compute_filament_velocity(self):
+        """Compute filament velocity based on meter_count changes over time."""
+        self.meter_count_cache.append(self.meter_count_raw)
+        self.logger.debug(f"Cached {len(self.meter_count_cache)} values for velocity computation.")
+
+        if len(self.meter_count_cache) == self.cache_size:
+            delta_meter = self.meter_count_cache[-1] - self.meter_count_cache[0]
+            delta_time = (self.cache_size - 1) * self.refresh_interval_ms / 1000.0 # convert ms to s
+            self.filament_velocity = delta_meter / delta_time
+        else:
+            self.filament_velocity = 0.0
+
+        self.logger.debug(f"Computed filament velocity: {self.filament_velocity} mm/s")
 
     @asyncSlot()
     async def stop(self):
@@ -185,7 +215,7 @@ async def mock_data_sender(reader, writer):
                 await writer.drain()
                 
                 # 4. 等待一段时间再发送下一次，避免刷屏和CPU 100%
-                await asyncio.sleep(1)
+                await asyncio.sleep(.1)
 
             except Exception as e:
                 print(f"向 {addr} 发送数据时出错: {e}")
@@ -201,13 +231,6 @@ async def mock_data_sender(reader, writer):
     await writer.wait_closed()
 
 async def _test_tcp_client():
-
-    # configure basic logging 
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)] # 确保输出到 stdout
-    )
 
     HOST, PORT = '127.0.0.1', 10001
     server = await asyncio.start_server(mock_data_sender, HOST, PORT)
@@ -227,6 +250,14 @@ async def main():
     await _test_tcp_client()
     
 if __name__ == "__main__":
+
+    # configure basic logging 
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)] # 确保输出到 stdout
+    )
+
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

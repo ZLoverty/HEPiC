@@ -7,7 +7,7 @@ from collections import deque
 class ConnectionWidget(QWidget):
     """The front page of the app, user needs to input the IP address of Raspberry Pi"""
 
-    ip = Signal(str)
+    host = Signal(str)
 
     def __init__(self, host=""):
 
@@ -44,7 +44,7 @@ class ConnectionWidget(QWidget):
     def on_connect_clicked(self):
         ip_address = self.ip_input.text().strip()
         if ip_address:
-            self.ip.emit(ip_address)
+            self.host.emit(ip_address)
         else:
             QMessageBox.warning(self, "输入错误", "请输入有效的 IP 地址。")
 
