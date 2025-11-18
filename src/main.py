@@ -48,7 +48,7 @@ class MainWindow(QMainWindow):
         if self.test_mode:
             self.setStyleSheet("""
                 QMainWindow#MyMainWindow {
-                    background-color: #D2DCB6; /* 这是一个深蓝灰色 */
+                    background-color: #D2DCB6; 
                 }
             """)
 

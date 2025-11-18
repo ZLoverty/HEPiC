@@ -11,7 +11,7 @@ class IRPageWidget(QWidget):
         super().__init__()
         # widgets
         self.mode_menu = QComboBox()
-        self.focus_bar = QScrollBar(Qt.Horizontal)
+        self.focus_bar = QScrollBar(Qt.Orientation.Horizontal)
         self.focus_bar.setMinimum(0)
         self.focus_bar.setMaximum(100)
         self.image_widget = VisionWidget()
