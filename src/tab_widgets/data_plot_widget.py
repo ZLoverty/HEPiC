@@ -3,10 +3,11 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Slot
 import pyqtgraph as pg
+import logging
 
 class DataPlotWidget(QWidget):
 
-    def __init__(self):
+    def __init__(self, logger=None):
 
         super().__init__()
 
@@ -27,6 +28,8 @@ class DataPlotWidget(QWidget):
         self.setLayout(layout)
 
         self.max_len = 300
+
+        self.logger = logger or logging.getLogger(__name__)
     
     @Slot(dict)
     def update_display(self, data):
@@ -40,5 +43,7 @@ class DataPlotWidget(QWidget):
             if "die_diameter_px" in data:
                 self.dieswell_curve.setData(list(data["time_s"])[-self.max_len:], list(data["die_diameter_px"])[-self.max_len:])
 
-        except (IndexError, ValueError):
-            self.temp_value_label.setText("解析错误")
+        except (IndexError, ValueError) as e:
+            self.logger.error(f"解析错误: {e}")
+        except Exception as e:
+            self.logger.error(f"data_plot_widget unknow error: {e}")
