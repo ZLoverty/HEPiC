@@ -27,7 +27,7 @@ if __name__ == "__main__":
     import sys
     from qasync import QEventLoop, asyncSlot
     import asyncio
-    from communications import IRWorker
+    from vision import IRWorker
 
     app = QApplication(sys.argv)
     window = QMainWindow()

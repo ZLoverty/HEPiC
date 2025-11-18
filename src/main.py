@@ -39,8 +39,6 @@ class MainWindow(QMainWindow):
         self.load_config()
         self.setWindowTitle(f"{self.app_name} v{self.config.get("version")}")
         self.setGeometry(900, 100, 700, 500)
-        
-
 
         self.initUI()
         self._timer = QTimer(self) # set data appending frequency
