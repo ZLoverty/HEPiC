@@ -2,7 +2,9 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QLabel, QLabel, QPushButton
 )
 from PySide6.QtCore import Signal, Slot
-import pyqtgraph as pg
+from PySide6.QtGui import QIcon
+# import pyqtgraph as pg
+import os
 
 class PlatformStatusWidget(QWidget):
 
@@ -10,10 +12,12 @@ class PlatformStatusWidget(QWidget):
     sigMeterCountZero = Signal()
     sigExtrusionForceZero = Signal()
 
-    def __init__(self):
+    def __init__(self, 
+                 placeholder : str = "***",
+                 icon_path : str = "icons"):
         
         super().__init__()
-        placeholder = "***"
+        
         # 组件
         self.hotend_temperature_label = QLabel("温度:")
         self.hotend_temperature_value = QLabel(f"{placeholder:5s} /")
@@ -21,10 +25,13 @@ class PlatformStatusWidget(QWidget):
         self.hotend_temperature_input.setMaximumWidth(60)
         self.extrusion_force_label = QLabel("挤出力:")
         self.extrusion_force_value = QLabel(f"{placeholder}")
-        self.extrusion_force_zero_button = QPushButton("0️⃣")
+        self.extrusion_force_zero_button = QPushButton()
+        zero_icon = QIcon(os.path.join(icon_path, "toZero.png"))
+        self.extrusion_force_zero_button.setIcon(zero_icon)
         self.meter_count_label = QLabel("当前进料量:")
         self.meter_count_value = QLabel(f"{placeholder}")
-        self.meter_count_zero_button = QPushButton("0️⃣")
+        self.meter_count_zero_button = QPushButton()
+        self.meter_count_zero_button.setIcon(zero_icon)
         self.feedrate_label = QLabel("进线速度:")
         self.measured_feedrate_value = QLabel(f"{placeholder}/")
         self.feedrate_value = QLabel(f"{placeholder} mm/s")

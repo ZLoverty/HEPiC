@@ -19,7 +19,7 @@ class TCPClient(QObject):
 
     def __init__(self, 
                  host: str, 
-                 port: str, 
+                 port: int, 
                  logger = None,
                  rotary_encoder_steps_total: int = 1000,
                  rotary_encoder_wheel_diameter: float = 28.6,

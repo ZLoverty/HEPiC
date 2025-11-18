@@ -78,7 +78,10 @@ class MainWindow(QMainWindow):
         self.host = self.config.get("hepic_host", "192.168.0.81")
         self.port = self.config.get("hepic_port", 10001)
         self.hepic_refresh_interval_ms = self.config.get("hepic_refresh_interval_ms", 100)
-    
+        self.test_mode = self.config.get("test_mode", False)
+        self.tmp_data_maxlen = self.config.get("tmp_data_maxlen", 100)
+        self.final_data_maxlen = self.config.get("final_data_maxlen", 1000000)
+
     def initUI(self):
         # --- 创建控件 ---
         # 标签栏
@@ -184,8 +187,8 @@ class MainWindow(QMainWindow):
         self.klipper_worker.sigPrintStats.connect(self.status_widget.update_progress)
 
         # Let all workers run
-        tcp_task = asyncio.create_task(self.worker.run())
-        klipper_task = asyncio.create_task(self.klipper_worker.run())
+        tcp_task = self.worker.run()
+        klipper_task = self.klipper_worker.run()
         self.initiate_camera()
         self.initiate_ir_imager()
 
@@ -197,7 +200,7 @@ class MainWindow(QMainWindow):
         Ideally, if the camera lost connect by accident, the software should attempt reconnection a few times. This should be handled in the camera class."""
         try:
             # 创建 video worker （用于接收和处理视频信号）
-            self.video_worker = VideoWorker(test_mode=Config.test_mode)
+            self.video_worker = VideoWorker(test_mode=self.test_mode)
             self.video_thread = QThread()
             self.video_worker.moveToThread(self.video_thread)
             self.hikcam_ok = True
@@ -323,7 +326,7 @@ class MainWindow(QMainWindow):
         self.current_time += self.time_delay # current time step forward
         
         # save additional data to file
-        if len(self.data_tmp["extrusion_force_N"]) >= Config.tmp_data_maxlen and self.is_recording:
+        if len(self.data_tmp["extrusion_force_N"]) >= self.tmp_data_maxlen and self.is_recording:
             # construct pd.DataFrame
             df = pd.DataFrame(self.data_tmp)
             if self.first_row:
@@ -376,7 +379,7 @@ class MainWindow(QMainWindow):
     @asyncSlot(str)
     async def update_host_and_connect(self, host):
         self.host = host
-        await self.connection_test(self.host, self.port)
+        await self.connection_test()
 
     async def closeEvent(self, event):
         print("正在关闭应用程序...")
