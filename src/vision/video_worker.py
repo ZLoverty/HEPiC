@@ -21,7 +21,7 @@ class VideoWorker(QObject):
     roi_frame_signal = Signal(np.ndarray)
     sigFinished = Signal()
 
-    def __init__(self, test_mode=False):
+    def __init__(self, test_mode=False, test_image_folder=""):
         """
         Parameters
         ----------
@@ -35,7 +35,7 @@ class VideoWorker(QObject):
         self.test_mode = test_mode
 
         if test_mode:  # 调试用图片流
-            image_folder = Path(Config.test_image_folder).expanduser().resolve()
+            image_folder = Path(test_image_folder).expanduser().resolve()
             self.cap = ImageStreamer(str(image_folder), fps=10)
         else: # 真图片流
             self.cap = HikVideoCapture(width=512, height=512, exposure_time=50000, center_roi=True)
@@ -44,7 +44,7 @@ class VideoWorker(QObject):
     def run(self):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.read_one_frame)
-        self._timer.start(0.1)
+        self._timer.start(100)
         self.thread().exec()
 
         print("IRWorker 事件循环已停止。")

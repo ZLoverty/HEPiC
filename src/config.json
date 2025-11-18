@@ -1,7 +1,7 @@
 {
     "name": "HEPiC",
     "version": "0.0.0",
-    "test_mode": false,
+    "test_mode": true,
     "test_image_folder": "~/Documents/GitHub/HEPiC/test/filament_images_captured",
     "hepic_host": "192.168.0.81",
     "hepic_port": 10001,

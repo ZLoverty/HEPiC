@@ -40,6 +40,18 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{self.app_name} v{self.config.get("version")}")
         self.setGeometry(900, 100, 700, 500)
 
+        # 1. (关键) 给主窗口设置一个唯一的对象名称
+        self.setObjectName("MyMainWindow") 
+
+        # 2. (关键) 使用 QSS 并通过 #objectName 来指定样式
+        # 这样可以确保样式只应用到主窗口，而不会"泄露"给子控件
+        if self.test_mode:
+            self.setStyleSheet("""
+                QMainWindow#MyMainWindow {
+                    background-color: #D2DCB6; /* 这是一个深蓝灰色 */
+                }
+            """)
+
         self.initUI()
         self._timer = QTimer(self) # set data appending frequency
         self.status_timer = QTimer(self) # set status panel update frequency
@@ -198,7 +210,7 @@ class MainWindow(QMainWindow):
         Ideally, if the camera lost connect by accident, the software should attempt reconnection a few times. This should be handled in the camera class."""
         try:
             # 创建 video worker （用于接收和处理视频信号）
-            self.video_worker = VideoWorker(test_mode=self.test_mode)
+            self.video_worker = VideoWorker(test_mode=self.test_mode, test_image_folder=self.config.get("test_image_folder", ""))
             self.video_thread = QThread()
             self.video_worker.moveToThread(self.video_thread)
             self.hikcam_ok = True
@@ -208,6 +220,9 @@ class MainWindow(QMainWindow):
             # if ROI has been changed in the UI, send it to the video worker, so that it can crop later images accordingly.
             self.vision_page_widget.vision_widget.sigRoiChanged.connect(self.video_worker.set_roi)
             
+            # 创建 image processing worker 用于处理图像，探测熔体直径
+            self.processing_worker = ProcessingWorker()
+
             # send cropped images to the processing worker for image analysis.
             self.video_worker.roi_frame_signal.connect(self.processing_worker.process_frame)
 
@@ -235,8 +250,7 @@ class MainWindow(QMainWindow):
             print(f"初始化熔体状态相机失败: {e}")
             print("WARNING: Failed to initiate camera. Vision module is inactive.")
 
-        # 创建 image processing worker 用于处理图像，探测熔体直径
-        self.processing_worker = ProcessingWorker()
+        
         
     
     @Slot()
