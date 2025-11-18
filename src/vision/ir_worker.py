@@ -7,7 +7,6 @@ Handles serial port / IP communications.
 from PySide6.QtCore import QObject, Signal, QTimer, Slot
 import numpy as np
 from pathlib import Path
-from config import Config
 from .vision import ImageStreamer
 
 OPTRIS_LIB_LOADED = False

@@ -1,19 +1,17 @@
 from PySide6.QtCore import QObject, Signal, Slot, QTimer
 import numpy as np
 from pathlib import Path
-from config import Config
 import os
 from .vision import binarize, filament_diameter, convert_to_grayscale, draw_filament_contour, find_longest_branch, ImageStreamer
 import time
 import cv2
 
-if not Config.test_mode:
-    if os.name == "nt":
-        # if on windows OS, import the windows camera library
-        from hikcam_win import HikVideoCapture
-    else:
-        # on Mac / Linux, use a different library
-        from .video_capture import HikVideoCapture  
+if os.name == "nt":
+    # if on windows OS, import the windows camera library
+    from hikcam_win import HikVideoCapture
+else:
+    # on Mac / Linux, use a different library
+    from .video_capture import HikVideoCapture  
 
 class VideoWorker(QObject):
     """
