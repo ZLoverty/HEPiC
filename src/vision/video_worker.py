@@ -8,7 +8,7 @@ import cv2
 
 if os.name == "nt":
     # if on windows OS, import the windows camera library
-    from hikcam_win import HikVideoCapture
+    from .hikcam_win import HikVideoCapture
 else:
     # on Mac / Linux, use a different library
     from .video_capture import HikVideoCapture  
