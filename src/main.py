@@ -10,7 +10,7 @@ from PySide6.QtCore import Signal, Slot, QThread, QTimer
 import pyqtgraph as pg
 from collections import deque
 from communications import TCPClient, KlipperWorker, ConnectionTester
-from vision import VideoWorker, ProcessingWorker, IRWorker
+from vision import VideoWorker, ProcessingWorker, IRWorker, VideoRecorder
 from tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget
 import asyncio
 from qasync import asyncSlot, QEventLoop
@@ -56,8 +56,8 @@ class MainWindow(QMainWindow):
 
         self.initUI()
         self._timer = QTimer(self) # set data appending frequency
-        self.status_timer = QTimer(self) # set status panel update frequency
         self._timer.timeout.connect(self.on_timer_tick)
+        self.status_timer = QTimer(self) # set status panel update frequency
         self.status_timer.timeout.connect(self.on_status_timer_tick)
         
         self.time_delay = 1 / self.data_frequency
@@ -75,6 +75,7 @@ class MainWindow(QMainWindow):
         self.ir_thread = None
 
         self.is_recording = False
+        self.record_timelapse = True
     
     def load_config(self, config_file="config.json"):
         with open(config_file, "r") as f:
@@ -248,13 +249,14 @@ class MainWindow(QMainWindow):
             self.video_thread.start()
 
             print("熔体相机初始化成功！")
+
+            
+            
+
         except Exception as e:
             print(f"初始化熔体状态相机失败: {e}")
             print("WARNING: Failed to initiate camera. Vision module is inactive.")
 
-        
-        
-    
     @Slot()
     def initiate_ir_imager(self):
         """Try to initiate the IR image. If failed, the status flag should be marked False. Ideally, the software should attempt reconnection a few times if connection is lost. This should be handled in the IR imager class."""
@@ -304,16 +306,37 @@ class MainWindow(QMainWindow):
     def on_toggle_play_pause(self, checked):
         if checked: 
             self.home_widget.play_pause_button.setIcon(self.home_widget.pause_icon)
-            self.autosave_filename = Path(f"{datetime.now().strftime("%Y%m%d_%H%M%S")}_autosave.csv").resolve()
+            self.autosave_prefix = datetime.now().strftime("%Y%m%d_%H%M%S")
+            self.autosave_filename = Path(f"{self.autosave_prefix}_autosave.csv").resolve()
+            
             print("Recording started ...")
             self.statusBar().showMessage(f"Autosave file at {self.autosave_filename}")
             self.is_recording = True
+            if self.record_timelapse:
+                # init video recorder
+                self.autosave_video_filename = Path(f"{self.autosave_prefix}_video.mkv").resolve()
+                self.autosave_ir_filename = Path(f"{self.autosave_prefix}_ir.mkv").resolve()
+                self.video_recorder_thread = VideoRecorder(self.autosave_video_filename)
+                self.ir_recorder_thread = VideoRecorder(self.autosave_ir_filename)
+                print("connect frame signal to add_frame")
+                self.processing_worker.proc_frame_signal.connect(self.video_recorder_thread.add_frame)
+                self.ir_worker.sigRoiFrame.connect(self.ir_recorder_thread.add_frame)
+                print("start thread")
+                self.video_recorder_thread.start()
+                self.ir_recorder_thread.start()
         else:
             self.home_widget.play_pause_button.setIcon(self.home_widget.play_icon)
             print("Recording stopped.")
             self.autosave_filename = None
             self.first_row = True
             self.is_recording = False
+            if self.record_timelapse:
+                self.processing_worker.proc_frame_signal.disconnect(self.video_recorder_thread.add_frame)
+                self.ir_worker.sigRoiFrame.disconnect(self.ir_recorder_thread.add_frame)
+                self.video_recorder_thread.close()
+                self.video_recorder_thread.deleteLater()
+                self.ir_recorder_thread.close()
+                self.ir_recorder_thread.deleteLater()
 
     @Slot(str)
     def update_status(self, status):
