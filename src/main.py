@@ -20,6 +20,7 @@ from pathlib import Path
 from datetime import datetime
 import logging
 import json
+import argparse
 
 pg.setConfigOption("background", "w")
 pg.setConfigOption("foreground", "k")
@@ -33,8 +34,9 @@ class MainWindow(QMainWindow):
     sigNewStatus = Signal(dict) # update status panel
     # sigQueryRequest = Signal() # signal to query klipper status
 
-    def __init__(self, logger=None):
+    def __init__(self, test_mode=False, logger=None):
         super().__init__()
+        self.test_mode = test_mode
         self.logger = logger or logging.getLogger(__name__)
         self.load_config()
         self.setWindowTitle(f"{self.app_name} v{self.config.get("version")}")
@@ -88,7 +90,7 @@ class MainWindow(QMainWindow):
         self.host = self.config.get("hepic_host", "192.168.0.81")
         self.port = self.config.get("hepic_port", 10001)
         self.hepic_refresh_interval_ms = self.config.get("hepic_refresh_interval_ms", 100)
-        self.test_mode = self.config.get("test_mode", False)
+        # self.test_mode = self.config.get("test_mode", False)
         self.tmp_data_maxlen = self.config.get("tmp_data_maxlen", 100)
         self.final_data_maxlen = self.config.get("final_data_maxlen", 1000000)
 
@@ -418,13 +420,28 @@ class MainWindow(QMainWindow):
 # 3. 应用程序入口
 # ====================================================================
 if __name__ == "__main__":
+    
+    parser = argparse.ArgumentParser(
+        description="Hotend extrusion platform control software.",
+        epilog="Example: python main.py -t -d"
+    )
+    parser.add_argument("-t", "--test", action="store_true", help="Enable test mode")
+    parser.add_argument("-d", "--debug", action="store_true", help="Enable debug logging")
+    args = parser.parse_args()
+
+    if args.debug:
+        log_lvl = logging.DEBUG
+    else:
+        log_lvl = logging.INFO
+
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=log_lvl,
         format="%(asctime)s - %(levelname)s - %(message)s",
         handlers=[logging.StreamHandler(sys.stdout)] # 确保输出到 stdout
     )
+
     app = QApplication(sys.argv)
-    window = MainWindow()
+    window = MainWindow(test_mode=args.test)
     window.show()
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
