@@ -46,8 +46,6 @@ class VideoWorker(QObject):
         self._timer.timeout.connect(self.read_one_frame)
         self._timer.start(100)
         self.thread().exec()
-
-        print("IRWorker 事件循环已停止。")
         self.cap.release()
         self.sigFinished.emit() # 通知主线程
 

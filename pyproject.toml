@@ -1,0 +1,47 @@
+[build-system]
+# 指定构建工具，这里使用最通用的 setuptools
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "HEPiC"
+version = "0.1.0"
+description = "The App for Polymaker extrusion platform."
+readme = "README.md"  # 也就是 PyPI 上的项目主页介绍
+requires-python = ">=3.8" # 指定支持的 Python 版本
+license = {text = "MIT"}
+authors = [
+  {name = "Zhengyang Liu", email = "liuzy19911112@gmail.com"},
+]
+keywords = ["tools", "automation", "sdk"]
+
+# ========================================================
+# 核心依赖配置
+# ========================================================
+dependencies = [
+    "pandas",             # 不指定版本，默认最新
+    "pyside6", 
+    "pyqtgraph",
+    "numpy==1.26", 
+    "opencv-python==4.8.1.78", # for compatibility with Optris camera SDK 
+    "qasync", 
+    "websockets",
+    "aiohttp", 
+    "scikit-image", 
+    "myimagelib", 
+    "skan"
+]
+
+# 命令行入口 (安装后用户可以在终端直接输入 'my-app-cmd' 运行)
+[project.scripts]
+hepic = "HEPiC.main:start_app" 
+
+[project.urls]
+Homepage = "https://github.com/zloverty/HEPiC"
+Issues = "https://github.com/zloverty/HEPiC/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]  # 代码在当前目录
+include = ["HEPiC*"]  # 只包含 HEPiC 文件夹
+exclude = ["notebooks*", "tests*", "docs*"]  # 明确排除 notebooks
+namespaces = false

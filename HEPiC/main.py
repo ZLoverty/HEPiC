@@ -9,9 +9,9 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Signal, Slot, QThread, QTimer
 import pyqtgraph as pg
 from collections import deque
-from communications import TCPClient, KlipperWorker, ConnectionTester
-from vision import VideoWorker, ProcessingWorker, IRWorker, VideoRecorder
-from tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget
+from .communications import TCPClient, KlipperWorker, ConnectionTester
+from .vision import VideoWorker, ProcessingWorker, IRWorker, VideoRecorder
+from .tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget
 import asyncio
 from qasync import asyncSlot, QEventLoop
 import numpy as np
@@ -21,6 +21,36 @@ from datetime import datetime
 import logging
 import json
 import argparse
+import sys
+from importlib.metadata import packages_distributions, version, PackageNotFoundError
+
+def _get_package_info():
+    # 1. 获取当前模块的“导入名” (即文件夹名，例如 hepic)
+    # __package__ 是 Python 内置变量，自动指向当前包名
+    import_name = __package__ or "unknown"
+    
+    # 2. 反查这个导入名属于哪个“安装包” (即 pyproject.toml 里的 name)
+    # 比如: 映射关系可能是 {'hepic': ['HEPiC']}
+    # 注意：packages_distributions 返回的是字典，value 是列表
+    dists = packages_distributions() 
+    dist_names = dists.get(import_name, [])
+    
+    # 通常一个文件夹只对应一个包，取第一个即可
+    dist_name = dist_names[0] if dist_names else import_name
+
+    # 3. 获取版本
+    try:
+        dist_version = version(dist_name)
+    except PackageNotFoundError:
+        dist_version = "unknown"
+
+    return dist_name, dist_version
+
+# 执行获取，导出常量
+__app_name__, __version__ = _get_package_info()
+current_file_path = Path(__file__).resolve()
+
+
 
 pg.setConfigOption("background", "w")
 pg.setConfigOption("foreground", "k")
@@ -38,8 +68,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.test_mode = test_mode
         self.logger = logger or logging.getLogger(__name__)
+        self.config_file = current_file_path.parent / "config.json"
         self.load_config()
-        self.setWindowTitle(f"{self.app_name} v{self.config.get("version")}")
+        self.setWindowTitle(f"{__app_name__} v{__version__}")
         self.setGeometry(900, 100, 700, 500)
 
         # 1. (关键) 给主窗口设置一个唯一的对象名称
@@ -77,15 +108,13 @@ class MainWindow(QMainWindow):
         self.is_recording = False
         self.record_timelapse = True
     
-    def load_config(self, config_file="config.json"):
-        with open(config_file, "r") as f:
+    def load_config(self):
+        with open(self.config_file, "r") as f:
             self.config = json.load(f)
         
         self.logger.debug(f"Loaded config: {self.config}")
 
         # set config values
-        self.app_name = self.config.get("name", "HEPiC")
-        self.app_version = self.config.get("version", "0.0.0")
         self.data_frequency = self.config.get("data_frequency", 10)
         self.status_frequency = self.config.get("status_frequency", 5)
         self.host = self.config.get("hepic_host", "192.168.0.81")
@@ -428,16 +457,8 @@ class MainWindow(QMainWindow):
             self.ir_worker.deleteLater()
         event.accept()
 
-    # def closeEvent(self, event):
-    #     """重写窗口关闭事件，确保线程被正确关闭"""
-    #     print("正在关闭应用程序...")
-    #     event.accept()
 
-# ====================================================================
-# 3. 应用程序入口
-# ====================================================================
-if __name__ == "__main__":
-    
+def start_app():
     parser = argparse.ArgumentParser(
         description="Hotend extrusion platform control software.",
         epilog="Example: python main.py -t -d"
@@ -462,5 +483,15 @@ if __name__ == "__main__":
     window.show()
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
-    with loop:
-        loop.run_forever()
+    try:
+        with loop:
+            loop.run_forever()
+    except KeyboardInterrupt:
+        return
+
+# ====================================================================
+# 3. 应用程序入口
+# ====================================================================
+if __name__ == "__main__":
+    start_app()
+    
