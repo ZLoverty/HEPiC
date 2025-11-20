@@ -51,10 +51,6 @@ __app_name__, __version__ = _get_package_info()
 current_file_path = Path(__file__).resolve()
 
 
-
-pg.setConfigOption("background", "w")
-pg.setConfigOption("foreground", "k")
-    
 # ====================================================================
 # 2. 创建主窗口类
 # ====================================================================
@@ -71,7 +67,10 @@ class MainWindow(QMainWindow):
         self.config_file = current_file_path.parent / "config.json"
         self.load_config()
         self.setWindowTitle(f"{__app_name__} v{__version__}")
-        self.setGeometry(900, 100, 700, 500)
+        self.setGeometry(900, 100, 1024, 768)
+        self.setStyleSheet(f"background-color: {self.background_color}; color: {self.foreground_color}") 
+        pg.setConfigOption("background", self.background_color)
+        pg.setConfigOption("foreground", self.foreground_color)
 
         # 1. (关键) 给主窗口设置一个唯一的对象名称
         self.setObjectName("MyMainWindow") 
@@ -123,6 +122,8 @@ class MainWindow(QMainWindow):
         # self.test_mode = self.config.get("test_mode", False)
         self.tmp_data_maxlen = self.config.get("tmp_data_maxlen", 100)
         self.final_data_maxlen = self.config.get("final_data_maxlen", 1000000)
+        self.background_color = self.config.get("background_color", "black")
+        self.foreground_color = self.config.get("foreground_color", "white")
 
     def initUI(self):
         # --- 创建控件 ---

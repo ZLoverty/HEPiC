@@ -11,7 +11,9 @@
     "data_frequency": 10,
     "status_frequency": 5,
     "tmp_data_maxlen": 100, 
-    "final_data_maxlen": 10000000
+    "final_data_maxlen": 10000000,
+    "background_color": "#222831",
+    "foreground_color": "#DFD0B8"
 }
 
     
