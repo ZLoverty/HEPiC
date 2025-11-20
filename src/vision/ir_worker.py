@@ -22,7 +22,7 @@ class IRWorker(QObject):
     sigRoiFrame = Signal(np.ndarray)
     sigFinished = Signal()
 
-    def __init__(self, test_mode=False):
+    def __init__(self, test_mode=False, test_image_folder=""):
 
         super().__init__()
         self.is_running = True
@@ -31,7 +31,7 @@ class IRWorker(QObject):
         self._timer = None
 
         if test_mode:  # 调试用图片流
-            test_image_folder = Path(Config.test_image_folder).expanduser().resolve()
+            test_image_folder = Path(test_image_folder).expanduser().resolve()
             self.cap = ImageStreamer(str(test_image_folder), fps=10)
         else:
             self.ranges = OptrisCamera.list_available_ranges(0)
