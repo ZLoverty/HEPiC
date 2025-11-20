@@ -168,7 +168,7 @@ class MainWindow(QMainWindow):
         
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
-        items = ["extrusion_force_N", "die_temperature_C", "die_diameter_px", "meter_count_mm", "gcode", "hotend_temperature_C", "feedrate_mms", "time_s", "measured_feedrate_mms"]
+        items = ["hotend_temperature_C", "die_temperature_C", "feedrate_mms", "measured_feedrate_mms", "extrusion_force_N", "die_diameter_px", "meter_count_mm", "time_s"]
         # should define functions that can fetch the quantities from workers
         self.data = {}
         self.data_tmp = {} # temporary buffer to slow down writing frequency
