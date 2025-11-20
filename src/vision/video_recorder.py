@@ -64,6 +64,7 @@ class VideoRecorder(QThread):
             self.pipe.wait()
 
     def close(self):
+        self.queue.put_nowait(None)
         self.is_running = False
         if self.pipe:
             self.pipe.stdin.close()

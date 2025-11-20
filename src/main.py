@@ -309,34 +309,28 @@ class MainWindow(QMainWindow):
             self.autosave_prefix = datetime.now().strftime("%Y%m%d_%H%M%S")
             self.autosave_filename = Path(f"{self.autosave_prefix}_autosave.csv").resolve()
             
-            print("Recording started ...")
+            self.logger.info("Recording started ...")
             self.statusBar().showMessage(f"Autosave file at {self.autosave_filename}")
             self.is_recording = True
             if self.record_timelapse:
                 # init video recorder
                 self.autosave_video_filename = Path(f"{self.autosave_prefix}_video.mkv").resolve()
-                self.autosave_ir_filename = Path(f"{self.autosave_prefix}_ir.mkv").resolve()
                 self.video_recorder_thread = VideoRecorder(self.autosave_video_filename)
-                self.ir_recorder_thread = VideoRecorder(self.autosave_ir_filename)
                 print("connect frame signal to add_frame")
                 self.processing_worker.proc_frame_signal.connect(self.video_recorder_thread.add_frame)
-                self.ir_worker.sigRoiFrame.connect(self.ir_recorder_thread.add_frame)
                 print("start thread")
                 self.video_recorder_thread.start()
-                self.ir_recorder_thread.start()
+
         else:
             self.home_widget.play_pause_button.setIcon(self.home_widget.play_icon)
-            print("Recording stopped.")
+            self.logger.info("Recording stopped.")
             self.autosave_filename = None
             self.first_row = True
             self.is_recording = False
             if self.record_timelapse:
                 self.processing_worker.proc_frame_signal.disconnect(self.video_recorder_thread.add_frame)
-                self.ir_worker.sigRoiFrame.disconnect(self.ir_recorder_thread.add_frame)
                 self.video_recorder_thread.close()
                 self.video_recorder_thread.deleteLater()
-                self.ir_recorder_thread.close()
-                self.ir_recorder_thread.deleteLater()
 
     @Slot(str)
     def update_status(self, status):
