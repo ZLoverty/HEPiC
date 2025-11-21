@@ -422,11 +422,7 @@ class MainWindow(QMainWindow):
             elif item == "feedrate_mms":
                 self.data_status[item] = self.klipper_worker.active_feedrate_mms
             elif item == "measured_feedrate_mms":
-                try:
-                    measured_feedrate = ( list(self.data_tmp["meter_count_mm"])[-1] - list(self.data_tmp["meter_count_mm"])[-6] ) / self.time_delay / 5
-                except Exception as e:
-                    self.logger.error(f"Feedrate calculation error: {e}")
-                    measured_feedrate = np.nan
+                measured_feedrate = self.worker.filament_velocity
                 self.data_status[item] = measured_feedrate
             elif item == "time_s":
                 self.data_status[item] = self.current_time

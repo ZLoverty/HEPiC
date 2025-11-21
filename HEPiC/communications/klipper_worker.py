@@ -59,8 +59,9 @@ class KlipperWorker(QObject):
 
                 self.listener_task = asyncio.create_task(self.message_listener(websocket))
                 self.processor_task = asyncio.create_task(self.data_processor(websocket))
+                self.query_task = asyncio.create_task(self.query_klipper(websocket))
 
-                await asyncio.gather(self.listener_task, self.processor_task)
+                await asyncio.gather(self.listener_task, self.processor_task, self.query_task)
 
         except (websockets.exceptions.ConnectionClosedError, ConnectionRefusedError) as e:
             self.logger.error(f"Klipper 连接失败")
@@ -103,7 +104,7 @@ class KlipperWorker(QObject):
         
         gcode_message = {
             "jsonrpc": "2.0",
-            "id": 12345, 
+            "id": 3, 
             "method": "printer.gcode.script",
             "params": {
                 "script": self.gcode,
@@ -131,52 +132,45 @@ class KlipperWorker(QObject):
             # 3. 我发送的 gcode 请求，包含 "method" 键，方法为 "printer.gcode.script"
             
             if "method" in data: 
-                if data["method"] == "notify_status_update": # 判断是否是状态回执
-                    try:
-                        sub_msg = data["params"][0]
-                        print(sub_msg)
-                    except Exception as e:
-                        print(f"Unknown error: {e}")
-                        continue
+                # if data["method"] == "notify_status_update": # 判断是否是状态回执
+                #     pass
+                    # try:
+                    #     self.logger.debug(data)
+                    #     sub_msg = data["params"][0]
+                        
+                    # except Exception as e:
+                    #     print(f"Unknown error: {e}")
+                    #     continue
 
-                    hotend_temperature = sub_msg.get("extruder", {}).get("temperature")    
-                    if hotend_temperature:
-                        self.hotend_temperature = hotend_temperature
+                    # hotend_temperature = sub_msg.get("extruder", {}).get("temperature")    
+                    # if hotend_temperature:
+                    #     self.hotend_temperature = hotend_temperature
 
-                    active_feedrate_mms = sub_msg.get("motion_report", {}).get("live_extruder_velocity")
-                    if active_feedrate_mms:
-                        self.active_feedrate_mms = active_feedrate_mms
+                    # active_feedrate_mms = sub_msg.get("motion_report", {}).get("live_extruder_velocity")
+                    # if active_feedrate_mms:
+                    #     self.active_feedrate_mms = active_feedrate_mms
                     
-                    if "print_stats" in sub_msg:
-                        self.sigPrintStats.emit(sub_msg["print_stats"])
-                elif data["method"] == "printer.gcode.script": # 发送 G-code
+                    # if "print_stats" in sub_msg:
+                    #     self.sigPrintStats.emit(sub_msg["print_stats"])
+                if data["method"] == "printer.gcode.script": # 发送 G-code
                     await websocket.send(json.dumps(data))
-                elif data["method"] == "printer.objects.subscribe": # 发送查询请求
+                elif data["method"] == "printer.objects.subscribe": # send subscription message
                     await websocket.send(json.dumps(data))
-                    self.logger.info("已发送状态订阅请求...")
-                elif data["method"] == "notify_proc_stat_update":
-                    pass
-                elif data["method"] == "notify_gcode_response":
-                    self.gcode_error.emit(data["params"][0])
+                    self.logger.debug("已发送状态订阅请求...")
+                elif data["method"] == "printer.objects.query":
+                    await websocket.send(json.dumps(data))
+                    self.logger.debug(f"sent {data}")
                 else:
-                    print(data)
+                    self.logger.debug(data)
             elif "result" in data:
-                print(data)
+                self.logger.info(data)
                 if "error" in data:
                     self.gcode_error.emit(f"{data["error"]["code"]}: {data["error"]["message"]}")
                 elif "id" in data:
-                    try:
-                        self.file_position = data["result"].get("status", {}).get("virtual_sdcard", {}).get("file_position")
-                    except Exception as e:
-                        print(f"读取文件位置发生未知错误: {e}")
-                    try:
-                        self.progress = data["result"].get("status", {}).get("virtual_sdcard", {}).get("progress")
-                    except Exception as e:
-                        print(f"读取打印进度发生未知错误: {e}")
-                    try:
-                        self.active_feedrate_mms = data["result"].get("status", {}).get("gcode_move", {}).get("speed")
-                    except Exception as e:
-                        print(f"读取打印速度发生未知错误: {e}")
+                    if data["id"] == 2:
+                        sub_msg = data.get("result", {}).get("status", {})
+                        self.hotend_temperature = sub_msg.get("extruder", {}).get("temperature", np.nan)
+                        self.active_feedrate_mms = sub_msg.get("motion_report", {}).get("live_extruder_velocity")
             else:
                 print(data)
 
@@ -222,6 +216,23 @@ class KlipperWorker(QObject):
         }
         
         await self.message_queue.put(subscribe_message)
+    
+    async def query_klipper(self, websocket):
+        query_msg = {
+            "jsonrpc": "2.0",
+            "method": "printer.objects.query",
+            "params": {
+                "objects": {
+                    "extruder": None,
+                    "motion_report": None,
+                    "virtual_sdcard": None
+                }
+            },
+            "id": 2
+        }
+        while True:
+            await self.message_queue.put(query_msg)
+            await asyncio.sleep(1)
 
 class GcodePositionMapper:
     """
