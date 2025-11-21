@@ -7,6 +7,7 @@ import logging
 import sys
 import numpy as np
 from collections import deque
+import time
 
 class TCPClient(QObject):
     # --- 信号 ---
@@ -23,35 +24,44 @@ class TCPClient(QObject):
                  logger = None,
                  rotary_encoder_steps_total: int = 1000,
                  rotary_encoder_wheel_diameter: float = 28.6,
-                 meter_count_cache_size: int = 10,
+                 meter_count_cache_size: int = 100,
                  refresh_interval_ms: int = 100):
         super().__init__()
         self.host = host
         self.port = port
         self.is_running = True
+
+        # message queue
         self.queue = asyncio.Queue()
+
+        # temporary states
         self.extrusion_force = np.nan
         self.extrusion_force_offset = 0.0
         self.extrusion_force_raw = np.nan
         self.meter_count_raw = np.nan
         self.meter_count_offset = 0.0
         self.meter_count = np.nan
+        
+
+        # rotary encoder constants 
         self.steps_total = rotary_encoder_steps_total
         self.wheel_diameter = rotary_encoder_wheel_diameter
-        self.filament_velocity = 0.0
+
+        
+        
+        # compute filament velocity
         self.cache_size = meter_count_cache_size
         self.meter_count_cache = deque(maxlen=self.cache_size) # cache for computing velocity
-        self._timer = QTimer()
-        self.refresh_interval_ms = refresh_interval_ms
-        self._timer.timeout.connect(self.compute_filament_velocity)
+        self.time_cache = deque(maxlen=self.cache_size)
+        self.filament_velocity = 0.0
 
         self.logger = logger or logging.getLogger(__name__)
+
+        self.count = 0
         
     @asyncSlot()
     async def run(self):
         self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.host, self.port), timeout=2.0)
-
-        self._timer.start(self.refresh_interval_ms)
 
         try:        
             await self.send_data("start")
@@ -113,29 +123,32 @@ class TCPClient(QObject):
         的形式从服务器发送。
         """
         try:
-            while self.is_running:   
-                message_dict = await self.queue.get()
-                if "extrusion_force" in message_dict:
-                    self.extrusion_force_raw = message_dict["extrusion_force"]
-                    self.extrusion_force = self.extrusion_force_raw - self.extrusion_force_offset
-                if "meter_count" in message_dict:
-                    self.meter_count_raw = message_dict["meter_count"]
-                    self.meter_count = (self.meter_count_raw - self.meter_count_offset) / self.steps_total * np.pi * self.wheel_diameter
-            # 标记队列任务已完成（好习惯）
-                self.queue.task_done()
+            while self.is_running:
+                try:
+                    message_dict = await self.queue.get()
+                    if "extrusion_force" in message_dict:
+                        self.extrusion_force_raw = message_dict["extrusion_force"]
+                        self.extrusion_force = self.extrusion_force_raw - self.extrusion_force_offset
+                    if "meter_count" in message_dict:
+                        self.meter_count_raw = message_dict["meter_count"]
+                        self.meter_count = (self.meter_count_raw - self.meter_count_offset) / self.steps_total * np.pi * self.wheel_diameter
+                        self.compute_filament_velocity()
+
+                # 标记队列任务已完成（好习惯）
+                    self.queue.task_done()
+                except Exception as e:
+                    # 捕获未知错误，否则任务会崩溃且主循环不知道
+                    self.logger.error(f"Error in process_data: {e}")
 
         except asyncio.CancelledError:
             self.logger.info("Process data task cancelled.") # 正常停止
-        except Exception as e:
-            # 捕获未知错误，否则任务会崩溃且主循环不知道
-            self.logger.error(f"Error in process_data: {e}")
-
+            
     def set_extrusion_force_offset(self):
         """将当前的挤出力读数设为零点偏移"""
         if self.extrusion_force_raw is not None:
             self.extrusion_force_offset = self.extrusion_force_raw
             self.logger.info(f"挤出力零点已设为 {self.extrusion_force_offset}")
-            print("set 0")
+            self.logger.debug("set 0")
         else:
             self.logger.warning("无法设定挤出力零点，当前无读数。")
     
@@ -149,13 +162,20 @@ class TCPClient(QObject):
 
     def compute_filament_velocity(self):
         """Compute filament velocity based on meter_count changes over time."""
-        self.meter_count_cache.append(self.meter_count_raw)
+        self.meter_count_cache.append(self.meter_count)
+        self.time_cache.append(time.time())
         self.logger.debug(f"Cached {len(self.meter_count_cache)} values for velocity computation.")
 
+        
         if len(self.meter_count_cache) == self.cache_size:
-            delta_meter = self.meter_count_cache[-1] - self.meter_count_cache[0]
-            delta_time = (self.cache_size - 1) * self.refresh_interval_ms / 1000.0 # convert ms to s
-            self.filament_velocity = delta_meter / delta_time
+            delta_meter = self.meter_count_cache[self.cache_size-1] - self.meter_count_cache[0]
+            delta_time = self.time_cache[self.cache_size-1] - self.time_cache[0]
+            try:
+                self.logger.debug(f"{self.count} : dt = {delta_time}")
+                self.filament_velocity = delta_meter / delta_time
+                self.count += 1
+            except Exception as e:
+                self.logger.error(f"{e}")
         else:
             self.filament_velocity = 0.0
 
