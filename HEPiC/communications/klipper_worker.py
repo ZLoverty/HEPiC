@@ -36,6 +36,7 @@ class KlipperWorker(QObject):
         self.active_feedrate_mms = 0
         self.active_gcode = None
         self.hotend_temperature = np.nan
+        self.target_hotend_temperature = np.nan
 
         # message queue
         self.message_queue = asyncio.Queue()
@@ -170,6 +171,7 @@ class KlipperWorker(QObject):
                     if data["id"] == 2:
                         sub_msg = data.get("result", {}).get("status", {})
                         self.hotend_temperature = sub_msg.get("extruder", {}).get("temperature", np.nan)
+                        self.target_hotend_temperature = sub_msg.get("extruder", {}).get("target", np.nan)
                         self.active_feedrate_mms = sub_msg.get("motion_report", {}).get("live_extruder_velocity")
             else:
                 print(data)

@@ -419,6 +419,8 @@ class MainWindow(QMainWindow):
                     self.data_status[item] = np.nan
             elif item == "hotend_temperature_C":
                 self.data_status[item] = self.klipper_worker.hotend_temperature
+            elif item == "target_hotend_temperature_C":
+                self.data_status[item] = self.klipper_worker.target_hotend_temperature
             elif item == "feedrate_mms":
                 self.data_status[item] = self.klipper_worker.active_feedrate_mms
             elif item == "measured_feedrate_mms":
