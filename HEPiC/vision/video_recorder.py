@@ -2,9 +2,10 @@ import subprocess
 import numpy as np
 from PySide6.QtCore import QThread, Slot
 import queue
+import logging
 
 class VideoRecorder(QThread):
-    def __init__(self, filename, width=512, height=512, fps=30):
+    def __init__(self, filename, width=512, height=512, fps=30, logger=None):
         super().__init__()
         self.command = [
             'ffmpeg',
@@ -31,6 +32,8 @@ class VideoRecorder(QThread):
             stderr=subprocess.DEVNULL # 或者是 subprocess.PIPE 以捕获错误日志
         )
 
+        self.logger = logger or logging.getLogger(__name__)
+
     @Slot()
     def add_frame(self, frame):
         try:
@@ -38,12 +41,11 @@ class VideoRecorder(QThread):
             # 如果队列满了，说明写入太慢，这里选择丢帧，保护主程序不卡死
             self.queue.put_nowait(frame)
         except queue.Full:
-            print("警告: 写入队列已满，发生丢帧！")
+            self.logger.warning("写入队列已满，发生丢帧！")
     
     def run(self):
-        print("start recording video")
+        self.logger.info("start recording video")
         while True:
-            print("record one frame")
             frame = self.queue.get() # 阻塞等待，直到有数据
             if frame is None: # 遇到哨兵，退出
                 self.queue.task_done()
@@ -52,7 +54,7 @@ class VideoRecorder(QThread):
             try:
                 self.pipe.stdin.write(frame.tobytes())
             except Exception as e:
-                print(f"FFmpeg Pipe Error: {e}")
+                self.logger.error(f"FFmpeg Pipe Error: {e}")
             
             self.queue.task_done()
             # 发送队列积压情况给 UI，方便调试
