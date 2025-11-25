@@ -9,19 +9,18 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Signal, Slot, QThread, QTimer
 import pyqtgraph as pg
 from collections import deque
-from .communications import TCPClient, KlipperWorker, ConnectionTester
-from .vision import VideoWorker, ProcessingWorker, IRWorker, VideoRecorder
-from .tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget
+from pathlib import Path
+from communications import TCPClient, KlipperWorker, ConnectionTester
+from vision import VideoWorker, ProcessingWorker, IRWorker, VideoRecorder
+from tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget, JobSequenceWidget
 import asyncio
 from qasync import asyncSlot, QEventLoop
 import numpy as np
 import pandas as pd
-from pathlib import Path
 from datetime import datetime
 import logging
 import json
 import argparse
-import sys
 from importlib.metadata import packages_distributions, version, PackageNotFoundError
 
 def _get_package_info():
@@ -142,6 +141,7 @@ class MainWindow(QMainWindow):
         self.vision_page_widget = VisionPageWidget()
         self.status_widget = self.home_widget.status_widget
         self.ir_page_widget = IRPageWidget()
+        self.job_sequence_widget = JobSequenceWidget()
 
         # 添加标签页到标签栏
         self.stacked_widget.addWidget(self.connection_widget)
@@ -150,7 +150,7 @@ class MainWindow(QMainWindow):
         # self.tabs.addTab(self.data_widget, "数据")
         self.tabs.addTab(self.vision_page_widget, "视觉")
         self.tabs.addTab(self.ir_page_widget, "红外")
-        self.tabs.addTab(self.gcode_widget, "G-code")
+        self.tabs.addTab(self.job_sequence_widget, "G-code")
         self.setCentralWidget(self.stacked_widget)
 
         # 设置状态栏
