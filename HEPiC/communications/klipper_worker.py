@@ -133,26 +133,6 @@ class KlipperWorker(QObject):
             # 3. 我发送的 gcode 请求，包含 "method" 键，方法为 "printer.gcode.script"
             
             if "method" in data: 
-                # if data["method"] == "notify_status_update": # 判断是否是状态回执
-                #     pass
-                    # try:
-                    #     self.logger.debug(data)
-                    #     sub_msg = data["params"][0]
-                        
-                    # except Exception as e:
-                    #     print(f"Unknown error: {e}")
-                    #     continue
-
-                    # hotend_temperature = sub_msg.get("extruder", {}).get("temperature")    
-                    # if hotend_temperature:
-                    #     self.hotend_temperature = hotend_temperature
-
-                    # active_feedrate_mms = sub_msg.get("motion_report", {}).get("live_extruder_velocity")
-                    # if active_feedrate_mms:
-                    #     self.active_feedrate_mms = active_feedrate_mms
-                    
-                    # if "print_stats" in sub_msg:
-                    #     self.sigPrintStats.emit(sub_msg["print_stats"])
                 if data["method"] == "printer.gcode.script": # 发送 G-code
                     await websocket.send(json.dumps(data))
                 elif data["method"] == "printer.objects.subscribe": # send subscription message
@@ -163,11 +143,13 @@ class KlipperWorker(QObject):
                     self.logger.debug(f"sent {data}")
                 else:
                     self.logger.debug(data)
+            elif "error" in data:
+                    err_msg = f"Error {data["error"]["code"]}: {data["error"]["message"]}"
+                    self.logger.info(f"error message: {err_msg}")
+                    self.gcode_error.emit(err_msg)
             elif "result" in data:
-                self.logger.info(data)
-                if "error" in data:
-                    self.gcode_error.emit(f"{data["error"]["code"]}: {data["error"]["message"]}")
-                elif "id" in data:
+                self.logger.info(data)     
+                if "id" in data:
                     if data["id"] == 2:
                         sub_msg = data.get("result", {}).get("status", {})
                         self.hotend_temperature = sub_msg.get("extruder", {}).get("temperature", np.nan)

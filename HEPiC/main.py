@@ -142,7 +142,6 @@ class MainWindow(QMainWindow):
         self.vision_page_widget = VisionPageWidget()
         self.status_widget = self.home_widget.status_widget
         self.data_widget = self.home_widget.data_widget
-        self.gcode_widget = self.home_widget.gcode_widget
         self.ir_page_widget = IRPageWidget()
         self.ir_image_widget = self.ir_page_widget.image_widget
         self.ir_roi_widget = self.home_widget.ir_roi_widget
@@ -162,7 +161,6 @@ class MainWindow(QMainWindow):
 
         # --- 连接信号与槽 ---
         self.connection_widget.host.connect(self.update_host_and_connect)
-        self.gcode_widget.run_button.clicked.connect(self.run_gcode)
         
         self.sigNewData.connect(self.data_widget.update_display)
         self.home_widget.play_pause_button.toggled.connect(self.on_toggle_play_pause)
@@ -225,9 +223,9 @@ class MainWindow(QMainWindow):
         self.klipper_worker = KlipperWorker(self.host, klipper_port)
         # 连接信号槽
         self.klipper_worker.connection_status.connect(self.update_status)
-        self.klipper_worker.current_step_signal.connect(self.gcode_widget.highlight_current_line)
-        self.klipper_worker.gcode_error.connect(self.update_status)
+        self.klipper_worker.gcode_error.connect(self.home_widget.command_widget.display_message)
         self.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
+        self.home_widget.command_widget.command.connect(self.klipper_worker.send_gcode)
         # self.sigQueryRequest.connect(self.klipper_worker.query_status)
         self.klipper_worker.sigPrintStats.connect(self.status_widget.update_progress)
 
@@ -371,13 +369,6 @@ class MainWindow(QMainWindow):
     def update_status(self, status):
         """更新状态栏信息"""
         self.statusBar().showMessage(status)
-
-    @asyncSlot()
-    async def run_gcode(self):
-        """运行从文本框里来的 gcode """
-        if self.klipper_worker:
-            gcode = self.gcode_widget.gcode_display.toPlainText()
-            await self.klipper_worker.send_gcode(gcode)
     
     @Slot()
     def on_timer_tick(self):
