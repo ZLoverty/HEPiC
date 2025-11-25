@@ -5,6 +5,7 @@ from PySide6.QtCore import Signal, Slot
 from PySide6.QtGui import QIcon
 # import pyqtgraph as pg
 import os
+from pathlib import Path
 
 class PlatformStatusWidget(QWidget):
 
@@ -18,6 +19,8 @@ class PlatformStatusWidget(QWidget):
         
         super().__init__()
         
+        current_file_path = Path(__file__).resolve()
+        icon_path = current_file_path.parent / "icons"
         # 组件
         self.hotend_temperature_label = QLabel("温度:")
         self.hotend_temperature_value = QLabel(f"{placeholder:5s} /")
@@ -26,7 +29,7 @@ class PlatformStatusWidget(QWidget):
         self.extrusion_force_label = QLabel("挤出力:")
         self.extrusion_force_value = QLabel(f"{placeholder}")
         self.extrusion_force_zero_button = QPushButton()
-        zero_icon = QIcon(os.path.join(icon_path, "toZero.png"))
+        zero_icon = QIcon(str(icon_path / "toZero.png"))
         self.extrusion_force_zero_button.setIcon(zero_icon)
         self.meter_count_label = QLabel("当前进料量:")
         self.meter_count_value = QLabel(f"{placeholder}")
