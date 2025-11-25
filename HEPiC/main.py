@@ -106,6 +106,8 @@ class MainWindow(QMainWindow):
 
         self.is_recording = False
         self.record_timelapse = True
+        self.VIDEO_WORKER_OK = False
+        self.IR_WORKER_OK = False
     
     def load_config(self):
         with open(self.config_file, "r") as f:
@@ -253,23 +255,10 @@ class MainWindow(QMainWindow):
             # if ROI has been changed in the UI, send it to the video worker, so that it can crop later images accordingly.
             self.vision_page_widget.vision_widget.sigRoiChanged.connect(self.video_worker.set_roi)
             
-            # 创建 image processing worker 用于处理图像，探测熔体直径
-            self.processing_worker = ProcessingWorker()
-
-            # send cropped images to the processing worker for image analysis.
-            self.video_worker.roi_frame_signal.connect(self.processing_worker.process_frame)
-
-            # the processed frame shall be sent to the home page of the UI for user to monitor.
-            self.processing_worker.proc_frame_signal.connect(self.vision_page_widget.roi_vision_widget.update_live_display)
-
-            # the result of the image analysis, here specifically the die melt diameter, shall be sent to the home page to display
-            self.processing_worker.proc_frame_signal.connect(self.home_widget.dieswell_widget.update_live_display)
-
             # allow user to set the exposure time of the camera
             self.vision_page_widget.sigExpTime.connect(self.video_worker.set_exp_time)
 
-            # allow user to invert the black and white to meet the image processing need in specific experiment.
-            self.vision_page_widget.invert_button.toggled.connect(self.processing_worker.invert_toggle)
+            
 
             # thread management: when the thread is started, call the run() method; when the thread is finished, call the deleteLater() method for both video_thread and video_worker.
             self.video_thread.started.connect(self.video_worker.run)
@@ -280,12 +269,28 @@ class MainWindow(QMainWindow):
 
             print("熔体相机初始化成功！")
 
-            
-            
+            self.VIDEO_WORKER_OK = True
 
         except Exception as e:
             print(f"初始化熔体状态相机失败: {e}")
             print("WARNING: Failed to initiate camera. Vision module is inactive.")
+        
+        # 创建 image processing worker 用于处理图像，探测熔体直径
+        self.processing_worker = ProcessingWorker()
+
+        if self.VIDEO_WORKER_OK:
+
+            # send cropped images to the processing worker for image analysis.
+            self.video_worker.roi_frame_signal.connect(self.processing_worker.process_frame)
+
+            # the processed frame shall be sent to the home page of the UI for user to monitor.
+            self.processing_worker.proc_frame_signal.connect(self.vision_page_widget.roi_vision_widget.update_live_display)
+
+            # the result of the image analysis, here specifically the die melt diameter, shall be sent to the home page to display
+            self.processing_worker.proc_frame_signal.connect(self.home_widget.dieswell_widget.update_live_display)
+
+            # allow user to invert the black and white to meet the image processing need in specific experiment.
+            self.vision_page_widget.invert_button.toggled.connect(self.processing_worker.invert_toggle)
 
     @Slot()
     def initiate_ir_imager(self):
@@ -342,7 +347,7 @@ class MainWindow(QMainWindow):
             self.logger.info("Recording started ...")
             self.statusBar().showMessage(f"Autosave file at {self.autosave_filename}")
             self.is_recording = True
-            if self.record_timelapse:
+            if self.record_timelapse and self.VIDEO_WORKER_OK:
                 # init video recorder
                 self.autosave_video_filename = Path(f"{self.autosave_prefix}_video.mkv").resolve()
                 self.video_recorder_thread = VideoRecorder(self.autosave_video_filename)
@@ -357,7 +362,7 @@ class MainWindow(QMainWindow):
             self.autosave_filename = None
             self.first_row = True
             self.is_recording = False
-            if self.record_timelapse:
+            if self.record_timelapse and self.VIDEO_WORKER_OK:
                 self.processing_worker.proc_frame_signal.disconnect(self.video_recorder_thread.add_frame)
                 self.video_recorder_thread.close()
                 self.video_recorder_thread.deleteLater()
