@@ -10,8 +10,6 @@ from pathlib import Path
 class PlatformStatusWidget(QWidget):
 
     set_temperature = Signal(float)
-    sigMeterCountZero = Signal()
-    sigExtrusionForceZero = Signal()
 
     def __init__(self, 
                  placeholder : str = "***",
@@ -99,8 +97,6 @@ class PlatformStatusWidget(QWidget):
 
         # connect signals and slots
         self.hotend_temperature_input.returnPressed.connect(self.on_temp_enter_pressed)
-        self.extrusion_force_zero_button.clicked.connect(self.on_extrusion_force_zero_clicked)
-        self.meter_count_zero_button.clicked.connect(self.on_meter_count_zero_clicked)
 
     @Slot(dict)
     def update_display(self, data):
