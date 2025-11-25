@@ -121,7 +121,7 @@ class PlatformStatusWidget(QWidget):
                     self.feedrate_value.setText(f"{feedrate:5.1f} mm/s")
             elif item == "die_temperature_C":
                 die_temperature = data[item]
-                self.die_temperature_value.setText(f"{die_temperature:5.1f} C")
+                self.die_temperature_value.setText(f"{die_temperature:5.1f} ℃")
             elif item == "die_diameter_px":
                 die_diameter = data[item]
                 self.die_diameter_value.setText(f"{die_diameter:5.1f} px")
