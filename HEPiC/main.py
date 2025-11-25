@@ -141,10 +141,7 @@ class MainWindow(QMainWindow):
         self.home_widget = HomeWidget()
         self.vision_page_widget = VisionPageWidget()
         self.status_widget = self.home_widget.status_widget
-        self.data_widget = self.home_widget.data_widget
         self.ir_page_widget = IRPageWidget()
-        self.ir_image_widget = self.ir_page_widget.image_widget
-        self.ir_roi_widget = self.home_widget.ir_roi_widget
 
         # 添加标签页到标签栏
         self.stacked_widget.addWidget(self.connection_widget)
@@ -153,7 +150,7 @@ class MainWindow(QMainWindow):
         # self.tabs.addTab(self.data_widget, "数据")
         self.tabs.addTab(self.vision_page_widget, "视觉")
         self.tabs.addTab(self.ir_page_widget, "红外")
-        # self.tabs.addTab(self.gcode_widget, "G-code")
+        self.tabs.addTab(self.gcode_widget, "G-code")
         self.setCentralWidget(self.stacked_widget)
 
         # 设置状态栏
@@ -162,7 +159,7 @@ class MainWindow(QMainWindow):
         # --- 连接信号与槽 ---
         self.connection_widget.host.connect(self.update_host_and_connect)
         
-        self.sigNewData.connect(self.data_widget.update_display)
+        self.sigNewData.connect(self.home_widget.data_widget.update_display)
         self.home_widget.play_pause_button.toggled.connect(self.on_toggle_play_pause)
         self.home_widget.reset_button.clicked.connect(self.init_data)
         self.sigNewStatus.connect(self.status_widget.update_display)
@@ -215,8 +212,8 @@ class MainWindow(QMainWindow):
         
         # 连接信号槽
         self.worker.connection_status.connect(self.update_status)
-        self.status_widget.sigMeterCountZero.connect(self.worker.set_meter_count_offset)
-        self.status_widget.sigExtrusionForceZero.connect(self.worker.set_extrusion_force_offset)
+        self.status_widget.meter_count_zero_button.clicked.connect(self.worker.set_meter_count_offset)
+        self.status_widget.extrusion_force_zero_button.clicked.connect(self.worker.set_extrusion_force_offset)
         
         # 创建 klipper worker（用于查询平台状态和发送动作指令）
         klipper_port = 7125
@@ -300,13 +297,13 @@ class MainWindow(QMainWindow):
             self.ircam_ok = True
 
             # when IR worker receives a new frame, send it to the IR page to shown on the canvas
-            self.ir_worker.sigNewFrame.connect(self.ir_image_widget.update_live_display)
+            self.ir_worker.sigNewFrame.connect(self.ir_page_widget.image_widget.update_live_display)
 
             # if user draw an ROI on the canvas, send the ROI info to the IR worker, so that in the future, the worker can crop the later frames
-            self.ir_image_widget.sigRoiChanged.connect(self.ir_worker.set_roi)
+            self.ir_page_widget.image_widget.sigRoiChanged.connect(self.ir_worker.set_roi)
 
             # cropped frames inside ROI will be sent to the preview widget in home page
-            self.ir_worker.sigRoiFrame.connect(self.ir_roi_widget.update_live_display)
+            self.ir_worker.sigRoiFrame.connect(self.home_widget.ir_roi_widget.update_live_display)
 
             # use a thread to handle the image reading and showing loop
             self.ir_thread.started.connect(self.ir_worker.run)

@@ -136,12 +136,6 @@ class PlatformStatusWidget(QWidget):
     def update_progress(self, progress):
         self.print_duration_label.setText(progress["print_duration"])
         self.total_duration_label.setText(progress["total_duration"])
-    
-    def on_extrusion_force_zero_clicked(self):
-        self.sigExtrusionForceZero.emit()
-    
-    def on_meter_count_zero_clicked(self):
-        self.sigMeterCountZero.emit()
 
 if __name__ == "__main__":
     import sys
