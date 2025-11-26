@@ -28,16 +28,16 @@ class VisionWidget(pg.GraphicsLayoutWidget):
         self.plot_item = self.addPlot(row=0, col=0)
         
         # # 2. 【关键步骤】从 PlotItem 中获取其内部的 ViewBox
-        # self.view_box = self.plot_item.getViewBox()
+        self.view_box = self.plot_item.getViewBox()
         
-        # # 3. 将所有 ViewBox 相关的设置应用到这个内部 ViewBox 上
-        # self.view_box.setAspectLocked(True)
-        # self.view_box.invertY(True)
-        # self.view_box.setMouseEnabled(x=False, y=False)
+        # 3. 将所有 ViewBox 相关的设置应用到这个内部 ViewBox 上
+        self.view_box.setAspectLocked(True)
+        self.view_box.invertY(True)
+        self.view_box.setMouseEnabled(x=False, y=False)
 
         # 4. 对于纯图像显示，我们通常不希望看到坐标轴，可以隐藏它们
-        # self.plot_item.hideAxis('left')
-        # self.plot_item.hideAxis('bottom')
+        self.plot_item.hideAxis('left')
+        self.plot_item.hideAxis('bottom')
         
         # 5. 创建 ImageItem 并将其添加到 PlotItem 中
         self.img_item = pg.ImageItem()
