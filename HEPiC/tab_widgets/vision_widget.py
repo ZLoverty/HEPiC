@@ -13,9 +13,10 @@ class VisionWidget(pg.GraphicsLayoutWidget):
         self.roi = None
         self.roi_start_pos = None
         self.mouse_enabled = True
+        self.mousePressed = False
 
         # 告诉布局管理器，让ViewBox占据所有可用空间，从而最小化边距
-        self.ci.layout.setContentsMargins(0, 0, 0, 0)
+        # self.ci.layout.setContentsMargins(0, 0, 0, 0)
 
         # 组件
         # 1. 创建 PlotItem，这是一个包含 ViewBox 和坐标轴的复合组件
@@ -30,8 +31,8 @@ class VisionWidget(pg.GraphicsLayoutWidget):
         self.view_box.setMouseEnabled(x=False, y=False)
 
         # 4. 对于纯图像显示，我们通常不希望看到坐标轴，可以隐藏它们
-        self.plot_item.hideAxis('left')
-        self.plot_item.hideAxis('bottom')
+        # self.plot_item.hideAxis('left')
+        # self.plot_item.hideAxis('bottom')
         
         # 5. 创建 ImageItem 并将其添加到 PlotItem 中
         self.img_item = pg.ImageItem()
@@ -64,10 +65,11 @@ class VisionWidget(pg.GraphicsLayoutWidget):
             # print(f"ImageItem Coords (画布坐标): x={image_pos.x():.2f}, y={image_pos.y():.2f}")
             # print(f"ImageItem 自身位置: x={self.img_item.pos().x()}, y={self.img_item.pos().y()}")
             # print("-----------------")
-
+            
+            self.mousePressed = True
 
             # 创建新的RectROI
-            self.roi = pg.RectROI(self.roi_start_pos, [1, 1], pen='y', removable=True)
+            self.roi = pg.RectROI(self.roi_start_pos, [0, 0], pen='y', removable=True)
             self.plot_item.addItem(self.roi)
             
             event.accept()
@@ -111,3 +113,13 @@ class VisionWidget(pg.GraphicsLayoutWidget):
         
         roi_info = (int(pos.x()), int(pos.y()), int(size.x()), int(size.y()))
         self.sigRoiChanged.emit(roi_info)            
+
+
+if __name__ == "__main__":
+    import sys
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication(sys.argv)
+    widget = VisionWidget()
+    widget.show()
+    sys.exit(app.exec())
