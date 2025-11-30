@@ -1,9 +1,15 @@
+from pathlib import Path
+import sys
+current_path = Path(__file__).resolve().parent.parent
+sys.path.append(str(current_path))
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, 
     QLineEdit, QLabel
 )
-from PySide6.QtCore import Signal
-from .vision_widget import VisionWidget
+from PySide6.QtCore import Signal, QObject
+from tab_widgets import VisionWidget
+import numpy as np
 
 class VisionPageWidget(QWidget):
     """Video + control widgets"""
@@ -42,11 +48,39 @@ class VisionPageWidget(QWidget):
         exp_time = float(self.exp_time.text())
         self.sigExpTime.emit(exp_time)
 
-if __name__ == "__main__":
-    import sys
-    from PySide6.QtWidgets import QApplication
+class ImageGenerator(QObject):
+    
+    sigImage = Signal(np.ndarray)
 
+    def __init__(self):
+        super().__init__()
+
+    def generate(self):
+
+        import time
+
+        X, Y = np.meshgrid(np.linspace(0, 4*np.pi, 512), np.linspace(0, 4*np.pi, 512))
+
+        offset = 0
+        while True:
+            img = np.sin(X+Y+offset)
+            self.sigImage.emit(img)
+            offset += .1
+            time.sleep(.033)
+
+if __name__ == "__main__":
+    from PySide6.QtWidgets import QApplication
+    from threading import Thread
+    from vision import ProcessingWorker
+    
     app = QApplication(sys.argv)
     widget = VisionPageWidget()
+
+    # display synthesized images
+    ig = ImageGenerator()
+    ig.sigImage.connect(widget.vision_widget.update_live_display)
+    thread = Thread(target=ig.generate)
+    thread.start()
+
     widget.show()
     sys.exit(app.exec())

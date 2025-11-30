@@ -125,6 +125,7 @@ if __name__ == "__main__":
 
     app = QApplication(sys.argv)
     widget = VisionWidget()
-    widget.update_live_display(np.random.rand(512, 512))
+    X, Y = np.meshgrid(np.linspace(0, np.pi, 512), np.linspace(0, np.pi, 512))
+    widget.update_live_display(np.sin(X+Y))
     widget.show()
     sys.exit(app.exec())
