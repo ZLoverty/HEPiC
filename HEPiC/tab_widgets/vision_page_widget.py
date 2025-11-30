@@ -82,5 +82,9 @@ if __name__ == "__main__":
     thread = Thread(target=ig.generate)
     thread.start()
 
+    processing_worker = ProcessingWorker()
+    ig.sigImage.connect(processing_worker.process_frame)
+    processing_worker.proc_frame_signal.connect(widget.roi_vision_widget.update_live_display)
+
     widget.show()
     sys.exit(app.exec())
