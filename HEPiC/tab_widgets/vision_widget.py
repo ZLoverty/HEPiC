@@ -6,6 +6,7 @@ import logging
 class VisionWidget(pg.GraphicsLayoutWidget):
 
     sigRoiChanged = Signal(tuple) # 发射 (x, y, w, h)
+    sigRoiImage = Signal(np.ndarray)
 
     def __init__(self, logger=None):
 
@@ -49,7 +50,14 @@ class VisionWidget(pg.GraphicsLayoutWidget):
     @Slot(np.ndarray)
     def update_live_display(self, frame):
         self.img_item.setImage(frame, axisOrder="row-major")
-    
+        if hasattr(self, "roi_info"):
+            x0, y0, w, h = self.roi_info
+            roi_image = frame[x0:x0+w, y0:y0+h]
+            self.sigRoiImage.emit(roi_image)
+        else:
+            self.sigRoiImage.emit(frame)
+         
+
     def mousePressEvent(self, event):
         # pyqtgraph 内部会处理好 PyQt/PySide 的差异，所以这部分逻辑不变
         if event.button() == pg.QtCore.Qt.MouseButton.LeftButton and self.mouse_enabled:
@@ -109,9 +117,9 @@ class VisionWidget(pg.GraphicsLayoutWidget):
         """当ROI被用户修改完成时被调用。"""
         if not self.roi:
             return
-        roi_info = (int(self.roi["pos"][0]), int(self.roi["pos"][1]), int(self.roi["size"][0]), int(self.roi["size"][1]))
-        self.sigRoiChanged.emit(roi_info) 
-        self.logger.debug(f"New ROI set {roi_info}.")
+        self.roi_info = (int(self.roi["pos"][0]), int(self.roi["pos"][1]), int(self.roi["size"][0]), int(self.roi["size"][1]))
+        self.sigRoiChanged.emit(self.roi_info) 
+        self.logger.debug(f"New ROI set {self.roi_info}.")
 
 if __name__ == "__main__":
     import sys
