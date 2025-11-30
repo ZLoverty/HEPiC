@@ -64,6 +64,7 @@ class VisionWidget(pg.GraphicsLayoutWidget):
 
             # 创建新的RectROI
             x0, y0 = self.roi_start_pos.x(), self.roi_start_pos.y()
+            self.roi["pos"] = (x0, y0)
             self.roi["item"] = pg.Qt.QtWidgets.QGraphicsRectItem(x0, y0, 0, 0)
             self.pen = pg.mkPen(color=(200, 0, 0), width=3, style=pg.QtCore.Qt.PenStyle.DashLine)
             self.roi["item"].setPen(self.pen)
@@ -110,7 +111,7 @@ class VisionWidget(pg.GraphicsLayoutWidget):
             return
         roi_info = (int(self.roi["pos"][0]), int(self.roi["pos"][1]), int(self.roi["size"][0]), int(self.roi["size"][1]))
         self.sigRoiChanged.emit(roi_info) 
-        self.logger.debug(f"New ROI info {roi_info} emitted.")
+        self.logger.debug(f"New ROI set {roi_info}.")
 
 if __name__ == "__main__":
     import sys
