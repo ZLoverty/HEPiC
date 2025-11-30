@@ -1,10 +1,16 @@
+from pathlib import Path
+import sys
+current_path = Path(__file__).resolve().parent.parent
+sys.path.append(str(current_path))
+
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout
 )
 from PySide6.QtCore import Slot, Signal, QThread, QObject
-from .gcode_widget import GcodeWidget
+from tab_widgets import GcodeWidget
 import pyqtgraph as pg
 import logging
+from utils import parse_gcode_time_series
 
 class JobSequenceWidget(QWidget):
 
@@ -42,7 +48,16 @@ class JobSequenceWidget(QWidget):
 
         self.setLayout(layout)
 
+        # signal - slots
+        self.gcode_widget.sigGcode.connect(self.show_plots)
+
         self.logger = logger or logging.getLogger(__name__)
+
+    @Slot(str)
+    def show_plots(self, gcode):
+        t, ve, temp = parse_gcode_time_series(gcode)
+        self.curves["filament_velocity_mms"].setData(t, ve)
+        self.curves["hotend_temperature_C"].setData(t, temp)
 
 if __name__ == "__main__":
     import sys

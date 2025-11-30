@@ -6,7 +6,8 @@ from PySide6.QtCore import Signal, Slot, QSize
 
 class GcodeWidget(QWidget):
 
-    gcode_save_signal = Signal()
+    sigGcode = Signal(str)
+    sigFilePath = Signal(str)
 
     def __init__(self):
         
@@ -25,6 +26,7 @@ class GcodeWidget(QWidget):
         self.warning_label.setToolTip(tooltip_text)
         self.gcode_title.setMaximumWidth(300)
         self.gcode_display = QTextEdit()
+        self.gcode_display.setReadOnly(True)
         # self.gcode_display.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.open_button = QPushButton("打开")
         # self.clear_button = QPushButton("清除")
@@ -51,7 +53,7 @@ class GcodeWidget(QWidget):
         # 信号槽连接
         self.open_button.clicked.connect(self.on_click_open)
         # self.clear_button.clicked.connect(self.on_click_clear)
-        self.gcode_save_signal.connect(self.update_display)
+
 
     def on_click_open(self):
         """打开 gcode 文件，清理注释，显示在 display 窗口"""
@@ -66,15 +68,14 @@ class GcodeWidget(QWidget):
             print(f"选择的文件路径是: {file_path}")
             with open(file_path, "r") as f:
                 gcode = f.read()
-            # self.gcode = self.clean_gcode(gcode)
-            self.update_display(gcode)
+            # emit gcode
+            self.sigGcode.emit(gcode)
+            self.gcode_display.setPlainText(gcode)
+            # emit file path
+            self.sigFilePath.emit(file_path)
         else:
             print("没有选择任何文件")
             return
-    
-    @Slot()
-    def update_display(self, gcode):
-        self.gcode_display.setPlainText(gcode)
 
     @Slot(int)
     def highlight_current_line(self, line_number):
