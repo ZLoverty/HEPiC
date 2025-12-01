@@ -9,6 +9,8 @@ import time
 import random
 import sys
 import numpy as np
+import os
+import requests
 
 class KlipperWorker(QObject):
     """
@@ -148,7 +150,7 @@ class KlipperWorker(QObject):
                     self.logger.info(f"error message: {err_msg}")
                     self.gcode_error.emit(err_msg)
             elif "result" in data:
-                self.logger.info(data)     
+                self.logger.debug(data)     
                 if "id" in data:
                     if data["id"] == 2:
                         sub_msg = data.get("result", {}).get("status", {})
@@ -156,7 +158,7 @@ class KlipperWorker(QObject):
                         self.target_hotend_temperature = sub_msg.get("extruder", {}).get("target", np.nan)
                         self.active_feedrate_mms = sub_msg.get("motion_report", {}).get("live_extruder_velocity")
             else:
-                print(data)
+                self.logger.info(data)
 
             # 标记任务完成，这对于优雅退出很重要
             self.message_queue.task_done()
@@ -216,7 +218,54 @@ class KlipperWorker(QObject):
         }
         while True:
             await self.message_queue.put(query_msg)
-            await asyncio.sleep(1)
+            await asyncio.sleep(.1)
+
+    def upload_gcode_to_klipper(self, file_path, print_after_upload=True):
+        """
+        上传 G-code 文件到 Klipper (Moonraker)。
+        
+        :param ip_address: 上位机 (树莓派) 的 IP 地址
+        :param file_path: 本地 G-code 文件的路径
+        :param print_after_upload: 是否上传后立即开始打印 (True/False)
+        """
+        
+        # Moonraker 的上传 API 端点
+        url = f"http://{self.host}/server/files/upload"
+        
+        # 检查文件是否存在
+        if not os.path.exists(file_path):
+            self.logger.error(f"错误: 找不到文件 {file_path}")
+            return
+
+        # 获取文件名
+        filename = os.path.basename(file_path)
+
+        # 准备 Payload
+        # 'root': 通常是 'gcodes'，表示上传到 G-code 文件夹
+        data = {
+            'root': 'gcodes',
+            'print': 'true' if print_after_upload else 'false'
+        }
+
+        try:
+            with open(file_path, 'rb') as f:
+                # 构建 multipart/form-data
+                files = {'file': (filename, f)}
+                
+                self.logger.info(f"正在上传 {filename} 到 {self.host}...")
+                response = requests.post(url, data=data, files=files)
+                
+                # 检查响应
+                if response.status_code in [200, 201]:
+                    self.logger.info("上传成功！")
+                    self.logger.info("服务器响应:", response.json())
+                else:
+                    self.logger.info(f"上传失败，状态码: {response.status_code}")
+                    self.logger.info("错误信息:", response.text)
+                    
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"连接错误: {e}")
+
 
 class GcodePositionMapper:
     """
@@ -624,6 +673,20 @@ async def _test_klipper_worker():
     await klipper_worker.subscribe_printer_status()
 
     await asyncio.sleep(5)
+    print("\n" + "-"*40 + "\n")
+
+    print("test upload gcode file ...")
+    file_path = "tmp.gcode"
+    gcode = """
+    M117 test1 
+    M117 test2
+    """
+    with open(file_path, "w") as f:
+        f.write(gcode)
+    klipper_worker.upload_gcode_to_klipper(file_path, print_after_upload=False)
+    os.remove(file_path)
+    await asyncio.sleep(2)
+    print("\n" + "-"*40 + "\n")
 
 async def main():
     # print("test gcode mapper ...")

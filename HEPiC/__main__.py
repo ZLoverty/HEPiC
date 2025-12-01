@@ -225,7 +225,7 @@ class MainWindow(QMainWindow):
         self.home_widget.command_widget.command.connect(self.klipper_worker.send_gcode)
         # self.sigQueryRequest.connect(self.klipper_worker.query_status)
         self.klipper_worker.sigPrintStats.connect(self.status_widget.update_progress)
-
+        self.job_sequence_widget.gcode_widget.sigFilePath.connect(self.klipper_worker.upload_gcode_to_klipper)
         # Let all workers run
         tcp_task = self.worker.run()
         klipper_task = self.klipper_worker.run()

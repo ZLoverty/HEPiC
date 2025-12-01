@@ -52,31 +52,37 @@ class GcodeWidget(QWidget):
 
         # 信号槽连接
         self.open_button.clicked.connect(self.on_click_open)
-        # self.clear_button.clicked.connect(self.on_click_clear)
+        self.run_button.clicked.connect(self.on_click_run)
 
+        # variables
+        self.file_path = None
 
     def on_click_open(self):
         """打开 gcode 文件，清理注释，显示在 display 窗口"""
-        file_path, _ = QFileDialog.getOpenFileName(
+        self.file_path, _ = QFileDialog.getOpenFileName(
             self,
             "选择一个文件",
             "",
             "G-code (*.gcode)"
         )
 
-        if file_path:
-            print(f"选择的文件路径是: {file_path}")
-            with open(file_path, "r") as f:
+        if self.file_path:
+            print(f"选择的文件路径是: {self.file_path}")
+            with open(self.file_path, "r") as f:
                 gcode = f.read()
             # emit gcode
             self.sigGcode.emit(gcode)
             self.gcode_display.setPlainText(gcode)
-            # emit file path
-            self.sigFilePath.emit(file_path)
+            
         else:
             print("没有选择任何文件")
             return
 
+    def on_click_run(self):
+        if self.file_path:
+            # emit file path
+            self.sigFilePath.emit(self.file_path)
+            
     @Slot(int)
     def highlight_current_line(self, line_number):
 
