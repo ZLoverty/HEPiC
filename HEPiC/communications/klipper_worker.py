@@ -602,11 +602,11 @@ class MockMoonrakerServer:
             self.logger.error(f"发送消息时出错: {e}", exc_info=True)
 
 async def _test_klipper_worker():
-    HOST = "127.0.0.1"
+    HOST = "192.168.22.65"
     PORT = 7125
     klipper_worker = KlipperWorker(HOST, PORT)
-    moonraker_server = MockMoonrakerServer(HOST, PORT)
-    moonraker_task = asyncio.create_task(moonraker_server.start())
+    # moonraker_server = MockMoonrakerServer(HOST, PORT)
+    # moonraker_task = asyncio.create_task(moonraker_server.start())
     klipper_task = klipper_worker.run()
 
     await asyncio.sleep(1)
@@ -624,8 +624,6 @@ async def _test_klipper_worker():
     await klipper_worker.subscribe_printer_status()
 
     await asyncio.sleep(5)
-
-
 
 async def main():
     # print("test gcode mapper ...")
