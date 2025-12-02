@@ -7,7 +7,7 @@ import json
 
 class CommandWidget(QWidget):
 
-    command_to_send = Signal(str)
+    command = Signal(str)
 
     def __init__(self):
 
@@ -17,7 +17,7 @@ class CommandWidget(QWidget):
         self.command_display.setReadOnly(True)
         self.command_display.setStyleSheet("background-color: #2b2b2b; color: #a9b7c6; font-family: Consolas, monaco, monospace;")
         self.command_input = QLineEdit()
-        self.command_input.setPlaceholderText("在此输入 G-code 指令 (如 G1 E10 F300)")
+        self.command_input.setPlaceholderText("输入 G-code 指令 (如 G1 E10 F300)")
         self.send_button = QPushButton("发送指令")
         self.send_button.setEnabled(False)
 
@@ -27,11 +27,12 @@ class CommandWidget(QWidget):
         input_layout.addWidget(self.send_button)
         layout.addWidget(self.command_display)
         layout.addLayout(input_layout)
+        self.setMinimumWidth(300)
         self.setLayout(layout)
 
         # 信号槽连接
-        self.send_button.clicked.connect(self.send_command)
-        self.command_input.returnPressed.connect(self.send_command)
+        self.send_button.clicked.connect(self.on_send_clicked)
+        self.command_input.returnPressed.connect(self.on_send_clicked)
 
     @Slot(bool)
     def update_button_status(self, connected):
@@ -44,20 +45,15 @@ class CommandWidget(QWidget):
             self.command_input.setEnabled(False)
 
     @Slot()
-    def send_command(self):
+    def on_send_clicked(self):
         command = self.command_input.text().strip()
         if command:
             print("--- [DEBUG] 'send_command' method called.")
             self.command_display.appendPlainText(f"{command}")
             # 调用 signal 发送指令
-            self.command_to_send.emit(command)
+            self.command.emit(command)
             self.command_input.clear()
     
     @Slot(str)
-    def update_command_display(self, message):
-        try:
-            data = json.loads(message)
-            pretty_message = json.dumps(data, indent=4)
-            self.command_display.appendPlainText(pretty_message)
-        except json.JSONDecodeError:
-            self.command_display.appendPlainText(message)
+    def display_message(self, message):
+        self.command_display.appendPlainText("//"+message)

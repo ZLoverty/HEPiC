@@ -11,7 +11,8 @@ if os.name == "nt":
     from .hikcam_win import HikVideoCapture
 else:
     # on Mac / Linux, use a different library
-    from .video_capture import HikVideoCapture  
+    # from .video_capture import HikVideoCapture  
+    pass
 
 class VideoWorker(QObject):
     """

@@ -9,19 +9,18 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Signal, Slot, QThread, QTimer
 import pyqtgraph as pg
 from collections import deque
+from pathlib import Path
 from .communications import TCPClient, KlipperWorker, ConnectionTester
 from .vision import VideoWorker, ProcessingWorker, IRWorker, VideoRecorder
-from .tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget
+from .tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget, JobSequenceWidget
 import asyncio
 from qasync import asyncSlot, QEventLoop
 import numpy as np
 import pandas as pd
-from pathlib import Path
 from datetime import datetime
 import logging
 import json
 import argparse
-import sys
 from importlib.metadata import packages_distributions, version, PackageNotFoundError
 
 def _get_package_info():
@@ -106,6 +105,8 @@ class MainWindow(QMainWindow):
 
         self.is_recording = False
         self.record_timelapse = True
+        self.VIDEO_WORKER_OK = False
+        self.IR_WORKER_OK = False
     
     def load_config(self):
         with open(self.config_file, "r") as f:
@@ -139,11 +140,8 @@ class MainWindow(QMainWindow):
         self.home_widget = HomeWidget()
         self.vision_page_widget = VisionPageWidget()
         self.status_widget = self.home_widget.status_widget
-        self.data_widget = self.home_widget.data_widget
-        self.gcode_widget = self.home_widget.gcode_widget
         self.ir_page_widget = IRPageWidget()
-        self.ir_image_widget = self.ir_page_widget.image_widget
-        self.ir_roi_widget = self.home_widget.ir_roi_widget
+        self.job_sequence_widget = JobSequenceWidget()
 
         # 添加标签页到标签栏
         self.stacked_widget.addWidget(self.connection_widget)
@@ -152,7 +150,7 @@ class MainWindow(QMainWindow):
         # self.tabs.addTab(self.data_widget, "数据")
         self.tabs.addTab(self.vision_page_widget, "视觉")
         self.tabs.addTab(self.ir_page_widget, "红外")
-        # self.tabs.addTab(self.gcode_widget, "G-code")
+        self.tabs.addTab(self.job_sequence_widget, "G-code")
         self.setCentralWidget(self.stacked_widget)
 
         # 设置状态栏
@@ -160,9 +158,8 @@ class MainWindow(QMainWindow):
 
         # --- 连接信号与槽 ---
         self.connection_widget.host.connect(self.update_host_and_connect)
-        self.gcode_widget.run_button.clicked.connect(self.run_gcode)
         
-        self.sigNewData.connect(self.data_widget.update_display)
+        self.sigNewData.connect(self.home_widget.data_widget.update_display)
         self.home_widget.play_pause_button.toggled.connect(self.on_toggle_play_pause)
         self.home_widget.reset_button.clicked.connect(self.init_data)
         self.sigNewStatus.connect(self.status_widget.update_display)
@@ -215,20 +212,20 @@ class MainWindow(QMainWindow):
         
         # 连接信号槽
         self.worker.connection_status.connect(self.update_status)
-        self.status_widget.sigMeterCountZero.connect(self.worker.set_meter_count_offset)
-        self.status_widget.sigExtrusionForceZero.connect(self.worker.set_extrusion_force_offset)
+        self.status_widget.meter_count_zero_button.clicked.connect(self.worker.set_meter_count_offset)
+        self.status_widget.extrusion_force_zero_button.clicked.connect(self.worker.set_extrusion_force_offset)
         
         # 创建 klipper worker（用于查询平台状态和发送动作指令）
         klipper_port = 7125
         self.klipper_worker = KlipperWorker(self.host, klipper_port)
         # 连接信号槽
         self.klipper_worker.connection_status.connect(self.update_status)
-        self.klipper_worker.current_step_signal.connect(self.gcode_widget.highlight_current_line)
-        self.klipper_worker.gcode_error.connect(self.update_status)
+        self.klipper_worker.gcode_error.connect(self.home_widget.command_widget.display_message)
         self.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
+        self.home_widget.command_widget.command.connect(self.klipper_worker.send_gcode)
         # self.sigQueryRequest.connect(self.klipper_worker.query_status)
         self.klipper_worker.sigPrintStats.connect(self.status_widget.update_progress)
-
+        self.job_sequence_widget.gcode_widget.sigFilePath.connect(self.klipper_worker.upload_gcode_to_klipper)
         # Let all workers run
         tcp_task = self.worker.run()
         klipper_task = self.klipper_worker.run()
@@ -253,23 +250,10 @@ class MainWindow(QMainWindow):
             # if ROI has been changed in the UI, send it to the video worker, so that it can crop later images accordingly.
             self.vision_page_widget.vision_widget.sigRoiChanged.connect(self.video_worker.set_roi)
             
-            # 创建 image processing worker 用于处理图像，探测熔体直径
-            self.processing_worker = ProcessingWorker()
-
-            # send cropped images to the processing worker for image analysis.
-            self.video_worker.roi_frame_signal.connect(self.processing_worker.process_frame)
-
-            # the processed frame shall be sent to the home page of the UI for user to monitor.
-            self.processing_worker.proc_frame_signal.connect(self.vision_page_widget.roi_vision_widget.update_live_display)
-
-            # the result of the image analysis, here specifically the die melt diameter, shall be sent to the home page to display
-            self.processing_worker.proc_frame_signal.connect(self.home_widget.dieswell_widget.update_live_display)
-
             # allow user to set the exposure time of the camera
             self.vision_page_widget.sigExpTime.connect(self.video_worker.set_exp_time)
 
-            # allow user to invert the black and white to meet the image processing need in specific experiment.
-            self.vision_page_widget.invert_button.toggled.connect(self.processing_worker.invert_toggle)
+            
 
             # thread management: when the thread is started, call the run() method; when the thread is finished, call the deleteLater() method for both video_thread and video_worker.
             self.video_thread.started.connect(self.video_worker.run)
@@ -280,12 +264,28 @@ class MainWindow(QMainWindow):
 
             print("熔体相机初始化成功！")
 
-            
-            
+            self.VIDEO_WORKER_OK = True
 
         except Exception as e:
             print(f"初始化熔体状态相机失败: {e}")
             print("WARNING: Failed to initiate camera. Vision module is inactive.")
+        
+        # 创建 image processing worker 用于处理图像，探测熔体直径
+        self.processing_worker = ProcessingWorker()
+
+        if self.VIDEO_WORKER_OK:
+
+            # send cropped images to the processing worker for image analysis.
+            self.video_worker.roi_frame_signal.connect(self.processing_worker.process_frame)
+
+            # the processed frame shall be sent to the home page of the UI for user to monitor.
+            self.processing_worker.proc_frame_signal.connect(self.vision_page_widget.roi_vision_widget.update_live_display)
+
+            # the result of the image analysis, here specifically the die melt diameter, shall be sent to the home page to display
+            self.processing_worker.proc_frame_signal.connect(self.home_widget.dieswell_widget.update_live_display)
+
+            # allow user to invert the black and white to meet the image processing need in specific experiment.
+            self.vision_page_widget.invert_button.toggled.connect(self.processing_worker.invert_toggle)
 
     @Slot()
     def initiate_ir_imager(self):
@@ -297,13 +297,13 @@ class MainWindow(QMainWindow):
             self.ircam_ok = True
 
             # when IR worker receives a new frame, send it to the IR page to shown on the canvas
-            self.ir_worker.sigNewFrame.connect(self.ir_image_widget.update_live_display)
+            self.ir_worker.sigNewFrame.connect(self.ir_page_widget.image_widget.update_live_display)
 
             # if user draw an ROI on the canvas, send the ROI info to the IR worker, so that in the future, the worker can crop the later frames
-            self.ir_image_widget.sigRoiChanged.connect(self.ir_worker.set_roi)
+            self.ir_page_widget.image_widget.sigRoiChanged.connect(self.ir_worker.set_roi)
 
             # cropped frames inside ROI will be sent to the preview widget in home page
-            self.ir_worker.sigRoiFrame.connect(self.ir_roi_widget.update_live_display)
+            self.ir_worker.sigRoiFrame.connect(self.home_widget.ir_roi_widget.update_live_display)
 
             # use a thread to handle the image reading and showing loop
             self.ir_thread.started.connect(self.ir_worker.run)
@@ -342,7 +342,7 @@ class MainWindow(QMainWindow):
             self.logger.info("Recording started ...")
             self.statusBar().showMessage(f"Autosave file at {self.autosave_filename}")
             self.is_recording = True
-            if self.record_timelapse:
+            if self.record_timelapse and self.VIDEO_WORKER_OK:
                 # init video recorder
                 self.autosave_video_filename = Path(f"{self.autosave_prefix}_video.mkv").resolve()
                 self.video_recorder_thread = VideoRecorder(self.autosave_video_filename)
@@ -357,7 +357,7 @@ class MainWindow(QMainWindow):
             self.autosave_filename = None
             self.first_row = True
             self.is_recording = False
-            if self.record_timelapse:
+            if self.record_timelapse and self.VIDEO_WORKER_OK:
                 self.processing_worker.proc_frame_signal.disconnect(self.video_recorder_thread.add_frame)
                 self.video_recorder_thread.close()
                 self.video_recorder_thread.deleteLater()
@@ -366,13 +366,6 @@ class MainWindow(QMainWindow):
     def update_status(self, status):
         """更新状态栏信息"""
         self.statusBar().showMessage(status)
-
-    @asyncSlot()
-    async def run_gcode(self):
-        """运行从文本框里来的 gcode """
-        if self.klipper_worker:
-            gcode = self.gcode_widget.gcode_display.toPlainText()
-            await self.klipper_worker.send_gcode(gcode)
     
     @Slot()
     def on_timer_tick(self):

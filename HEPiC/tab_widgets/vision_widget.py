@@ -1,27 +1,34 @@
 import pyqtgraph as pg
 import numpy as np
 from PySide6.QtCore import Signal, Slot, QPointF
+import logging
 
 class VisionWidget(pg.GraphicsLayoutWidget):
 
     sigRoiChanged = Signal(tuple) # 发射 (x, y, w, h)
+    sigRoiImage = Signal(np.ndarray)
 
-    def __init__(self):
+    def __init__(self, logger=None):
 
         super().__init__()
 
-        self.roi = None
+        self.roi = {
+            "item": None,
+            "pos": (0, 0),
+            "size": (0, 0)
+        }
         self.roi_start_pos = None
         self.mouse_enabled = True
+        self.mousePressed = False
 
         # 告诉布局管理器，让ViewBox占据所有可用空间，从而最小化边距
-        self.ci.layout.setContentsMargins(0, 0, 0, 0)
+        # self.ci.layout.setContentsMargins(0, 0, 0, 0)
 
         # 组件
         # 1. 创建 PlotItem，这是一个包含 ViewBox 和坐标轴的复合组件
         self.plot_item = self.addPlot(row=0, col=0)
         
-        # 2. 【关键步骤】从 PlotItem 中获取其内部的 ViewBox
+        # # 2. 【关键步骤】从 PlotItem 中获取其内部的 ViewBox
         self.view_box = self.plot_item.getViewBox()
         
         # 3. 将所有 ViewBox 相关的设置应用到这个内部 ViewBox 上
@@ -37,40 +44,42 @@ class VisionWidget(pg.GraphicsLayoutWidget):
         self.img_item = pg.ImageItem()
         self.plot_item.addItem(self.img_item)
 
+        # logger
+        self.logger = logger or logging.getLogger(__name__)
+
     @Slot(np.ndarray)
     def update_live_display(self, frame):
         self.img_item.setImage(frame, axisOrder="row-major")
-    
+        if hasattr(self, "roi_info"):
+            x0, y0, w, h = self.roi_info
+            roi_image = frame[x0:x0+w, y0:y0+h]
+            self.sigRoiImage.emit(roi_image)
+        else:
+            self.sigRoiImage.emit(frame)
+         
+
     def mousePressEvent(self, event):
         # pyqtgraph 内部会处理好 PyQt/PySide 的差异，所以这部分逻辑不变
         if event.button() == pg.QtCore.Qt.MouseButton.LeftButton and self.mouse_enabled:
             if self.roi:
-                self.plot_item.removeItem(self.roi)
-                self.roi = None
+                self.plot_item.removeItem(self.roi["item"])
 
             pos = event.scenePosition()
             mousePoint = self.plot_item.vb.mapSceneToView(pos)
             self.roi_start_pos = mousePoint
-
-            # --- 诊断代码 ---
-            # scene_pos = event.scenePosition()
-            # view_pos = self.view_box.mapSceneToView(scene_pos)
-            # image_pos = self.img_item.mapFromScene(scene_pos)
             
-
-            # print("--- 坐标诊断 ---")
-            # print(f"Scene Coords (墙壁坐标):     x={scene_pos.x():.2f}, y={scene_pos.y():.2f}")
-            # print(f"ViewBox Coords (画框坐标):   x={view_pos.x():.2f}, y={view_pos.y():.2f}")
-            # print(f"ImageItem Coords (画布坐标): x={image_pos.x():.2f}, y={image_pos.y():.2f}")
-            # print(f"ImageItem 自身位置: x={self.img_item.pos().x()}, y={self.img_item.pos().y()}")
-            # print("-----------------")
-
+            self.mousePressed = True
 
             # 创建新的RectROI
-            self.roi = pg.RectROI(self.roi_start_pos, [1, 1], pen='y', removable=True)
-            self.plot_item.addItem(self.roi)
+            x0, y0 = self.roi_start_pos.x(), self.roi_start_pos.y()
+            self.roi["pos"] = (x0, y0)
+            self.roi["item"] = pg.Qt.QtWidgets.QGraphicsRectItem(x0, y0, 0, 0)
+            self.pen = pg.mkPen(color=(200, 0, 0), width=3, style=pg.QtCore.Qt.PenStyle.DashLine)
+            self.roi["item"].setPen(self.pen)
+            self.logger.debug(f"create ROI starting at {x0}, {y0}")
+            self.plot_item.addItem(self.roi["item"])
             
-            event.accept()
+            # event.accept()
         else:
             super().mousePressEvent(event)
 
@@ -79,22 +88,25 @@ class VisionWidget(pg.GraphicsLayoutWidget):
             current_pos = self.plot_item.getViewBox().mapSceneToView(event.scenePosition())
             # 更新ROI的位置和大小，以确保拖拽行为符合直觉
             # min()确保左上角坐标正确，abs()确保宽高为正
-            start_x, start_y = self.roi_start_pos.x(), self.roi_start_pos.y()
+            if 'item' in self.roi:
+                self.plot_item.removeItem(self.roi['item'])
+
+            x0, y0 = self.roi_start_pos.x(), self.roi_start_pos.y()
             curr_x, curr_y = current_pos.x(), current_pos.y()
             
-            new_pos = QPointF(min(start_x, curr_x), min(start_y, curr_y))
-            new_size = QPointF(abs(start_x - curr_x), abs(start_y - curr_y))
+            # new_pos = QPointF(min(start_x, curr_x), min(start_y, curr_y))
+            new_size = curr_x - x0, curr_y - y0
 
-            self.roi.setPos(new_pos)
-            self.roi.setSize(new_size)
-
-            event.accept()
+            self.roi["size"] = new_size
+            self.roi["item"] = pg.Qt.QtWidgets.QGraphicsRectItem(x0, y0, new_size[0], new_size[1])
+            self.plot_item.addItem(self.roi["item"])
+            self.roi["item"].setPen(self.pen)
+            
         else:
             super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
         if self.roi and event.button() == pg.QtCore.Qt.MouseButton.LeftButton and self.mouse_enabled:
-            self.roi.sigRegionChangeFinished.connect(self.on_roi_changed)
             self.on_roi_changed() # 首次绘制完成时，主动触发一次
             self.roi_start_pos = None
             event.accept()
@@ -105,9 +117,24 @@ class VisionWidget(pg.GraphicsLayoutWidget):
         """当ROI被用户修改完成时被调用。"""
         if not self.roi:
             return
-            
-        pos = self.roi.pos()
-        size = self.roi.size()
-        
-        roi_info = (int(pos.x()), int(pos.y()), int(size.x()), int(size.y()))
-        self.sigRoiChanged.emit(roi_info)            
+        self.roi_info = (int(self.roi["pos"][0]), int(self.roi["pos"][1]), int(self.roi["size"][0]), int(self.roi["size"][1]))
+        self.sigRoiChanged.emit(self.roi_info) 
+        self.logger.debug(f"New ROI set {self.roi_info}.")
+
+if __name__ == "__main__":
+    import sys
+    from PySide6.QtWidgets import QApplication
+    import numpy as np
+
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)] # 确保输出到 stdout
+    )
+
+    app = QApplication(sys.argv)
+    widget = VisionWidget()
+    X, Y = np.meshgrid(np.linspace(0, np.pi, 512), np.linspace(0, np.pi, 512))
+    widget.update_live_display(np.sin(X+Y))
+    widget.show()
+    sys.exit(app.exec())

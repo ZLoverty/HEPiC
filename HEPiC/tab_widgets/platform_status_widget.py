@@ -5,12 +5,11 @@ from PySide6.QtCore import Signal, Slot
 from PySide6.QtGui import QIcon
 # import pyqtgraph as pg
 import os
+from pathlib import Path
 
 class PlatformStatusWidget(QWidget):
 
     set_temperature = Signal(float)
-    sigMeterCountZero = Signal()
-    sigExtrusionForceZero = Signal()
 
     def __init__(self, 
                  placeholder : str = "***",
@@ -18,6 +17,8 @@ class PlatformStatusWidget(QWidget):
         
         super().__init__()
         
+        current_file_path = Path(__file__).resolve()
+        icon_path = current_file_path.parent / "icons"
         # 组件
         self.hotend_temperature_label = QLabel("温度:")
         self.hotend_temperature_value = QLabel(f"{placeholder:5s} /")
@@ -26,7 +27,7 @@ class PlatformStatusWidget(QWidget):
         self.extrusion_force_label = QLabel("挤出力:")
         self.extrusion_force_value = QLabel(f"{placeholder}")
         self.extrusion_force_zero_button = QPushButton()
-        zero_icon = QIcon(os.path.join(icon_path, "toZero.png"))
+        zero_icon = QIcon(str(icon_path / "toZero.png"))
         self.extrusion_force_zero_button.setIcon(zero_icon)
         self.meter_count_label = QLabel("当前进料量:")
         self.meter_count_value = QLabel(f"{placeholder}")
@@ -96,8 +97,6 @@ class PlatformStatusWidget(QWidget):
 
         # connect signals and slots
         self.hotend_temperature_input.returnPressed.connect(self.on_temp_enter_pressed)
-        self.extrusion_force_zero_button.clicked.connect(self.on_extrusion_force_zero_clicked)
-        self.meter_count_zero_button.clicked.connect(self.on_meter_count_zero_clicked)
 
     @Slot(dict)
     def update_display(self, data):
@@ -121,7 +120,7 @@ class PlatformStatusWidget(QWidget):
                     self.feedrate_value.setText(f"{feedrate:5.1f} mm/s")
             elif item == "die_temperature_C":
                 die_temperature = data[item]
-                self.die_temperature_value.setText(f"{die_temperature:5.1f} C")
+                self.die_temperature_value.setText(f"{die_temperature:5.1f} ℃")
             elif item == "die_diameter_px":
                 die_diameter = data[item]
                 self.die_diameter_value.setText(f"{die_diameter:5.1f} px")
@@ -133,12 +132,6 @@ class PlatformStatusWidget(QWidget):
     def update_progress(self, progress):
         self.print_duration_label.setText(progress["print_duration"])
         self.total_duration_label.setText(progress["total_duration"])
-    
-    def on_extrusion_force_zero_clicked(self):
-        self.sigExtrusionForceZero.emit()
-    
-    def on_meter_count_zero_clicked(self):
-        self.sigMeterCountZero.emit()
 
 if __name__ == "__main__":
     import sys

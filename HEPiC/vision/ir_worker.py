@@ -8,6 +8,7 @@ from PySide6.QtCore import QObject, Signal, QTimer, Slot
 import numpy as np
 from pathlib import Path
 from .vision import ImageStreamer
+import logging
 
 OPTRIS_LIB_LOADED = False
 try:
@@ -22,13 +23,15 @@ class IRWorker(QObject):
     sigRoiFrame = Signal(np.ndarray)
     sigFinished = Signal()
 
-    def __init__(self, test_mode=False, test_image_folder=""):
+    def __init__(self, test_mode=False, test_image_folder="", logger=None):
 
         super().__init__()
         self.is_running = True
         self.roi = None
         self.die_temperature = np.nan
-        self._timer = None
+        self._timer = QTimer(self)
+        # logging 
+        self.logger = logger or logging.getLogger(__name__)
 
         if test_mode:  # 调试用图片流
             test_image_folder = Path(test_image_folder).expanduser().resolve()
@@ -38,8 +41,6 @@ class IRWorker(QObject):
             self.cap = OptrisCamera()
             
     def run(self):
-        self._timer = QTimer(self)
-
         self._timer.timeout.connect(self.read_one_frame)
         self._timer.start(0)
         self.thread().exec()

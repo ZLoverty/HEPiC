@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import QSize
 from .gcode_widget import GcodeWidget
+from .command_widget import CommandWidget
 from .data_plot_widget import DataPlotWidget
 from .platform_status_widget import PlatformStatusWidget
 from .vision_widget import VisionWidget
@@ -12,8 +13,8 @@ class HomeWidget(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.gcode_widget = GcodeWidget()
-        self.gcode_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.command_widget = CommandWidget()
+        self.command_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.data_widget = DataPlotWidget()
         self.status_widget = PlatformStatusWidget()
         self.dieswell_widget = VisionWidget() # hik cam roi
@@ -73,7 +74,7 @@ class HomeWidget(QWidget):
         # 布局
         layout = QHBoxLayout()
         control_layout = QVBoxLayout()
-        control_layout.addWidget(self.gcode_widget)
+        control_layout.addWidget(self.command_widget)
         control_button_layout = QHBoxLayout()
         control_button_layout.addWidget(self.play_pause_button)
         # control_button_layout.addWidget(self.stop_button)
