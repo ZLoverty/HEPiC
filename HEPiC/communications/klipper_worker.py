@@ -101,7 +101,7 @@ class KlipperWorker(QObject):
         Parameters
         ----------
         gcode : str
-            gcode string, can be one-liner or multi-liner
+            gcode string
         """
         self.gcode = gcode
         
@@ -265,6 +265,10 @@ class KlipperWorker(QObject):
                     
         except requests.exceptions.RequestException as e:
             self.logger.error(f"连接错误: {e}")
+
+    @asyncSlot()
+    async def restart_firmware(self):
+        await self.send_gcode("FIRMWARE_RESTART")
 
 
 class GcodePositionMapper:

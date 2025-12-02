@@ -62,8 +62,6 @@ class HomeWidget(QWidget):
         """
         self.play_pause_button.setStyleSheet(qss_style)
 
-        # self.start_button = QPushButton("开始")
-        # self.stop_button = QPushButton("停止")
         self.reset_button = QPushButton()
         self.reset_icon = style.standardIcon(QStyle.StandardPixmap.SP_MediaStop)
         self.reset_button.setIcon(self.reset_icon)
