@@ -20,6 +20,7 @@ class VideoRecorder(QThread):
             '-pix_fmt', 'yuv420p',# 输出必须转为 yuv420p 才能在普通播放器播放
             '-preset', 'fast',    # 编码速度：ultrafast, superfast, veryfast, fast, medium, slow
             '-crf', '28',         # 画质控制：18-28。数值越小画质越好。23 是默认平衡点。
+            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', # 总是将图像转为偶数尺寸
             filename
         ]
         
@@ -29,7 +30,7 @@ class VideoRecorder(QThread):
         self.pipe = subprocess.Popen(
             self.command, 
             stdin=subprocess.PIPE, 
-            stderr=subprocess.DEVNULL # 或者是 subprocess.PIPE 以捕获错误日志
+            stderr=subprocess.PIPE # 或者是 subprocess.PIPE 以捕获错误日志
         )
 
         self.logger = logger or logging.getLogger(__name__)

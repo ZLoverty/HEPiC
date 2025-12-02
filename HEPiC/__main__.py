@@ -107,6 +107,8 @@ class MainWindow(QMainWindow):
         self.record_timelapse = True
         self.VIDEO_WORKER_OK = False
         self.IR_WORKER_OK = False
+
+        self.frame_size = (512, 512)
     
     def load_config(self):
         with open(self.config_file, "r") as f:
@@ -250,6 +252,9 @@ class MainWindow(QMainWindow):
             # if ROI has been changed in the UI, send it to the video worker, so that it can crop later images accordingly.
             self.vision_page_widget.vision_widget.sigRoiChanged.connect(self.video_worker.set_roi)
             
+            # update frame size 
+            self.vision_page_widget.vision_widget.sigRoiChanged.connect(self.update_frame_size)
+
             # allow user to set the exposure time of the camera
             self.vision_page_widget.sigExpTime.connect(self.video_worker.set_exp_time)
 
@@ -345,11 +350,10 @@ class MainWindow(QMainWindow):
             if self.record_timelapse and self.VIDEO_WORKER_OK:
                 # init video recorder
                 self.autosave_video_filename = Path(f"{self.autosave_prefix}_video.mkv").resolve()
-                self.video_recorder_thread = VideoRecorder(self.autosave_video_filename)
-                print("connect frame signal to add_frame")
+                self.video_recorder_thread = VideoRecorder(self.autosave_video_filename, *self.frame_size)
                 self.processing_worker.proc_frame_signal.connect(self.video_recorder_thread.add_frame)
-                print("start thread")
                 self.video_recorder_thread.start()
+                
 
         else:
             self.home_widget.play_pause_button.setIcon(self.home_widget.play_icon)
@@ -432,6 +436,10 @@ class MainWindow(QMainWindow):
     async def update_host_and_connect(self, host):
         self.host = host
         await self.connection_test()
+
+    @Slot(tuple)
+    def update_frame_size(self, roi):
+        self.frame_size = (roi[2], roi[3])
 
     async def closeEvent(self, event):
         print("正在关闭应用程序...")
