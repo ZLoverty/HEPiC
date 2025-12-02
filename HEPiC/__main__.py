@@ -57,9 +57,9 @@ class MainWindow(QMainWindow):
     
     sigNewData = Signal(dict) # update data plot
     sigNewStatus = Signal(dict) # update status panel
-    # sigQueryRequest = Signal() # signal to query klipper status
     sigRestartFirmware = Signal()
     sigProgress = Signal(float)
+    sigFilePosition = Signal(int)
 
     def __init__(self, test_mode=False, logger=None):
         super().__init__()
@@ -129,6 +129,7 @@ class MainWindow(QMainWindow):
         self.final_data_maxlen = self.config.get("final_data_maxlen", 1000000)
         self.background_color = self.config.get("background_color", "black")
         self.foreground_color = self.config.get("foreground_color", "white")
+        self.klipper_query_delay = self.config.get("klipper_query_delay", 0.1)
 
     def initUI(self):
         # --- 创建控件 ---
@@ -221,10 +222,11 @@ class MainWindow(QMainWindow):
         
         # 创建 klipper worker（用于查询平台状态和发送动作指令）
         klipper_port = 7125
-        self.klipper_worker = KlipperWorker(self.host, klipper_port)
+        self.klipper_worker = KlipperWorker(self.host, klipper_port, query_delay=self.klipper_query_delay)
         # 连接信号槽
         self.klipper_worker.connection_status.connect(self.update_status)
-        self.klipper_worker.gcode_error.connect(self.home_widget.command_widget.display_message)
+        self.klipper_worker.gcode_response.connect(self.home_widget.command_widget.display_message)
+        # self.klipper_worker.gcode_error.connect(self.home_widget.command_widget.display_message)
         self.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
         self.home_widget.command_widget.command.connect(self.klipper_worker.send_gcode)
         self.sigRestartFirmware.connect(self.klipper_worker.restart_firmware)
@@ -405,8 +407,7 @@ class MainWindow(QMainWindow):
         self.grab_status()
         self.sigNewStatus.emit(self.data_status)
         self.sigProgress.emit(self.klipper_worker.progress)
-        # self.sigQueryRequest.emit()
-        # update gcode highlight if 
+        self.sigFilePosition.emit(self.klipper_worker.file_position)
 
     def grab_status(self):
         for item in self.data_status:

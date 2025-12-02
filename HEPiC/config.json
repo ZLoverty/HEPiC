@@ -13,7 +13,8 @@
     "tmp_data_maxlen": 100, 
     "final_data_maxlen": 10000000,
     "background_color": "#222831",
-    "foreground_color": "#DFD0B8"
+    "foreground_color": "#DFD0B8",
+    "klipper_query_delay": 1
 }
 
     

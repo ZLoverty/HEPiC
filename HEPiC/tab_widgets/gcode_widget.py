@@ -1,13 +1,20 @@
+from pathlib import Path
+import sys
+current_path = Path(__file__).resolve().parent.parent
+sys.path.append(str(current_path))
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog, QTextEdit, QLabel, QStyle
 )
 from PySide6.QtGui import QTextCursor, QTextCharFormat, QColor
 from PySide6.QtCore import Signal, Slot, QSize
+from utils import GcodePositionMapper
 
 class GcodeWidget(QWidget):
 
     sigGcode = Signal(str)
     sigFilePath = Signal(str)
+    sigCurrentLine = Signal(int)
 
     def __init__(self):
         
@@ -29,7 +36,6 @@ class GcodeWidget(QWidget):
         self.gcode_display.setReadOnly(True)
         # self.gcode_display.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.open_button = QPushButton("打开")
-        # self.clear_button = QPushButton("清除")
         self.run_button = QPushButton("运行")
 
         # 布局
@@ -39,20 +45,20 @@ class GcodeWidget(QWidget):
         label_layout.addWidget(self.warning_label)
         label_layout.addStretch(1)
         button_layout1 = QHBoxLayout()
-        # button_layout2 = QHBoxLayout()
+
         button_layout1.addWidget(self.open_button)
-        # button_layout1.addWidget(self.clear_button)
         button_layout1.addWidget(self.run_button, stretch=3)
 
         layout.addLayout(label_layout)
         layout.addWidget(self.gcode_display, stretch=4)
         layout.addLayout(button_layout1)
-        # layout.addLayout(button_layout2)
         self.setLayout(layout)
 
         # 信号槽连接
         self.open_button.clicked.connect(self.on_click_open)
         self.run_button.clicked.connect(self.on_click_run)
+        self.sigCurrentLine.connect(self.highlight_current_line)
+        self.sigCurrentLine.connect(self.reset_line_highlight)
 
         # variables
         self.file_path = None
@@ -69,10 +75,10 @@ class GcodeWidget(QWidget):
         if self.file_path:
             print(f"选择的文件路径是: {self.file_path}")
             with open(self.file_path, "r") as f:
-                gcode = f.read()
+                self.gcode = f.read()
             # emit gcode
-            self.sigGcode.emit(gcode)
-            self.gcode_display.setPlainText(gcode)
+            self.sigGcode.emit(self.gcode)
+            self.gcode_display.setPlainText(self.gcode)
             
         else:
             print("没有选择任何文件")
@@ -82,7 +88,9 @@ class GcodeWidget(QWidget):
         if self.file_path:
             # emit file path
             self.sigFilePath.emit(self.file_path)
-            
+            # create gcode position mapper
+            self.mapper = GcodePositionMapper(self.gcode)
+    
     @Slot(int)
     def highlight_current_line(self, line_number):
 
@@ -126,3 +134,11 @@ class GcodeWidget(QWidget):
             self.gcode_display.setTextCursor(cursor)
         else: # 如果这是第一行，则不执行恢复操作
             return
+    
+    @Slot(int)
+    def update_file_position(self, file_position):
+        if self.mapper:
+            current_line = self.mapper
+            self.sigCurrentLine.emit(current_line)
+        else:
+            pass
