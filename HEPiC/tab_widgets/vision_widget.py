@@ -120,6 +120,12 @@ class VisionWidget(pg.GraphicsLayoutWidget):
         self.roi_info = (int(self.roi["pos"][0]), int(self.roi["pos"][1]), int(self.roi["size"][0]), int(self.roi["size"][1]))
         self.sigRoiChanged.emit(self.roi_info) 
         self.logger.debug(f"New ROI set {self.roi_info}.")
+    
+    def enable_mouse(self):
+        self.mouse_enabled = True
+    
+    def disable_mouse(self):
+        self.mouse_enabled = False
 
 if __name__ == "__main__":
     import sys

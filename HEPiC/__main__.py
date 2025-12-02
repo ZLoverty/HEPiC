@@ -353,8 +353,9 @@ class MainWindow(QMainWindow):
                 self.video_recorder_thread = VideoRecorder(self.autosave_video_filename, *self.frame_size)
                 self.processing_worker.proc_frame_signal.connect(self.video_recorder_thread.add_frame)
                 self.video_recorder_thread.start()
+                # disable mouse in vision page
+                self.vision_page_widget.vision_widget.disable_mouse()
                 
-
         else:
             self.home_widget.play_pause_button.setIcon(self.home_widget.play_icon)
             self.logger.info("Recording stopped.")
@@ -365,6 +366,8 @@ class MainWindow(QMainWindow):
                 self.processing_worker.proc_frame_signal.disconnect(self.video_recorder_thread.add_frame)
                 self.video_recorder_thread.close()
                 self.video_recorder_thread.deleteLater()
+                # enable mouse after recording
+                self.vision_page_widget.vision_widget.enable_mouse()
 
     @Slot(str)
     def update_status(self, status):
