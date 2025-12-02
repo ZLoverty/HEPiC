@@ -59,6 +59,7 @@ class MainWindow(QMainWindow):
     sigNewStatus = Signal(dict) # update status panel
     # sigQueryRequest = Signal() # signal to query klipper status
     sigRestartFirmware = Signal()
+    sigProgress = Signal(float)
 
     def __init__(self, test_mode=False, logger=None):
         super().__init__()
@@ -227,7 +228,7 @@ class MainWindow(QMainWindow):
         self.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
         self.home_widget.command_widget.command.connect(self.klipper_worker.send_gcode)
         self.sigRestartFirmware.connect(self.klipper_worker.restart_firmware)
-        self.klipper_worker.sigPrintStats.connect(self.status_widget.update_progress)
+        self.sigProgress.connect(self.status_widget.update_progress)
         self.job_sequence_widget.gcode_widget.sigFilePath.connect(self.klipper_worker.upload_gcode_to_klipper)
         # Let all workers run
         tcp_task = self.worker.run()
@@ -403,6 +404,7 @@ class MainWindow(QMainWindow):
         """Update status panel"""
         self.grab_status()
         self.sigNewStatus.emit(self.data_status)
+        self.sigProgress.emit(self.klipper_worker.progress)
         # self.sigQueryRequest.emit()
         # update gcode highlight if 
 

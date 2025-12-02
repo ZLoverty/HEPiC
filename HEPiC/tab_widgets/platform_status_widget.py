@@ -41,8 +41,7 @@ class PlatformStatusWidget(QWidget):
         self.die_diameter_label = QLabel("出口熔体直径:")
         self.die_diameter_value = QLabel(f"{placeholder}")
         self.progress_label = QLabel("任务进度:")
-        self.print_duration_label = QLabel(f"{placeholder} / ")
-        self.total_duration_label = QLabel(f"{placeholder} s")
+        self.progress_value = QLabel(f"{placeholder}")
 
         # 布局
         layout = QVBoxLayout()
@@ -82,8 +81,7 @@ class PlatformStatusWidget(QWidget):
         die_diameter_row_layout.addWidget(self.die_diameter_value)
         # progress row
         progress_row_layout.addWidget(self.progress_label)
-        progress_row_layout.addWidget(self.print_duration_label)
-        progress_row_layout.addWidget(self.total_duration_label)
+        progress_row_layout.addWidget(self.progress_value)
 
         layout.addLayout(row_layout_1)
         layout.addLayout(row_layout_2)
@@ -91,7 +89,7 @@ class PlatformStatusWidget(QWidget):
         layout.addLayout(row_layout_4)
         layout.addLayout(die_temperature_row_layout)
         layout.addLayout(die_diameter_row_layout)
-        # layout.addLayout(progress_row_layout)
+        layout.addLayout(progress_row_layout)
         
         self.setLayout(layout)
 
@@ -128,10 +126,9 @@ class PlatformStatusWidget(QWidget):
     def on_temp_enter_pressed(self):
         self.set_temperature.emit(float(self.hotend_temperature_input.text()))
 
-    @Slot(dict)
+    @Slot(float)
     def update_progress(self, progress):
-        self.print_duration_label.setText(progress["print_duration"])
-        self.total_duration_label.setText(progress["total_duration"])
+        self.progress_value.setText(f"{progress*100}%")
 
 if __name__ == "__main__":
     import sys

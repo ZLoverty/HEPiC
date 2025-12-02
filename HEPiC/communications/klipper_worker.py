@@ -21,9 +21,8 @@ class KlipperWorker(QObject):
 
     connection_status = Signal(str)
     hotend_temperature = Signal(float)
-    current_step_signal = Signal(int)
     gcode_error = Signal(str)
-    sigPrintStats = Signal(dict)
+    
 
     def __init__(self, host, port, logger=None):
         super().__init__()
@@ -144,19 +143,20 @@ class KlipperWorker(QObject):
                     await websocket.send(json.dumps(data))
                     self.logger.debug(f"sent {data}")
                 else:
-                    self.logger.debug(data)
+                    self.logger.info(data)
             elif "error" in data:
                     err_msg = f"Error {data["error"]["code"]}: {data["error"]["message"]}"
                     self.logger.info(f"error message: {err_msg}")
                     self.gcode_error.emit(err_msg)
             elif "result" in data:
-                self.logger.debug(data)     
+                self.logger.info(data)     
                 if "id" in data:
                     if data["id"] == 2:
                         sub_msg = data.get("result", {}).get("status", {})
                         self.hotend_temperature = sub_msg.get("extruder", {}).get("temperature", np.nan)
                         self.target_hotend_temperature = sub_msg.get("extruder", {}).get("target", np.nan)
                         self.active_feedrate_mms = sub_msg.get("motion_report", {}).get("live_extruder_velocity")
+                        self.progress = sub_msg.get("virtual_sdcard", {}).get("progress", None)
             else:
                 self.logger.info(data)
 
