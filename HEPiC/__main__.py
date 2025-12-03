@@ -156,11 +156,11 @@ class MainWindow(QMainWindow):
 
         # --- 连接信号与槽 ---
         self.connection_widget.host.connect(self.update_host_and_connect)
-        
         self.sigNewData.connect(self.home_widget.data_widget.update_display)
         self.home_widget.play_pause_button.toggled.connect(self.on_toggle_play_pause)
         self.home_widget.stop_button.clicked.connect(self.on_stop_clicked)
         self.sigNewStatus.connect(self.status_widget.update_display)
+        self.sigFilePosition.connect(self.job_sequence_widget.gcode_widget.update_file_position)
         
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
