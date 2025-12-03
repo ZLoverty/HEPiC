@@ -7,8 +7,11 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog, QTextEdit, QLabel, QStyle
 )
 from PySide6.QtGui import QTextCursor, QTextCharFormat, QColor
-from PySide6.QtCore import Signal, Slot, QSize
+from PySide6.QtCore import Signal, Slot, QSize, QObject
 from utils import GcodePositionMapper
+import time
+from threading import Thread
+import logging
 
 class GcodeWidget(QWidget):
 
@@ -16,7 +19,7 @@ class GcodeWidget(QWidget):
     sigFilePath = Signal(str)
     sigCurrentLine = Signal(int)
 
-    def __init__(self):
+    def __init__(self, hightlight_color="#456882", logger=None):
         
         super().__init__()
 
@@ -58,10 +61,14 @@ class GcodeWidget(QWidget):
         self.open_button.clicked.connect(self.on_click_open)
         self.run_button.clicked.connect(self.on_click_run)
         self.sigCurrentLine.connect(self.highlight_current_line)
-        self.sigCurrentLine.connect(self.reset_line_highlight)
+        # self.sigCurrentLine.connect(self.reset_line_highlight)
 
         # variables
         self.file_path = None
+        self.highlight_color = hightlight_color
+
+        # logger
+        self.logger = logger or logging.getLogger(__name__)
 
     def on_click_open(self):
         """打开 gcode 文件，清理注释，显示在 display 窗口"""
@@ -75,10 +82,11 @@ class GcodeWidget(QWidget):
         if self.file_path:
             print(f"选择的文件路径是: {self.file_path}")
             with open(self.file_path, "r") as f:
-                self.gcode = f.read()
-            # emit gcode
-            self.sigGcode.emit(self.gcode)
-            self.gcode_display.setPlainText(self.gcode)
+                gcode = f.read()
+                self.set_gcode(gcode)
+            
+            # self.gcode_display.setPlainText(self.gcode)
+            self.display_gcode()
             
         else:
             print("没有选择任何文件")
@@ -88,17 +96,27 @@ class GcodeWidget(QWidget):
         if self.file_path:
             # emit file path
             self.sigFilePath.emit(self.file_path)
-            # create gcode position mapper
-            self.mapper = GcodePositionMapper(self.gcode)
+            
     
+    def display_gcode(self):
+        self.gcode_display.setPlainText(self.gcode)
+    
+    def set_gcode(self, gcode):
+        self.gcode = gcode
+        # emit gcode
+        self.sigGcode.emit(self.gcode)
+        # create gcode position mapper
+        self.mapper = GcodePositionMapper(self.gcode)
+
     @Slot(int)
     def highlight_current_line(self, line_number):
+        self.logger.debug(f"highlight line {line_number}")
 
         manual_selection = QTextEdit.ExtraSelection()
             
         # 设置高亮格式 (背景色)
         manual_format = QTextCharFormat()
-        manual_format.setBackground(QColor("lightblue"))
+        manual_format.setBackground(QColor(self.highlight_color))
         # <<< 关键改动 1: 必须设置这个属性才能让高亮填满整行
         manual_format.setProperty(QTextCharFormat.FullWidthSelection, True)
         manual_selection.format = manual_format
@@ -116,8 +134,9 @@ class GcodeWidget(QWidget):
     @Slot(int)
     def reset_line_highlight(self, line_number):
         """将高亮 gcode 恢复为普通样式。注意，这里接收的 line_number 仍然是当前执行行，所以 cursor 需要选择到 line_number-1 行进行操作。"""
-
+        
         if line_number > 1:
+            self.logger.debug(f"reset line {line_number}")
             cursor = self.gcode_display.textCursor()
             cursor.movePosition(QTextCursor.StartOfBlock)
             for i in range(line_number-1):
@@ -137,8 +156,50 @@ class GcodeWidget(QWidget):
     
     @Slot(int)
     def update_file_position(self, file_position):
+        self.logger.debug(f"file position: {file_position}")
         if self.mapper:
-            current_line = self.mapper
+            current_line = self.mapper.get_line_number(file_position) - 1
+            self.logger.debug(f"current line: {current_line}")
             self.sigCurrentLine.emit(current_line)
         else:
             pass
+
+def update_position_test(widget):
+    pos = range(0, 300, 10)
+    for fp in pos:
+        widget.update_file_position(fp)
+        time.sleep(1)
+
+
+if __name__ == "__main__":
+
+    from PySide6.QtWidgets import QApplication
+
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)] # 确保输出到 stdout
+    )
+
+    test_gcode_content = """
+    G91
+    M104 S200 ; Set Temp
+    G1 F100 ; Set speed 20mm/s
+    G1 E1 ; Move and Extrude
+    G1 F200
+    G1 E2 ; Move and Extrude
+    G1 F300
+    G1 E3 ; Retract (E goes from 2 to 1)
+    M104 S210 ; Change Temp
+    G1 X30 E3 ; Move and Extrude
+    """
+
+    app = QApplication(sys.argv)
+    widget = GcodeWidget()
+    widget.set_gcode(test_gcode_content)
+    widget.display_gcode()
+    # widget.update_file_position(100)
+    thread = Thread(target=update_position_test, args=(widget, ))
+    thread.start()
+    widget.show()
+    sys.exit(app.exec())
