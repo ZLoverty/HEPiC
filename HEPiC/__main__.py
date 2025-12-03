@@ -57,9 +57,9 @@ class MainWindow(QMainWindow):
     
     sigNewData = Signal(dict) # update data plot
     sigNewStatus = Signal(dict) # update status panel
-    sigRestartFirmware = Signal()
     sigProgress = Signal(float)
     sigFilePosition = Signal(int)
+    sigEmergencyStop = Signal()
 
     def __init__(self, test_mode=False, logger=None):
         super().__init__()
@@ -168,7 +168,7 @@ class MainWindow(QMainWindow):
         
         self.sigNewData.connect(self.home_widget.data_widget.update_display)
         self.home_widget.play_pause_button.toggled.connect(self.on_toggle_play_pause)
-        self.home_widget.reset_button.clicked.connect(self.on_reset_clicked)
+        self.home_widget.stop_button.clicked.connect(self.on_stop_clicked)
         self.sigNewStatus.connect(self.status_widget.update_display)
         
     def init_data(self):
@@ -231,7 +231,8 @@ class MainWindow(QMainWindow):
         # self.klipper_worker.gcode_error.connect(self.home_widget.command_widget.display_message)
         self.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
         self.home_widget.command_widget.command.connect(self.klipper_worker.send_gcode)
-        self.sigRestartFirmware.connect(self.klipper_worker.restart_firmware)
+        self.home_widget.sigRestart.connect(self.klipper_worker.restart_firmware)
+        self.sigEmergencyStop.connect(self.klipper_worker.emergency_stop)
         self.sigProgress.connect(self.status_widget.update_progress)
         self.job_sequence_widget.gcode_widget.sigFilePath.connect(self.klipper_worker.upload_gcode_to_klipper)
         # Let all workers run
@@ -451,10 +452,10 @@ class MainWindow(QMainWindow):
         self.frame_size = (roi[2], roi[3])
 
     @Slot()
-    def on_reset_clicked(self):
+    def on_stop_clicked(self):
         self.init_data()
         self.home_widget.play_pause_button.setChecked(False)
-        self.sigRestartFirmware.emit()
+        self.sigEmergencyStop.emit()
 
     async def closeEvent(self, event):
         print("正在关闭应用程序...")

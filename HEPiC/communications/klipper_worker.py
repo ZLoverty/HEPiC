@@ -134,14 +134,8 @@ class KlipperWorker(QObject):
             # 3. 我发送的 gcode 请求，包含 "method" 键，方法为 "printer.gcode.script"
             
             if "method" in data: 
-                if data["method"] == "printer.gcode.script": # 发送 G-code
+                if data["method"] in ["printer.gcode.script", "printer.objects.subscribe", "printer.objects.query", "printer.emergency_stop"]: # 发送 G-code
                     await websocket.send(json.dumps(data))
-                elif data["method"] == "printer.objects.subscribe": # send subscription message
-                    await websocket.send(json.dumps(data))
-                    self.logger.debug("已发送状态订阅请求...")
-                elif data["method"] == "printer.objects.query":
-                    await websocket.send(json.dumps(data))
-                    self.logger.debug(f"sent {data}")
                 elif data["method"] == "notify_gcode_response":
                     response = data.get("params")[0]
                     self.gcode_response.emit(response)
@@ -272,7 +266,21 @@ class KlipperWorker(QObject):
 
     @asyncSlot()
     async def restart_firmware(self):
+        self.logger.info("Sending restart")
         await self.send_gcode("FIRMWARE_RESTART")
+
+    @asyncSlot()
+    async def emergency_stop(self):
+        """
+        发送最高优先级的急停指令
+        """
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "printer.emergency_stop", # 注意：不是 gcode.script
+            "id": 0
+        }
+        print("!!! SENDING EMERGENCY STOP !!!")
+        await self.message_queue.put(payload)
 
 
 class MockMoonrakerServer:
