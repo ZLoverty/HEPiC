@@ -76,15 +76,6 @@ class MainWindow(QMainWindow):
         # 1. (关键) 给主窗口设置一个唯一的对象名称
         self.setObjectName("MyMainWindow") 
 
-        # 2. (关键) 使用 QSS 并通过 #objectName 来指定样式
-        # 这样可以确保样式只应用到主窗口，而不会"泄露"给子控件
-        if self.test_mode:
-            self.setStyleSheet("""
-                QMainWindow#MyMainWindow {
-                    background-color: #D2DCB6; 
-                }
-            """)
-
         self.initUI()
         self._timer = QTimer(self) # set data appending frequency
         self._timer.timeout.connect(self.on_timer_tick)
