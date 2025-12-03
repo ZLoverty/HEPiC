@@ -130,6 +130,8 @@ class MainWindow(QMainWindow):
         self.background_color = self.config.get("background_color", "black")
         self.foreground_color = self.config.get("foreground_color", "white")
         self.klipper_query_delay = self.config.get("klipper_query_delay", 0.1)
+        self.gcode_highlight_background = self.config.get("gcode_highlight_background", "#435663")
+        self.hover_color = self.config.get("hover_color", "#A3B087")
 
     def initUI(self):
         # --- 创建控件 ---

@@ -58,9 +58,6 @@ class KlipperWorker(QObject):
             async with websockets.connect(self.uri, open_timeout=2.0) as websocket:
                 self.logger.info("Klipper 连接成功！")
                 self.connection_status.emit("Klipper 连接成功！")
-                
-                # await self.subscribe_printer_status()
-                # self.logger.info("已发送状态订阅请求...")
 
                 self.listener_task = asyncio.create_task(self.message_listener(websocket))
                 self.processor_task = asyncio.create_task(self.data_processor(websocket))
@@ -149,13 +146,13 @@ class KlipperWorker(QObject):
                     response = data.get("params")[0]
                     self.gcode_response.emit(response)
                 else:
-                    self.logger.info(data)
+                    self.logger.debug(data)
             elif "error" in data:
                     err_msg = f"Error {data["error"]["code"]}: {data["error"]["message"]}"
                     self.logger.error(f"error message: {err_msg}")
                     self.gcode_error.emit(err_msg)
             elif "result" in data:
-                self.logger.info(data)     
+                self.logger.debug(data)     
                 if "id" in data:
                     if data["id"] == 2:
                         sub_msg = data.get("result", {}).get("status", {})
@@ -165,7 +162,7 @@ class KlipperWorker(QObject):
                         self.progress = sub_msg.get("virtual_sdcard", {}).get("progress")
                         self.file_position = sub_msg.get("virtual_sdcard", {}).get("file_position")
             else:
-                self.logger.info(data)
+                self.logger.debug(data)
 
             # 标记任务完成，这对于优雅退出很重要
             self.message_queue.task_done()
