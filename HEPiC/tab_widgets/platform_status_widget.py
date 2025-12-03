@@ -128,7 +128,7 @@ class PlatformStatusWidget(QWidget):
 
     @Slot(float)
     def update_progress(self, progress):
-        self.progress_value.setText(f"{progress*100}%")
+        self.progress_value.setText(f"{progress*100:.1f}%")
 
 if __name__ == "__main__":
     import sys
