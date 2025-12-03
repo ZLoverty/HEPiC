@@ -12,6 +12,7 @@ from utils import GcodePositionMapper
 import time
 from threading import Thread
 import logging
+from tab_widgets.job_sequence_dialog import JobSequenceDialog
 
 class GcodeWidget(QWidget):
 
@@ -40,6 +41,7 @@ class GcodeWidget(QWidget):
         # self.gcode_display.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.open_button = QPushButton("打开")
         self.run_button = QPushButton("运行")
+        self.gen_button = QPushButton("生成")
 
         # 布局
         layout = QVBoxLayout()
@@ -49,8 +51,9 @@ class GcodeWidget(QWidget):
         label_layout.addStretch(1)
         button_layout1 = QHBoxLayout()
 
+        button_layout1.addWidget(self.gen_button)
         button_layout1.addWidget(self.open_button)
-        button_layout1.addWidget(self.run_button, stretch=3)
+        button_layout1.addWidget(self.run_button)
 
         layout.addLayout(label_layout)
         layout.addWidget(self.gcode_display, stretch=4)
@@ -61,10 +64,12 @@ class GcodeWidget(QWidget):
         self.open_button.clicked.connect(self.on_click_open)
         self.run_button.clicked.connect(self.on_click_run)
         self.sigCurrentLine.connect(self.highlight_current_line)
+        self.gen_button.clicked.connect(self.on_click_gen)
         # self.sigCurrentLine.connect(self.reset_line_highlight)
 
         # variables
         self.file_path = None
+        self.mapper = None
         self.highlight_color = hightlight_color
 
         # logger
@@ -72,31 +77,39 @@ class GcodeWidget(QWidget):
 
     def on_click_open(self):
         """打开 gcode 文件，清理注释，显示在 display 窗口"""
-        self.file_path, _ = QFileDialog.getOpenFileName(
+        file_path, _ = QFileDialog.getOpenFileName(
             self,
             "选择一个文件",
             "",
             "G-code (*.gcode)"
         )
 
-        if self.file_path:
-            print(f"选择的文件路径是: {self.file_path}")
-            with open(self.file_path, "r") as f:
+        if file_path:
+            print(f"选择的文件路径是: {file_path}")
+            with open(file_path, "r") as f:
                 gcode = f.read()
-                self.set_gcode(gcode)
-            
-            # self.gcode_display.setPlainText(self.gcode)
-            self.display_gcode()
-            
+                self.set_gcode(gcode)         
         else:
             print("没有选择任何文件")
             return
 
     def on_click_run(self):
+        self.file_path = Path(__file__).resolve().parent / "tmp.gcode"
+        with open(self.file_path, "w") as f:
+            f.write(self.gcode)
+
         if self.file_path:
             # emit file path
-            self.sigFilePath.emit(self.file_path)
-            
+            self.sigFilePath.emit(str(self.file_path))
+    
+    def on_click_gen(self):
+        dialog = JobSequenceDialog(self)
+        if dialog.exec():
+            gcode = dialog.get_job_sequence()
+            self.set_gcode(gcode)
+            print(f"生成动作序列如下:\n {gcode}")
+        else:
+            print("用户取消了输入")
     
     def display_gcode(self):
         self.gcode_display.setPlainText(self.gcode)
@@ -105,6 +118,8 @@ class GcodeWidget(QWidget):
         self.gcode = gcode
         # emit gcode
         self.sigGcode.emit(self.gcode)
+        
+        self.display_gcode()
         # create gcode position mapper
         self.mapper = GcodePositionMapper(self.gcode)
 

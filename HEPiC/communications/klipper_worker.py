@@ -263,6 +263,10 @@ class KlipperWorker(QObject):
                     
         except requests.exceptions.RequestException as e:
             self.logger.error(f"连接错误: {e}")
+        
+        finally:
+            # delete the temporary gcode file
+            os.remove(file_path)
 
     @asyncSlot()
     async def restart_firmware(self):
