@@ -1,10 +1,13 @@
 import subprocess
 import numpy as np
-from PySide6.QtCore import QThread, Slot
+from PySide6.QtCore import QThread, Slot, Signal
 import queue
 import logging
 
 class VideoRecorder(QThread):
+
+    sigClose = Signal()
+
     def __init__(self, filename, width=512, height=512, fps=30, logger=None):
         super().__init__()
         self.command = [
@@ -58,20 +61,20 @@ class VideoRecorder(QThread):
                 self.logger.error(f"FFmpeg Pipe Error: {e}")
             
             self.queue.task_done()
-            # 发送队列积压情况给 UI，方便调试
-            # self.update_status.emit(f"Queue: {self.queue.qsize()}")
 
-        # 清理工作
-        if self.pipe:
-            self.pipe.stdin.close()
-            self.pipe.wait()
-
+    @Slot()
     def close(self):
+        # put None in queue
         self.queue.put_nowait(None)
-        self.is_running = False
-        if self.pipe:
-            self.pipe.stdin.close()
-            self.pipe.wait()
+        # self.is_running = False
+        if self.pipe:         
+            try:
+                # communicate 会关闭 stdin，并读取 stdout/stderr 直到进程结束
+                outs, errs = self.pipe.communicate(timeout=1)
+            except subprocess.TimeoutExpired:
+                self.pipe.kill()
+                outs, errs = self.pipe.communicate()
+            self.deleteLater()
 
 # --- 使用示例 ---
 # 假设在你的线程中
