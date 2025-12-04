@@ -5,10 +5,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "HEPiC"
-version = "0.2.0"
+version = "0.3.1"
 description = "The App for Polymaker extrusion platform."
 readme = "README.md"  # 也就是 PyPI 上的项目主页介绍
-requires-python = ">=3.8" # 指定支持的 Python 版本
+requires-python = ">=3.12" # 指定支持的 Python 版本
 license = {text = "MIT"}
 authors = [
   {name = "Zhengyang Liu", email = "liuzy19911112@gmail.com"},

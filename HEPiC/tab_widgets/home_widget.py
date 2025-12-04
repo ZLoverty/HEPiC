@@ -1,8 +1,7 @@
 from PySide6.QtWidgets import (
      QWidget, QVBoxLayout, QHBoxLayout, QSizePolicy, QPushButton, QStyle
 )
-from PySide6.QtCore import QSize
-from .gcode_widget import GcodeWidget
+from PySide6.QtCore import QSize, Signal, Slot
 from .command_widget import CommandWidget
 from .data_plot_widget import DataPlotWidget
 from .platform_status_widget import PlatformStatusWidget
@@ -10,6 +9,8 @@ from .vision_widget import VisionWidget
 
 class HomeWidget(QWidget):
     """主页控件，包含 G-code 控件和数据状态监视控件"""
+
+    sigRestart = Signal()
 
     def __init__(self):
         super().__init__()
@@ -42,6 +43,8 @@ class HomeWidget(QWidget):
             
             /* (可选) 默认背景色 */
             background-color: #f0f0f0;
+
+            font-size: 24pt;
         }}
         
         /* (可选) 鼠标悬停时的样式 */
@@ -62,14 +65,19 @@ class HomeWidget(QWidget):
         """
         self.play_pause_button.setStyleSheet(qss_style)
 
-        # self.start_button = QPushButton("开始")
-        # self.stop_button = QPushButton("停止")
-        self.reset_button = QPushButton()
-        self.reset_icon = style.standardIcon(QStyle.StandardPixmap.SP_MediaStop)
-        self.reset_button.setIcon(self.reset_icon)
-        self.reset_button.setFixedSize(button_size, button_size)
-        self.reset_button.setIconSize(QSize(button_size // 2, button_size // 2))
-        self.reset_button.setStyleSheet(qss_style)
+        self.stop_button = QPushButton()
+        self.stop_icon = style.standardIcon(QStyle.StandardPixmap.SP_DialogCancelButton)
+        self.stop_button.setIcon(self.stop_icon)
+        self.stop_button.setFixedSize(button_size, button_size)
+        self.stop_button.setIconSize(QSize(button_size // 2, button_size // 2))
+        self.stop_button.setStyleSheet(qss_style)
+
+        self.restart_button = QPushButton("🍓")
+        # self.restart_icon = style.standardIcon(QStyle.StandardPixmap.SP_MediaStop)
+        # self.restart_button.setIcon(self.restart_icon)
+        self.restart_button.setFixedSize(button_size, button_size)
+        self.restart_button.setIconSize(QSize(button_size // 2, button_size // 2))
+        self.restart_button.setStyleSheet(qss_style)
 
         # 布局
         layout = QHBoxLayout()
@@ -78,7 +86,8 @@ class HomeWidget(QWidget):
         control_button_layout = QHBoxLayout()
         control_button_layout.addWidget(self.play_pause_button)
         # control_button_layout.addWidget(self.stop_button)
-        control_button_layout.addWidget(self.reset_button)
+        control_button_layout.addWidget(self.stop_button)
+        control_button_layout.addWidget(self.restart_button)
         control_layout.addLayout(control_button_layout)
         data_layout = QVBoxLayout()
         status_and_vision_layout = QHBoxLayout()
@@ -90,3 +99,10 @@ class HomeWidget(QWidget):
         layout.addLayout(control_layout)
         layout.addLayout(data_layout)
         self.setLayout(layout)
+
+        # Signal and slot
+        self.restart_button.clicked.connect(self.on_restart_clicked)
+
+    @Slot()
+    def on_restart_clicked(self):
+        self.sigRestart.emit()

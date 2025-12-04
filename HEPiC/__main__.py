@@ -57,7 +57,9 @@ class MainWindow(QMainWindow):
     
     sigNewData = Signal(dict) # update data plot
     sigNewStatus = Signal(dict) # update status panel
-    # sigQueryRequest = Signal() # signal to query klipper status
+    sigProgress = Signal(float)
+    sigFilePosition = Signal(int)
+    sigEmergencyStop = Signal()
 
     def __init__(self, test_mode=False, logger=None):
         super().__init__()
@@ -73,15 +75,6 @@ class MainWindow(QMainWindow):
 
         # 1. (关键) 给主窗口设置一个唯一的对象名称
         self.setObjectName("MyMainWindow") 
-
-        # 2. (关键) 使用 QSS 并通过 #objectName 来指定样式
-        # 这样可以确保样式只应用到主窗口，而不会"泄露"给子控件
-        if self.test_mode:
-            self.setStyleSheet("""
-                QMainWindow#MyMainWindow {
-                    background-color: #D2DCB6; 
-                }
-            """)
 
         self.initUI()
         self._timer = QTimer(self) # set data appending frequency
@@ -107,6 +100,8 @@ class MainWindow(QMainWindow):
         self.record_timelapse = True
         self.VIDEO_WORKER_OK = False
         self.IR_WORKER_OK = False
+
+        self.frame_size = (512, 512)
     
     def load_config(self):
         with open(self.config_file, "r") as f:
@@ -125,6 +120,9 @@ class MainWindow(QMainWindow):
         self.final_data_maxlen = self.config.get("final_data_maxlen", 1000000)
         self.background_color = self.config.get("background_color", "black")
         self.foreground_color = self.config.get("foreground_color", "white")
+        self.klipper_query_delay = self.config.get("klipper_query_delay", 0.1)
+        self.gcode_highlight_background = self.config.get("gcode_highlight_background", "#435663")
+        self.hover_color = self.config.get("hover_color", "#A3B087")
 
     def initUI(self):
         # --- 创建控件 ---
@@ -158,11 +156,11 @@ class MainWindow(QMainWindow):
 
         # --- 连接信号与槽 ---
         self.connection_widget.host.connect(self.update_host_and_connect)
-        
         self.sigNewData.connect(self.home_widget.data_widget.update_display)
         self.home_widget.play_pause_button.toggled.connect(self.on_toggle_play_pause)
-        self.home_widget.reset_button.clicked.connect(self.init_data)
+        self.home_widget.stop_button.clicked.connect(self.on_stop_clicked)
         self.sigNewStatus.connect(self.status_widget.update_display)
+        self.sigFilePosition.connect(self.job_sequence_widget.gcode_widget.update_file_position)
         
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
@@ -217,14 +215,16 @@ class MainWindow(QMainWindow):
         
         # 创建 klipper worker（用于查询平台状态和发送动作指令）
         klipper_port = 7125
-        self.klipper_worker = KlipperWorker(self.host, klipper_port)
+        self.klipper_worker = KlipperWorker(self.host, klipper_port, query_delay=self.klipper_query_delay)
         # 连接信号槽
         self.klipper_worker.connection_status.connect(self.update_status)
-        self.klipper_worker.gcode_error.connect(self.home_widget.command_widget.display_message)
+        self.klipper_worker.gcode_response.connect(self.home_widget.command_widget.display_message)
+        # self.klipper_worker.gcode_error.connect(self.home_widget.command_widget.display_message)
         self.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
         self.home_widget.command_widget.command.connect(self.klipper_worker.send_gcode)
-        # self.sigQueryRequest.connect(self.klipper_worker.query_status)
-        self.klipper_worker.sigPrintStats.connect(self.status_widget.update_progress)
+        self.home_widget.sigRestart.connect(self.klipper_worker.restart_firmware)
+        self.sigEmergencyStop.connect(self.klipper_worker.emergency_stop)
+        self.sigProgress.connect(self.status_widget.update_progress)
         self.job_sequence_widget.gcode_widget.sigFilePath.connect(self.klipper_worker.upload_gcode_to_klipper)
         # Let all workers run
         tcp_task = self.worker.run()
@@ -250,6 +250,9 @@ class MainWindow(QMainWindow):
             # if ROI has been changed in the UI, send it to the video worker, so that it can crop later images accordingly.
             self.vision_page_widget.vision_widget.sigRoiChanged.connect(self.video_worker.set_roi)
             
+            # update frame size 
+            self.vision_page_widget.vision_widget.sigRoiChanged.connect(self.update_frame_size)
+
             # allow user to set the exposure time of the camera
             self.vision_page_widget.sigExpTime.connect(self.video_worker.set_exp_time)
 
@@ -345,12 +348,12 @@ class MainWindow(QMainWindow):
             if self.record_timelapse and self.VIDEO_WORKER_OK:
                 # init video recorder
                 self.autosave_video_filename = Path(f"{self.autosave_prefix}_video.mkv").resolve()
-                self.video_recorder_thread = VideoRecorder(self.autosave_video_filename)
-                print("connect frame signal to add_frame")
+                self.video_recorder_thread = VideoRecorder(self.autosave_video_filename, *self.frame_size)
                 self.processing_worker.proc_frame_signal.connect(self.video_recorder_thread.add_frame)
-                print("start thread")
                 self.video_recorder_thread.start()
-
+                # disable mouse in vision page
+                self.vision_page_widget.vision_widget.disable_mouse()
+                
         else:
             self.home_widget.play_pause_button.setIcon(self.home_widget.play_icon)
             self.logger.info("Recording stopped.")
@@ -361,6 +364,8 @@ class MainWindow(QMainWindow):
                 self.processing_worker.proc_frame_signal.disconnect(self.video_recorder_thread.add_frame)
                 self.video_recorder_thread.close()
                 self.video_recorder_thread.deleteLater()
+                # enable mouse after recording
+                self.vision_page_widget.vision_widget.enable_mouse()
 
     @Slot(str)
     def update_status(self, status):
@@ -395,8 +400,8 @@ class MainWindow(QMainWindow):
         """Update status panel"""
         self.grab_status()
         self.sigNewStatus.emit(self.data_status)
-        # self.sigQueryRequest.emit()
-        # update gcode highlight if 
+        self.sigProgress.emit(self.klipper_worker.progress)
+        self.sigFilePosition.emit(self.klipper_worker.file_position)
 
     def grab_status(self):
         for item in self.data_status:
@@ -432,6 +437,16 @@ class MainWindow(QMainWindow):
     async def update_host_and_connect(self, host):
         self.host = host
         await self.connection_test()
+
+    @Slot(tuple)
+    def update_frame_size(self, roi):
+        self.frame_size = (roi[2], roi[3])
+
+    @Slot()
+    def on_stop_clicked(self):
+        self.init_data()
+        self.home_widget.play_pause_button.setChecked(False)
+        self.sigEmergencyStop.emit()
 
     async def closeEvent(self, event):
         print("正在关闭应用程序...")

@@ -8,12 +8,16 @@
     "rotary_encoder_steps_total": 1000,
     "rotary_encoder_wheel_diameter": 28.6,
     "meter_count_cache_size": 10,
-    "data_frequency": 10,
-    "status_frequency": 5,
+    
     "tmp_data_maxlen": 100, 
     "final_data_maxlen": 10000000,
-    "background_color": "#222831",
-    "foreground_color": "#DFD0B8"
+    "background_color": "#313647",
+    "foreground_color": "#FFF8D4",
+    "gcode_highlight_background": "#435663",
+    "hover_color": "#A3B087",
+    "data_frequency": 10,
+    "status_frequency": 5,
+    "klipper_query_delay": 0.1
 }
 
     
