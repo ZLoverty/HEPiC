@@ -173,7 +173,7 @@ class GcodeWidget(QWidget):
     def update_file_position(self, file_position):
         self.logger.debug(f"file position: {file_position}")
         if self.mapper:
-            current_line = self.mapper.get_line_number(file_position) - 1
+            current_line = self.mapper.get_line_number(file_position)
             self.logger.debug(f"current line: {current_line}")
             self.sigCurrentLine.emit(current_line)
         else:
