@@ -15,7 +15,7 @@
     "foreground_color": "#FFF8D4",
     "gcode_highlight_background": "#435663",
     "hover_color": "#A3B087",
-    "data_frequency": 10,
+    "data_frequency": 100,
     "status_frequency": 5,
     "klipper_query_delay": 0.1
 }
