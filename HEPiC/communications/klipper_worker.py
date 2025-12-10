@@ -25,57 +25,83 @@ class KlipperWorker(QObject):
     def __init__(self, host, port, query_delay=1, logger=None):
         super().__init__()
 
-        # connection
+        # connection / args
         self.host = host
         self.port = port
         self.uri = f"ws://{self.host}:{self.port}/websocket"
-        
-        # status / flags
+        self.query_delay = query_delay
+        self.logger = logger or logging.getLogger(__name__)
+
+        # status / data
         self.is_running = True
+        self._init_data()
+        
+        # message queue
+        self.message_queue = asyncio.Queue()
+        
+        # task handlers
+        self.listener_task = None
+        self.processor_task = None
+        self.query_task = None
+
+    def _init_data(self):
+        # initiate internal data container
         self.active_feedrate_mms = 0
-        self.active_gcode = None
         self.hotend_temperature = np.nan
         self.target_hotend_temperature = np.nan
         self.progress = 0.0
         self.file_position = 0
 
-        # message queue
-        self.message_queue = asyncio.Queue()
-
-        # logger
-        self.logger = logger or logging.getLogger(__name__)
-
-        # variables
-        self.query_delay = query_delay
-        
     @asyncSlot()
     async def run(self):
         """Asyncio 事件循环，处理 WebSocket 连接和通信"""
-        try:
-            self.logger.info(f"正在连接 Klipper {self.uri} ...")
-            self.connection_status.emit(f"正在连接 Klipper {self.uri} ...")
-            # async with asyncio.wait_for(websockets.connect(self.uri), timeout=2.0) as websocket:
-            async with websockets.connect(self.uri, open_timeout=2.0) as websocket:
-                self.logger.info("Klipper 连接成功！")
-                self.connection_status.emit("Klipper 连接成功！")
+        while self.is_running:
+            try:
+                self.logger.info(f"正在连接 Klipper {self.uri} ...")
+                self.connection_status.emit(f"正在连接 Klipper {self.uri} ...")
+                # async with asyncio.wait_for(websockets.connect(self.uri), timeout=2.0) as websocket:
+                async with websockets.connect(self.uri, open_timeout=2.0) as websocket:
+                    self.logger.info("Klipper 连接成功！")
+                    self.connection_status.emit("Klipper 连接成功！")
 
-                self.listener_task = asyncio.create_task(self.message_listener(websocket))
-                self.processor_task = asyncio.create_task(self.data_processor(websocket))
-                self.query_task = asyncio.create_task(self.query_klipper(websocket))
+                    # clear message queue if it's not empty
+                    while not self.message_queue.empty():
+                        try: self.message_queue.get_nowait()
+                        except: pass
 
-                await asyncio.gather(self.listener_task, self.processor_task, self.query_task)
+                    self.listener_task = asyncio.create_task(self.message_listener(websocket))
+                    self.processor_task = asyncio.create_task(self.data_processor(websocket))
+                    self.query_task = asyncio.create_task(self.query_klipper(websocket))
+                    
+                    done, pending = await asyncio.wait(
+                        [self.listener_task, self.processor_task],
+                        return_when=asyncio.FIRST_COMPLETED
+                    )
 
-        except (websockets.exceptions.ConnectionClosedError, ConnectionRefusedError) as e:
-            self.logger.error(f"Klipper 连接失败")
-        except TimeoutError as e:
-            self.logger.error("Klipper 连接超时，检查服务器是否开启")
-            self.connection_status.emit("Klipper 连接超时，检查服务器是否开启")
+                    self.logger.warning("连接已中断，正在清理任务...")
+                    for task in pending:
+                        task.cancel()
+                        try:
+                            await task
+                        except asyncio.CancelledError:
+                            pass
+            
+            except (websockets.exceptions.ConnectionClosedError, ConnectionRefusedError) as e:
+                self.logger.error(f"Klipper 连接失败")
+            except TimeoutError as e:
+                self.logger.error("Klipper 连接超时，检查服务器是否开启")
+                self.connection_status.emit("Klipper 连接超时，检查服务器是否开启")
 
+            # 如果 is_running 依然为 True，说明是意外断开，需要重连
+            if self.is_running:
+                self.connection_status.emit("连接断开，3秒后重连...")
+                self.logger.info("将在 3 秒后尝试重连...")
+                await asyncio.sleep(3)
+            
     async def message_listener(self, websocket):
         self.logger.debug("消息监听器已启动")
         try:
             async for message in websocket:
-                # print(f"--- [DEBUG] 收到原始消息: {message}") # <--- 增加原始打印
                 try:
                     data = json.loads(message)
                     await self.message_queue.put(data)
@@ -91,7 +117,6 @@ class KlipperWorker(QObject):
             self.logger.error(f"!!! [ERROR] 消息监听器崩溃: {e}")
         finally:
             self.logger.debug("--- [DEBUG] 消息监听器已退出 ---")
-            self.is_running = False # 确保其他循环也能退出
 
     @asyncSlot(str)
     async def send_gcode(self, gcode):
@@ -145,6 +170,7 @@ class KlipperWorker(QObject):
                     err_msg = f"Error {data["error"]["code"]}: {data["error"]["message"]}"
                     self.logger.error(f"error message: {err_msg}")
                     self.gcode_error.emit(err_msg)
+                    self.connection_status.emit(err_msg)
             elif "result" in data:
                 self.logger.debug(data)     
                 if "id" in data:
@@ -285,7 +311,6 @@ class KlipperWorker(QObject):
         }
         print("!!! SENDING EMERGENCY STOP !!!")
         await self.message_queue.put(payload)
-
 
 class MockMoonrakerServer:
     """

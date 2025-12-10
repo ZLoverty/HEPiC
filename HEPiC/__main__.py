@@ -363,7 +363,8 @@ class MainWindow(QMainWindow):
             if self.record_timelapse and self.VIDEO_WORKER_OK:
                 self.processing_worker.proc_frame_signal.disconnect(self.video_recorder_thread.add_frame)
                 self.video_recorder_thread.close()
-                self.video_recorder_thread.deleteLater()
+                self.video_recorder_thread.sigClose.emit()
+                # self.video_recorder_thread.deleteLater()
                 # enable mouse after recording
                 self.vision_page_widget.vision_widget.enable_mouse()
 

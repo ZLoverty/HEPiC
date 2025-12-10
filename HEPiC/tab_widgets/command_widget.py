@@ -58,7 +58,6 @@ class CommandWidget(QWidget):
     def on_send_clicked(self):
         command = self.command_input.text().strip()
         if command:
-            print("--- [DEBUG] 'send_command' method called.")
             self.display_message(command)
             # 调用 signal 发送指令
             self.command.emit(command)

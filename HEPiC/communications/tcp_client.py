@@ -61,21 +61,41 @@ class TCPClient(QObject):
         
     @asyncSlot()
     async def run(self):
-        self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.host, self.port), timeout=2.0)
+        while self.is_running:
+            try:      
+                self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.host, self.port), timeout=2.0) 
+                self.logger.info(f"Reconnected to server at {self.host}:{self.port}")
+                self.connection_status.emit("hepic_server 重连成功！")
+                await self.send_data("start")
+                self.receive_task = asyncio.create_task(self.receive_data())
+                self.process_task = asyncio.create_task(self.process_data())
+                done, pending = await asyncio.wait(
+                    [self.receive_task, self.process_task],
+                    return_when=asyncio.FIRST_COMPLETED
+                )
 
-        try:        
-            await self.send_data("start")
-            self.receive_task = asyncio.create_task(self.receive_data())
-            self.process_task = asyncio.create_task(self.process_data())
-            await asyncio.gather(self.receive_task, self.process_task)
-        except Exception as e:
-            self.logger.error(f"未知错误: {e}")
-        finally: # 无论如何中断，都关闭 writer，并关闭两个任务
-            self.writer.close()
-            await self.writer.wait_closed()
-            self.receive_task.cancel()
-            self.process_task.cancel()
-            await asyncio.gather(self.receive_task, self.process_task, return_exceptions=True)
+                self.logger.warning("连接已中断，正在清理任务...")
+                for task in pending:
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+
+            except Exception as e:
+                self.logger.error(f"未知错误: {e}")
+            finally: # 无论如何中断，都关闭 writer，并关闭两个任务
+                self.logger.info("Closing the writer ...")
+                self.writer.close()
+                await self.writer.wait_closed()
+
+            if self.is_running:
+                self.connection_status.emit("hepic_server 断开，3秒后重连...")
+                await asyncio.sleep(1)
+                self.connection_status.emit("hepic_server 断开，2秒后重连...")
+                await asyncio.sleep(1)
+                self.connection_status.emit("hepic_server 断开，1秒后重连...")
+                await asyncio.sleep(1)
 
     async def send_data(self, message):
         """向服务器发送一条消息"""
@@ -193,14 +213,8 @@ class TCPClient(QObject):
             self.receive_task.cancel()
         if hasattr(self, 'process_task'):
             self.process_task.cancel()
-            
-        # run() 方法中的 finally 块将处理 writer 的关闭
-        # 我们也可以在这里关闭 writer 以更快地中止 receive_task
         if hasattr(self, 'writer') and self.writer:
             self.writer.close()
-
-
-
 
 async def mock_data_sender(reader, writer):
     """This function listens on host:port and send data to any client that connect to this address. Its main purpose is to test the logic in the TCPClient class."""
