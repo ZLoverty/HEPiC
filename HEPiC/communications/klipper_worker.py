@@ -1,5 +1,5 @@
 from qasync import asyncSlot
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, Slot
 import asyncio
 import websockets
 import logging
@@ -51,6 +51,7 @@ class KlipperWorker(QObject):
         self.target_hotend_temperature = np.nan
         self.progress = 0.0
         self.file_position = 0
+        self.active_gcode = ""
 
     @asyncSlot()
     async def run(self):
@@ -312,6 +313,10 @@ class KlipperWorker(QObject):
         print("!!! SENDING EMERGENCY STOP !!!")
         await self.message_queue.put(payload)
 
+    @Slot()
+    def set_active_gcode(self, gcode):
+        self.active_gcode = gcode
+    
 class MockMoonrakerServer:
     """
     一个虚拟的 Moonraker WebSocket 服务器，用于测试 Klipper/Moonraker 客户端。

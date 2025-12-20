@@ -85,6 +85,9 @@ class VideoWorker(QObject):
         if self._timer:
             self._timer.stop()
             self._timer.start(int(1000/self.fps))
+    
+    def get_fps(self):
+        return self.fps
 
     @Slot()
     def stop(self):

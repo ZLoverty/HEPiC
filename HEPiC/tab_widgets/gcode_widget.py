@@ -19,6 +19,7 @@ class GcodeWidget(QWidget):
     sigGcode = Signal(str)
     sigFilePath = Signal(str)
     sigCurrentLine = Signal(int)
+    sigActiveGcode = Signal(str)
 
     def __init__(self, hightlight_color="#456882", logger=None):
         
@@ -122,6 +123,8 @@ class GcodeWidget(QWidget):
         self.display_gcode()
         # create gcode position mapper
         self.mapper = GcodePositionMapper(self.gcode)
+        
+        self.gcode_list = self.gcode.splitlines()
 
     @Slot(int)
     def highlight_current_line(self, line_number):
@@ -176,6 +179,7 @@ class GcodeWidget(QWidget):
             current_line = self.mapper.get_line_number(file_position)
             self.logger.debug(f"current line: {current_line}")
             self.sigCurrentLine.emit(current_line)
+            self.sigActiveGcode.emit(self.gcode_list[current_line])
         else:
             pass
 
