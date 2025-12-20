@@ -93,7 +93,8 @@ class JobSequenceDialog(QDialog):
                 job_sequence_list.extend([
                     "M400",
                     "M118 Temperature reached. Programmed test starts in 3 seconds.",
-                    "M118 If you'd like to record the test, please start recording now."
+                    "M118 If you'd like to record the test, please start recording now.",
+                    "M118 Make sure to zero extrusion force and meter values.",
                     "G4 P1000",
                     "M118 3 ...",
                     "M400",
