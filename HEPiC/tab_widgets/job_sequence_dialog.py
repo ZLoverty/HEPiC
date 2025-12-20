@@ -56,6 +56,7 @@ class JobSequenceDialog(QDialog):
 
     def get_job_sequence(self):
         """返回用户输入的数据"""
+
         job_sequence_list = [
             "M118 Set to relative mode",
             "M109 S250",
@@ -69,24 +70,41 @@ class JobSequenceDialog(QDialog):
             "G1 E30 F300",
             "M118 Try to extrude at even higher rate ...",
             "M400",
-            "M118 Finished testing, real test will start in 3 seconds ...",
-            "G4 S1",
-            "M118 3",
-            "M400",
-            "G4 S1",
-            "M118 2",
-            "M400",
-            "G4 S1",
-            "M118 1",
-            "M400"
+            "M118 Finished testing"
         ]
 
         Ts = np.linspace(float(self.tmin_input.text()), float(self.tmax_input.text()), self.tnum_input.value())
         Vs = np.linspace(float(self.vmin_input.text()), float(self.vmax_input.text()), self.vnum_input.value())
         t_each = float(self.tstep_input.text())
 
-        for T in Ts:
+        # adjusting temperature to the first temperature of the real test
+        job_sequence_list.extend([
+            "adjusting temperature to real test ...",
+        ])
+            
+            
+
+
+        
+
+        for num, T in enumerate(Ts):
             job_sequence_list.append(f"M109 S{T:.2f}")
+            if num == 0:
+                job_sequence_list.extend([
+                    "M400",
+                    "M118 Temperature reached. Programmed test starts in 3 seconds.",
+                    "M118 If you'd like to record the test, please start recording now."
+                    "G4 P1000",
+                    "M118 3 ...",
+                    "M400",
+                    "G4 P1000",
+                    "M118 2 ...",
+                    "M400",
+                    "G4 P1000",
+                    "M118 1 ...",
+                    "M400",
+                    "M118 -- Test starts now! --"
+                ])
             for V in Vs:
                 job_sequence_list.append(f"M118 V = {V:.2f} mm/s")
                 ext_length = V*t_each
