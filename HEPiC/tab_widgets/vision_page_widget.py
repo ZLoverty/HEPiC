@@ -15,17 +15,23 @@ class VisionPageWidget(QWidget):
     """Video + control widgets"""
 
     sigExpTime = Signal(float)
+    sigFPS = Signal(float)
 
     def __init__(self):
         # 设定曝光时间的窗口
         super().__init__()
         self.exp_time_label = QLabel("曝光时间")
         self.exp_time = QLineEdit("50")
+        self.exp_time.setMaximumWidth(30)
         self.exp_time_unit = QLabel("ms")
         self.vision_widget = VisionWidget()
         self.roi_vision_widget = VisionWidget()
         self.roi_vision_widget.mouse_enabled = False
         self.invert_button = QCheckBox("黑白反转")
+
+        self.fps_label = QLabel("FPS")
+        self.fps = QLineEdit("10")
+
         layout = QHBoxLayout(self)
         control_layout = QVBoxLayout()
         button_layout = QHBoxLayout()
@@ -33,20 +39,31 @@ class VisionPageWidget(QWidget):
         button_layout.addWidget(self.exp_time)
         button_layout.addWidget(self.exp_time_unit)
         button_layout.addStretch(1)
+        button_layout_2 = QHBoxLayout()
+        button_layout_2.addWidget(self.fps_label)
+        button_layout_2.addWidget(self.fps)
         control_layout.addLayout(button_layout)
+        control_layout.addLayout(button_layout_2)
         control_layout.addWidget(self.invert_button)
-        # control_layout.addStretch(1)
-        control_layout.addWidget(self.roi_vision_widget, 4)
-        layout.addWidget(self.vision_widget)
+        control_layout.addStretch(1)
         layout.addLayout(control_layout)
+        layout.addWidget(self.vision_widget)
+        layout.addWidget(self.roi_vision_widget)
+        
+
         self.setLayout(layout)
 
         # 连接信号槽
         self.exp_time.returnPressed.connect(self.on_exp_time_pressed)
-    
+        self.fps.returnPressed.connect(self.on_fps_pressed)
+
     def on_exp_time_pressed(self):
         exp_time = float(self.exp_time.text())
         self.sigExpTime.emit(exp_time)
+
+    def on_fps_pressed(self):
+        fps = float(self.fps.text())
+        self.sigFPS.emit(fps)
 
 class ImageGenerator(QObject):
     
@@ -81,10 +98,11 @@ if __name__ == "__main__":
     ig.sigImage.connect(widget.vision_widget.update_live_display)
     thread = Thread(target=ig.generate)
     thread.start()
-
+    
     processing_worker = ProcessingWorker()
     widget.vision_widget.sigRoiImage.connect(processing_worker.process_frame)
     processing_worker.proc_frame_signal.connect(widget.roi_vision_widget.update_live_display)
-
+    
+    
     widget.show()
     sys.exit(app.exec())

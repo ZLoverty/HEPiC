@@ -1,6 +1,10 @@
+from pathlib import Path
+import sys
+# current_path = Path(__file__).resolve().parent.parent
+# sys.path.append(str(current_path))
+
 from PySide6.QtCore import QObject, Signal, Slot, QTimer
 import numpy as np
-from pathlib import Path
 import os
 from .vision import binarize, filament_diameter, convert_to_grayscale, draw_filament_contour, find_longest_branch, ImageStreamer
 import time
@@ -20,7 +24,6 @@ class VideoWorker(QObject):
     """
     new_frame_signal = Signal(np.ndarray)
     roi_frame_signal = Signal(np.ndarray)
-    sigFinished = Signal()
 
     def __init__(self, test_mode=False, test_image_folder=""):
         """
@@ -40,36 +43,51 @@ class VideoWorker(QObject):
             self.cap = ImageStreamer(str(image_folder), fps=10)
         else: # 真图片流
             self.cap = HikVideoCapture(width=512, height=512, exposure_time=50000, center_roi=True)
-            
         
+        self.fps = 10
+        self.frame = None
+            
     def run(self):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.read_one_frame)
-        self._timer.start(100)
-        self.thread().exec()
-        self.cap.release()
-        self.sigFinished.emit() # 通知主线程
+        self._timer.start(10) # a very high frequency, make sure that the newest frame is always read
 
+        self._timer_get = QTimer(self)
+        self._timer_get.timeout.connect(self.get_frame)
+        self._timer_get.start(int(1000/self.fps))
+            
     def read_one_frame(self):
-
+        """Emit current frame and roi."""
         if not self.cap:
-            return
-        
+            return 
         ret, frame = self.cap.read()
         if ret:
-            self.new_frame_signal.emit(frame)
+            self.frame = frame
+
+    def get_frame(self):
+        """Emit current frame and roi at the specified fps."""
+        if self.frame is not None:
+            self.new_frame_signal.emit(self.frame)
             if self.roi is None:
                 # if ROI is not set, show the whole frame in the ROI panel
-                self.roi_frame_signal.emit(frame)
+                self.roi_frame_signal.emit(self.frame)
             else:
                 x, y, w, h = self.roi
-                self.roi_frame_signal.emit(frame[y:y+h, x:x+w])
-        else:
-            print("Fail to read frame.")
+                self.roi_frame_signal.emit(self.frame[y:y+h, x:x+w])
 
     @Slot(tuple)
     def set_roi(self, roi):
         self.roi = roi
+
+    @Slot(float)
+    def set_fps(self, fps):
+        self.fps = fps
+        if self._timer:
+            self._timer.stop()
+            self._timer.start(int(1000/self.fps))
+    
+    def get_fps(self):
+        return self.fps
 
     @Slot()
     def stop(self):
@@ -129,3 +147,44 @@ class ProcessingWorker(QObject):
     def invert_toggle(self, checked):
         """Sometimes the filament is the darker part of the image and background is brighter. In such cases, we may invert the binary image to make the algorithm work correctly. This is a toggle for the user to manually switch on/off whether to invert."""
         self.invert = checked
+
+if __name__ == "__main__":
+
+    from PySide6.QtWidgets import QApplication
+    current_path = Path(__file__).resolve().parent.parent
+    sys.path.append(str(current_path))
+    from tab_widgets import VisionPageWidget
+    from PySide6.QtCore import QThread
+    
+    try:
+        app = QApplication(sys.argv)
+        widget = VisionPageWidget()
+        
+        # display synthesized images
+        test_image_folder = current_path / ".." / "test" / "filament_images_captured"
+        video_worker = VideoWorker(test_mode=True, test_image_folder=str(test_image_folder))
+        thread = QThread()
+        video_worker.moveToThread(thread)
+        thread.started.connect(video_worker.run)
+        thread.start()
+        
+        video_worker.new_frame_signal.connect(widget.vision_widget.update_live_display)
+
+        processing_worker = ProcessingWorker()
+        widget.vision_widget.sigRoiImage.connect(processing_worker.process_frame)
+        processing_worker.proc_frame_signal.connect(widget.roi_vision_widget.update_live_display)
+        widget.sigFPS.connect(video_worker.set_fps)
+
+        widget.show()
+        sys.exit(app.exec())
+
+    except Exception as e:
+        print(f"error: {e}")
+
+    finally:
+        if video_worker:
+            video_worker.stop()
+            video_worker.deleteLater()
+        if thread:
+            thread.deleteLater()
+    

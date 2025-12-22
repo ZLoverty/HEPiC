@@ -85,7 +85,6 @@ class MainWindow(QMainWindow):
         self.time_delay = 1 / self.data_frequency
         
         self.time_delay_status = 1 / self.status_frequency
-        self.ircam_ok = False
         self.hikcam_ok = False
         self.init_data()
         self.current_time = 0
@@ -98,7 +97,6 @@ class MainWindow(QMainWindow):
 
         self.is_recording = False
         self.record_timelapse = True
-        self.VIDEO_WORKER_OK = False
         self.IR_WORKER_OK = False
 
         self.frame_size = (512, 512)
@@ -226,6 +224,7 @@ class MainWindow(QMainWindow):
         self.sigEmergencyStop.connect(self.klipper_worker.emergency_stop)
         self.sigProgress.connect(self.status_widget.update_progress)
         self.job_sequence_widget.gcode_widget.sigFilePath.connect(self.klipper_worker.upload_gcode_to_klipper)
+        self.job_sequence_widget.gcode_widget.sigActiveGcode.connect(self.klipper_worker.set_active_gcode)
         # Let all workers run
         tcp_task = self.worker.run()
         klipper_task = self.klipper_worker.run()
@@ -264,19 +263,16 @@ class MainWindow(QMainWindow):
             self.video_thread.finished.connect(self.video_thread.deleteLater)
 
             self.video_thread.start()
-
-            print("熔体相机初始化成功！")
-
-            self.VIDEO_WORKER_OK = True
+            self.logger.info("熔体相机初始化成功！")
 
         except Exception as e:
-            print(f"初始化熔体状态相机失败: {e}")
-            print("WARNING: Failed to initiate camera. Vision module is inactive.")
+            self.logger.error(f"初始化熔体状态相机失败: {e}")
+            self.video_worker = None
         
         # 创建 image processing worker 用于处理图像，探测熔体直径
         self.processing_worker = ProcessingWorker()
 
-        if self.VIDEO_WORKER_OK:
+        if self.video_worker:
 
             # send cropped images to the processing worker for image analysis.
             self.video_worker.roi_frame_signal.connect(self.processing_worker.process_frame)
@@ -297,7 +293,6 @@ class MainWindow(QMainWindow):
             self.ir_worker = IRWorker()
             self.ir_thread = QThread()
             self.ir_worker.moveToThread(self.ir_thread)
-            self.ircam_ok = True
 
             # when IR worker receives a new frame, send it to the IR page to shown on the canvas
             self.ir_worker.sigNewFrame.connect(self.ir_page_widget.image_widget.update_live_display)
@@ -325,12 +320,10 @@ class MainWindow(QMainWindow):
 
             self.ir_thread.start()
 
-
         except Exception as e:
-            print(f"初始化热成像仪失败，热成像仪不可用: {e}")
-            print("WARNING: Failed to initiate IR camera. Die temperature module is inactive.")
+            self.logger.error(f"初始化热成像仪失败，热成像仪不可用: {e}")
+            self.ir_worker = None
             
-
         self.show_UI(1) # show main UI anyway
         self.status_timer.start(int(self.time_delay_status * 1000))
         self._timer.start(int(self.time_delay*1000))
@@ -345,10 +338,10 @@ class MainWindow(QMainWindow):
             self.logger.info("Recording started ...")
             self.statusBar().showMessage(f"Autosave file at {self.autosave_filename}")
             self.is_recording = True
-            if self.record_timelapse and self.VIDEO_WORKER_OK:
+            if self.record_timelapse and self.video_worker:
                 # init video recorder
                 self.autosave_video_filename = Path(f"{self.autosave_prefix}_video.mkv").resolve()
-                self.video_recorder_thread = VideoRecorder(self.autosave_video_filename, *self.frame_size)
+                self.video_recorder_thread = VideoRecorder(self.autosave_video_filename, *self.frame_size, fps=self.video_worker.get_fps())
                 self.processing_worker.proc_frame_signal.connect(self.video_recorder_thread.add_frame)
                 self.video_recorder_thread.start()
                 # disable mouse in vision page
@@ -360,7 +353,7 @@ class MainWindow(QMainWindow):
             self.autosave_filename = None
             self.first_row = True
             self.is_recording = False
-            if self.record_timelapse and self.VIDEO_WORKER_OK:
+            if self.record_timelapse and self.video_worker:
                 self.processing_worker.proc_frame_signal.disconnect(self.video_recorder_thread.add_frame)
                 self.video_recorder_thread.close()
                 self.video_recorder_thread.sigClose.emit()
@@ -412,7 +405,7 @@ class MainWindow(QMainWindow):
             elif item == "meter_count_mm":
                 self.data_status[item] = self.worker.meter_count
             elif item == "die_temperature_C":
-                if self.ircam_ok:
+                if self.ir_worker:
                     self.data_status[item] = self.ir_worker.die_temperature
                 else:
                     self.data_status[item] = np.nan
@@ -430,7 +423,8 @@ class MainWindow(QMainWindow):
             elif item == "die_diameter_px":
                 self.data_status[item] = self.processing_worker.die_diameter
             elif item == "gcode":
-                self.data_status[item] = self.klipper_worker.active_gcode
+                if self.klipper_worker:
+                    self.data_status[item] = self.klipper_worker.active_gcode
             else:
                 self.data_status[item] = np.nan
 

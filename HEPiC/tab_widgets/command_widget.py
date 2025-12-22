@@ -90,7 +90,7 @@ class CommandWidget(QWidget):
 
         # 3. 移动光标到末尾并插入文本
         cursor = self.command_display.textCursor()
-        # cursor.movePosition(QTextCursor.End)
+        cursor.movePosition(QTextCursor.End)
 
         # time stamp
         now = datetime.now()
