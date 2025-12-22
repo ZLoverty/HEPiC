@@ -79,22 +79,21 @@ class JobSequenceDialog(QDialog):
 
         # adjusting temperature to the first temperature of the real test
         job_sequence_list.extend([
-            "adjusting temperature to real test ...",
+            "M118 adjusting temperature to real test ...",
         ])
             
-            
-
-
-        
-
         for num, T in enumerate(Ts):
             job_sequence_list.append(f"M109 S{T:.2f}")
             if num == 0:
                 job_sequence_list.extend([
                     "M400",
                     "M118 Temperature reached. Programmed test starts in 3 seconds.",
+                    "G4 P2000",
                     "M118 If you'd like to record the test, please start recording now.",
+                    "G4 P1500",
                     "M118 Make sure to zero extrusion force and meter values.",
+                    "G4 P1500",
+                    "M118 Starting test in 3 seconds ..."
                     "G4 P1000",
                     "M118 3 ...",
                     "M400",
