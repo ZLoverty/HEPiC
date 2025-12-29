@@ -1,5 +1,5 @@
 """
-vision.py
+vision_utils.py
 =========
 Implement die swell detection and other vision related needs.
 """
@@ -9,9 +9,6 @@ import numpy as np
 from skimage.morphology import skeletonize
 from myimagelib import to8bit
 from skan import Skeleton, summarize
-import time
-from PySide6.QtCore import QObject, Signal, Slot
-from collections import deque
 import os
 import glob
 
@@ -56,7 +53,7 @@ def filament_diameter(binary):
 
     return diameter, skeleton, dist_transform
 
-def convert_to_grayscale(img):
+def convert_to_grayscale(img) -> np.ndarray:
     """
     Converts an image to grayscale.
 
@@ -92,7 +89,6 @@ def convert_to_grayscale(img):
             gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) 
     else:
         print(f"Error: Unsupported image shape: {img.shape}. Cannot convert to grayscale.")
-        return None
         
     return gray_img
 
@@ -252,8 +248,11 @@ class ImageStreamer:
 if __name__ == "__main__":
     # an example showing the two step approach 
     import matplotlib.pyplot as plt
+    from pathlib import Path
 
-    img = cv2.imread(r"test\filament_images_simulated\curly_50px.png", cv2.IMREAD_GRAYSCALE)
+    test_folder = Path(__file__).resolve().parent.parent.parent / "test"
+    img_path = test_folder / "filament_images_simulated" / "curly_50px.png"
+    img = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
     diameter, skeleton, dist_transform = filament_diameter(img) # the rough estimate
     print(f"Rough estimate: {diameter} px")
     longest_branch = find_longest_branch(skeleton)
