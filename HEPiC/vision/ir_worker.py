@@ -3,11 +3,13 @@ communications.py
 =================
 Handles serial port / IP communications.
 """
+from pathlib import Path
+import sys
+current_path = Path(__file__).resolve().parent
 
 from PySide6.QtCore import QObject, Signal, QTimer, Slot
 import numpy as np
-from pathlib import Path
-from .vision import ImageStreamer
+from vision_utils import ImageStreamer
 import logging
 
 OPTRIS_LIB_LOADED = False

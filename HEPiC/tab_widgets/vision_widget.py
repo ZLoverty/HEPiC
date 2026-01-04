@@ -46,9 +46,11 @@ class VisionWidget(pg.GraphicsLayoutWidget):
 
         # logger
         self.logger = logger or logging.getLogger(__name__)
+        self.frame = None
 
     @Slot(np.ndarray)
     def update_live_display(self, frame):
+        self.frame = frame
         self.img_item.setImage(frame, axisOrder="row-major")
         if hasattr(self, "roi_info"):
             x0, y0, w, h = self.roi_info

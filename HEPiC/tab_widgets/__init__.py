@@ -9,3 +9,4 @@ from .home_widget import HomeWidget
 from .vision_page_widget import VisionPageWidget
 from .ir_widget import IRPageWidget
 from .job_sequence_widget import JobSequenceWidget
+from .calibration_dialog import CalibrationDialog
