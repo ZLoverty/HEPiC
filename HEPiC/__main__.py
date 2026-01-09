@@ -61,10 +61,10 @@ class MainWindow(QMainWindow):
     sigFilePosition = Signal(int)
     sigEmergencyStop = Signal()
 
-    def __init__(self, test_mode=False, logger=None):
+    def __init__(self, test_mode=False):
         super().__init__()
         self.test_mode = test_mode
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logging.getLogger(__name__)
         self.config_file = current_file_path.parent / "config.json"
         self.load_config()
         self.setWindowTitle(f"{__app_name__} v{__version__}")
@@ -112,7 +112,7 @@ class MainWindow(QMainWindow):
         self.status_frequency = self.config.get("status_frequency", 5)
         self.host = self.config.get("hepic_host", "192.168.0.81")
         self.port = self.config.get("hepic_port", 10001)
-        self.hepic_refresh_interval_ms = self.config.get("hepic_refresh_interval_ms", 100)
+
         # self.test_mode = self.config.get("test_mode", False)
         self.tmp_data_maxlen = self.config.get("tmp_data_maxlen", 100)
         self.final_data_maxlen = self.config.get("final_data_maxlen", 1000000)
@@ -204,7 +204,7 @@ class MainWindow(QMainWindow):
         1. TCP connection with the data server on Raspberry Pi
         2. Websocket connection with the Klipper host (via Moonraker) on Raspberry Pi"""
         # 创建 TCP 连接以接收数据
-        self.worker = TCPClient(self.host, self.port, logger=self.logger, refresh_interval_ms=self.hepic_refresh_interval_ms)
+        self.worker = TCPClient(self.host, self.port)
         
         # 连接信号槽
         self.worker.connection_status.connect(self.update_status)
@@ -463,23 +463,22 @@ class MainWindow(QMainWindow):
 def start_app():
     parser = argparse.ArgumentParser(
         description="Hotend extrusion platform control software.",
-        epilog="Example: python main.py -t -d"
+        epilog="Example: python main.py -t"
     )
     parser.add_argument("-t", "--test", action="store_true", help="Enable test mode")
-    parser.add_argument("-d", "--debug", action="store_true", help="Enable debug logging")
     args = parser.parse_args()
 
-    if args.debug:
-        log_lvl = logging.DEBUG
-    else:
-        log_lvl = logging.INFO
-
     logging.basicConfig(
-        level=log_lvl,
+        level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
         handlers=[logging.StreamHandler(sys.stdout)] # 确保输出到 stdout
     )
 
+    ### Debug module logging ###
+    logging.getLogger("tab_widgets.gcode_widget").setLevel(logging.DEBUG)
+    logging.getLogger("communications.klipper_worker").setLevel(logging.DEBUG)
+    ############################
+    
     app = QApplication(sys.argv)
     window = MainWindow(test_mode=args.test)
     window.show()
