@@ -21,7 +21,7 @@ class GcodeWidget(QWidget):
     sigCurrentLine = Signal(int)
     sigActiveGcode = Signal(str)
 
-    def __init__(self, hightlight_color="#456882", logger=None):
+    def __init__(self, hightlight_color="#456882"):
         
         super().__init__()
 
@@ -74,7 +74,7 @@ class GcodeWidget(QWidget):
         self.highlight_color = hightlight_color
 
         # logger
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logging.getLogger(__name__)
 
     def on_click_open(self):
         """打开 gcode 文件，清理注释，显示在 display 窗口"""
@@ -86,12 +86,12 @@ class GcodeWidget(QWidget):
         )
 
         if file_path:
-            print(f"选择的文件路径是: {file_path}")
+            self.logger.info(f"选择的文件路径是: {file_path}")
             with open(file_path, "r") as f:
                 gcode = f.read()
                 self.set_gcode(gcode)         
         else:
-            print("没有选择任何文件")
+            self.logger.info("没有选择任何文件")
             return
 
     def on_click_run(self):
@@ -108,9 +108,9 @@ class GcodeWidget(QWidget):
         if dialog.exec():
             gcode = dialog.get_job_sequence()
             self.set_gcode(gcode)
-            print(f"生成动作序列如下:\n {gcode}")
+            self.logger.debug(f"生成动作序列如下:\n {gcode}")
         else:
-            print("用户取消了输入")
+            self.logger.info("用户取消了输入")
     
     def display_gcode(self):
         self.gcode_display.setPlainText(self.gcode)
@@ -128,8 +128,6 @@ class GcodeWidget(QWidget):
 
     @Slot(int)
     def highlight_current_line(self, line_number):
-        self.logger.debug(f"highlight line {line_number}")
-
         manual_selection = QTextEdit.ExtraSelection()
             
         # 设置高亮格式 (背景色)
@@ -174,9 +172,13 @@ class GcodeWidget(QWidget):
     
     @Slot(int)
     def update_file_position(self, file_position):
-        self.logger.debug(f"file position: {file_position}")
+        
         if self.mapper:
             current_line = self.mapper.get_line_number(file_position)
+        else:
+            current_line = None
+        if current_line and current_line < len(self.gcode_list):
+            self.logger.debug(f"file position: {file_position}")
             self.logger.debug(f"current line: {current_line}")
             self.sigCurrentLine.emit(current_line)
             self.sigActiveGcode.emit(self.gcode_list[current_line])

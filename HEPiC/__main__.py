@@ -61,10 +61,10 @@ class MainWindow(QMainWindow):
     sigFilePosition = Signal(int)
     sigEmergencyStop = Signal()
 
-    def __init__(self, test_mode=False, logger=None):
+    def __init__(self, test_mode=False):
         super().__init__()
         self.test_mode = test_mode
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logging.getLogger(__name__)
         self.config_file = current_file_path.parent / "config.json"
         self.load_config()
         self.setWindowTitle(f"{__app_name__} v{__version__}")
@@ -112,13 +112,15 @@ class MainWindow(QMainWindow):
         self.status_frequency = self.config.get("status_frequency", 5)
         self.host = self.config.get("hepic_host", "192.168.0.81")
         self.port = self.config.get("hepic_port", 10001)
-        self.hepic_refresh_interval_ms = self.config.get("hepic_refresh_interval_ms", 100)
+
         # self.test_mode = self.config.get("test_mode", False)
         self.tmp_data_maxlen = self.config.get("tmp_data_maxlen", 100)
         self.final_data_maxlen = self.config.get("final_data_maxlen", 1000000)
+        self.klipper_query_delay = self.config.get("klipper_query_delay", 0.1)
+
+        # color scheme
         self.background_color = self.config.get("background_color", "black")
         self.foreground_color = self.config.get("foreground_color", "white")
-        self.klipper_query_delay = self.config.get("klipper_query_delay", 0.1)
         self.gcode_highlight_background = self.config.get("gcode_highlight_background", "#435663")
         self.hover_color = self.config.get("hover_color", "#A3B087")
 
@@ -162,7 +164,7 @@ class MainWindow(QMainWindow):
         
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
-        items = ["hotend_temperature_C", "die_temperature_C", "feedrate_mms", "measured_feedrate_mms", "extrusion_force_N", "die_diameter_px", "meter_count_mm", "time_s"]
+        items = ["time_s", "temperature_C", "feedrate_mms", "extrusion_force_N", "die_diameter_px", "die_temperature_C", "measured_temperature_C", "measured_feedrate_mms", "meter_count_mm"]
         # should define functions that can fetch the quantities from workers
         self.data = {}
         self.data_tmp = {} # temporary buffer to slow down writing frequency
@@ -204,7 +206,7 @@ class MainWindow(QMainWindow):
         1. TCP connection with the data server on Raspberry Pi
         2. Websocket connection with the Klipper host (via Moonraker) on Raspberry Pi"""
         # 创建 TCP 连接以接收数据
-        self.worker = TCPClient(self.host, self.port, logger=self.logger, refresh_interval_ms=self.hepic_refresh_interval_ms)
+        self.worker = TCPClient(self.host, self.port)
         
         # 连接信号槽
         self.worker.connection_status.connect(self.update_status)
@@ -368,7 +370,7 @@ class MainWindow(QMainWindow):
     
     @Slot()
     def on_timer_tick(self):
-        """Record data into tmp queue on every timer tick."""
+        """Update homepage graphs on each timer tick by recording data into tmp queue."""
         # set variable to show on the homepage
         self.grab_status()
         for item in self.data_tmp:
@@ -391,7 +393,7 @@ class MainWindow(QMainWindow):
                 self.data_tmp[item].clear()
 
     def on_status_timer_tick(self):
-        """Update status panel"""
+        """Update the status panel."""
         self.grab_status()
         self.sigNewStatus.emit(self.data_status)
         self.sigProgress.emit(self.klipper_worker.progress)
@@ -409,9 +411,9 @@ class MainWindow(QMainWindow):
                     self.data_status[item] = self.ir_worker.die_temperature
                 else:
                     self.data_status[item] = np.nan
-            elif item == "hotend_temperature_C":
+            elif item == "measured_temperature_C":
                 self.data_status[item] = self.klipper_worker.hotend_temperature
-            elif item == "target_hotend_temperature_C":
+            elif item == "temperature_C":
                 self.data_status[item] = self.klipper_worker.target_hotend_temperature
             elif item == "feedrate_mms":
                 self.data_status[item] = self.klipper_worker.active_feedrate_mms
@@ -463,23 +465,22 @@ class MainWindow(QMainWindow):
 def start_app():
     parser = argparse.ArgumentParser(
         description="Hotend extrusion platform control software.",
-        epilog="Example: python main.py -t -d"
+        epilog="Example: python main.py -t"
     )
     parser.add_argument("-t", "--test", action="store_true", help="Enable test mode")
-    parser.add_argument("-d", "--debug", action="store_true", help="Enable debug logging")
     args = parser.parse_args()
 
-    if args.debug:
-        log_lvl = logging.DEBUG
-    else:
-        log_lvl = logging.INFO
-
     logging.basicConfig(
-        level=log_lvl,
+        level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
         handlers=[logging.StreamHandler(sys.stdout)] # 确保输出到 stdout
     )
 
+    ### Debug module logging ###
+    logging.getLogger("tab_widgets.gcode_widget").setLevel(logging.DEBUG)
+    logging.getLogger("communications.klipper_worker").setLevel(logging.DEBUG)
+    ############################
+    
     app = QApplication(sys.argv)
     window = MainWindow(test_mode=args.test)
     window.show()

@@ -1,5 +1,6 @@
 import time
 import bisect
+import logging
 
 class GcodePositionMapper:
     """
@@ -8,7 +9,9 @@ class GcodePositionMapper:
     """
     
     def __init__(self, gcode_content: str):
-        print("正在构建 G-code 字节偏移量映射表...")
+        
+        self.logger = logging.getLogger(__name__)
+        self.logger.info("正在构建 G-code 字节偏移量映射表...")
         self.gcode_content = gcode_content
         # self.line_start_offsets 存储 *每一行* 的 *起始字节偏移量*
         # 列表的索引 0 对应行号 1, 索引 1 对应行号 2...
@@ -16,7 +19,7 @@ class GcodePositionMapper:
         self.total_lines = 0
         
         self._build_map()
-        print(f"映射表构建完毕。总行数: {self.total_lines}, 总字节: {self.total_bytes}")
+        self.logger.info(f"映射表构建完毕。总行数: {self.total_lines}, 总字节: {self.total_bytes}")
 
     def _build_map(self):
         """

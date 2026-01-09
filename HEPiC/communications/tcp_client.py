@@ -21,11 +21,9 @@ class TCPClient(QObject):
     def __init__(self, 
                  host: str, 
                  port: int, 
-                 logger = None,
                  rotary_encoder_steps_total: int = 1000,
                  rotary_encoder_wheel_diameter: float = 28.6,
-                 meter_count_cache_size: int = 100,
-                 refresh_interval_ms: int = 100):
+                 meter_count_cache_size: int = 100):
         super().__init__()
         self.host = host
         self.port = port
@@ -42,22 +40,17 @@ class TCPClient(QObject):
         self.meter_count_offset = 0.0
         self.meter_count = np.nan
         
-
         # rotary encoder constants 
         self.steps_total = rotary_encoder_steps_total
         self.wheel_diameter = rotary_encoder_wheel_diameter
 
-        
-        
         # compute filament velocity
         self.cache_size = meter_count_cache_size
         self.meter_count_cache = deque(maxlen=self.cache_size) # cache for computing velocity
         self.time_cache = deque(maxlen=self.cache_size)
         self.filament_velocity = 0.0
 
-        self.logger = logger or logging.getLogger(__name__)
-
-        self.count = 0
+        self.logger = logging.getLogger(__name__)
         
     @asyncSlot()
     async def run(self):
@@ -177,6 +170,9 @@ class TCPClient(QObject):
         if self.meter_count_raw is not None:
             self.meter_count_offset = self.meter_count_raw
             self.logger.info(f"米数零点已设为 {self.meter_count_offset}")
+            # clear the cache when setting offset to avoid sudden jump in velocity calculation
+            self.meter_count_cache.clear()
+            self.time_cache.clear()
         else:
             self.logger.warning("无法设定米数零点，当前无读数。")
 
@@ -191,9 +187,7 @@ class TCPClient(QObject):
             delta_meter = self.meter_count_cache[self.cache_size-1] - self.meter_count_cache[0]
             delta_time = self.time_cache[self.cache_size-1] - self.time_cache[0]
             try:
-                self.logger.debug(f"{self.count} : dt = {delta_time}")
                 self.filament_velocity = delta_meter / delta_time
-                self.count += 1
             except Exception as e:
                 self.logger.error(f"{e}")
         else:

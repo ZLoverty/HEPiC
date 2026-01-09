@@ -1,10 +1,8 @@
 {
     "name": "HEPiC",
-    "version": "0.0.0",
     "test_image_folder": "~/Documents/GitHub/HEPiC/test/filament_images_captured",
     "hepic_host": "192.168.0.81",
     "hepic_port": 10001,
-    "hepic_refresh_interval_ms": 1000,
     "rotary_encoder_steps_total": 1000,
     "rotary_encoder_wheel_diameter": 28.6,
     "meter_count_cache_size": 10,
@@ -19,5 +17,3 @@
     "status_frequency": 5,
     "klipper_query_delay": 0.1
 }
-
-    

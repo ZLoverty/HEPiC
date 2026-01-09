@@ -22,7 +22,7 @@ class KlipperWorker(QObject):
     gcode_error = Signal(str)
     gcode_response = Signal(str)
 
-    def __init__(self, host, port, query_delay=1, logger=None):
+    def __init__(self, host, port, query_delay=1):
         super().__init__()
 
         # connection / args
@@ -30,7 +30,7 @@ class KlipperWorker(QObject):
         self.port = port
         self.uri = f"ws://{self.host}:{self.port}/websocket"
         self.query_delay = query_delay
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logging.getLogger(__name__)
 
         # status / data
         self.is_running = True
@@ -100,7 +100,7 @@ class KlipperWorker(QObject):
                 await asyncio.sleep(3)
             
     async def message_listener(self, websocket):
-        self.logger.debug("消息监听器已启动")
+        self.logger.info("消息监听器已启动")
         try:
             async for message in websocket:
                 try:
@@ -112,12 +112,12 @@ class KlipperWorker(QObject):
                     self.logger.error(f"放入队列时出错: {e}")
 
         except websockets.exceptions.ConnectionClosed as e:
-            self.logger.error(f"--- [DEBUG] 监听器: WebSocket 连接已关闭 (代码: {e.code}, 原因: {e.reason}) ---")
+            self.logger.error(f"监听器: WebSocket 连接已关闭 (代码: {e.code}, 原因: {e.reason})")
         except Exception as e:
             # 捕获其他所有未知错误
-            self.logger.error(f"!!! [ERROR] 消息监听器崩溃: {e}")
+            self.logger.error(f"消息监听器崩溃: {e}")
         finally:
-            self.logger.debug("--- [DEBUG] 消息监听器已退出 ---")
+            self.logger.debug("消息监听器已退出")
 
     @asyncSlot(str)
     async def send_gcode(self, gcode):
@@ -141,15 +141,12 @@ class KlipperWorker(QObject):
 
         await self.message_queue.put(gcode_message)
         self.logger.debug("put gcode message into queue: {self.gcode[:30]} ..")
-
-        # create mapper
-        # self.gcode_mapper = GcodePositionMapper(self.gcode)
        
     async def data_processor(self, websocket):
         """
         消费者：从队列中等待并获取数据，然后进行处理。本函数需要处理多种与 Klipper 的通讯信息，至少包含 i) 订阅回执，ii) gcode 发送。
         """
-        print("数据处理器已启动，等待数据...")
+        self.logger.info("数据处理器已启动，等待数据...")
         while True:
             # 核心：在这里await，等待队列中有新数据
             data = await self.message_queue.get()
@@ -297,7 +294,7 @@ class KlipperWorker(QObject):
 
     @asyncSlot()
     async def restart_firmware(self):
-        self.logger.info("Sending restart")
+        self.logger.info("Restarting firmware ...")
         await self.send_gcode("FIRMWARE_RESTART")
 
     @asyncSlot()
@@ -310,7 +307,7 @@ class KlipperWorker(QObject):
             "method": "printer.emergency_stop", # 注意：不是 gcode.script
             "id": 0
         }
-        print("!!! SENDING EMERGENCY STOP !!!")
+        self.logger.warning("!!! SENDING EMERGENCY STOP !!!")
         await self.message_queue.put(payload)
 
     @Slot()

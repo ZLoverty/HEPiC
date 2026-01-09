@@ -1,12 +1,12 @@
 from pathlib import Path
 import sys
-# current_path = Path(__file__).resolve().parent.parent
-# sys.path.append(str(current_path))
+current_path = Path(__file__).resolve().parent
+sys.path.append(str(current_path))
 
 from PySide6.QtCore import QObject, Signal, Slot, QTimer
 import numpy as np
 import os
-from .vision import binarize, filament_diameter, convert_to_grayscale, draw_filament_contour, find_longest_branch, ImageStreamer
+from vision_utils import binarize, filament_diameter, convert_to_grayscale, draw_filament_contour, ImageStreamer
 import time
 import cv2
 
@@ -112,19 +112,26 @@ class VideoWorker(QObject):
             self.cap = HikVideoCapture(width=512, height=512, exposure_time=exp_time*1000, center_roi=True)
 
 class ProcessingWorker(QObject):
-    """基于 distance transform 计算前景图案的尺寸。"""
+    """Image processing utilities:
+    1. Calculated foreground pattern size based on distance transform algorithm.
+    2. Measure grid size of a chessboard calibrator upon selecting "calibration mode".
+    """
 
     proc_frame_signal = Signal(np.ndarray)
+    sigMPP = Signal(float)
+    sigCalibrationMsg = Signal(str)
 
     def __init__(self):
         super().__init__()
         self.die_diameter = np.nan
         self.invert = False
+        self.calibration = False
+        
         
     @Slot(np.ndarray)
     def process_frame(self, img):
         """Find filament in image and update the `self.die_diameter` variable with detected filament diameter."""
-        gray = convert_to_grayscale(img) # only process gray images    
+        gray = convert_to_grayscale(img) # only process gray images
         try:
             binary = binarize(gray)
             if self.invert:
@@ -147,6 +154,8 @@ class ProcessingWorker(QObject):
     def invert_toggle(self, checked):
         """Sometimes the filament is the darker part of the image and background is brighter. In such cases, we may invert the binary image to make the algorithm work correctly. This is a toggle for the user to manually switch on/off whether to invert."""
         self.invert = checked
+    
+    
 
 if __name__ == "__main__":
 
@@ -156,12 +165,14 @@ if __name__ == "__main__":
     from tab_widgets import VisionPageWidget
     from PySide6.QtCore import QThread
     
+    test_image_folder = current_path / ".." / "test" / "filament_images_captured"
+
     try:
         app = QApplication(sys.argv)
         widget = VisionPageWidget()
         
         # display synthesized images
-        test_image_folder = current_path / ".." / "test" / "filament_images_captured"
+        
         video_worker = VideoWorker(test_mode=True, test_image_folder=str(test_image_folder))
         thread = QThread()
         video_worker.moveToThread(thread)
