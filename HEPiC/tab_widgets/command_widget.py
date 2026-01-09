@@ -2,9 +2,10 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QPlainTextEdit
 )
-from PySide6.QtCore import Signal, Slot
+from PySide6.QtCore import Signal, Slot, Qt
 from PySide6.QtGui import QColor, QTextCharFormat, QTextCursor
 from datetime import datetime
+import logging
 
 class CommandWidget(QWidget):
 
@@ -14,10 +15,11 @@ class CommandWidget(QWidget):
 
         super().__init__()
 
+        # layout
         self.command_display = QPlainTextEdit()
         self.command_display.setReadOnly(True)
         self.command_display.setStyleSheet("background-color: #2b2b2b; color: #a9b7c6; font-family: Consolas, monaco, monospace;")
-        self.command_input = QLineEdit()
+        self.command_input = CommandInput()
         self.command_input.setPlaceholderText("输入 G-code 指令 (如 G1 E10 F300)")
         self.send_button = QPushButton("发送指令")
         # self.send_button.setEnabled(False)
@@ -34,6 +36,7 @@ class CommandWidget(QWidget):
         # 信号槽连接
         self.send_button.clicked.connect(self.on_send_clicked)
         self.command_input.returnPressed.connect(self.on_send_clicked)
+        self.command_input.upArrowPressed.connect(self.on_prev_clicked)
 
         # constants
         self.colors = {
@@ -43,6 +46,9 @@ class CommandWidget(QWidget):
             "command": QColor("#4caf50"), # 绿色 (用户发送的指令)
             "normal": QColor("#ffffff")   # 白色
         }
+
+        # variables
+        self.command_cache = []
 
     @Slot(bool)
     def update_button_status(self, connected):
@@ -62,7 +68,15 @@ class CommandWidget(QWidget):
             # 调用 signal 发送指令
             self.command.emit(command)
             self.command_input.clear()
+            # cache command for later use
+            self.command_cache.append(command)
     
+    def on_prev_clicked(self):
+        """Roll back to previously sent command."""
+        if self.command_cache:
+            command = self.command_cache.pop()
+            self.command_input.setText(command)
+
     @Slot(str)
     def display_message(self, message):
         """
@@ -102,3 +116,32 @@ class CommandWidget(QWidget):
         # 4. 自动滚动到底部
         self.command_display.setTextCursor(cursor)
         self.command_display.ensureCursorVisible()
+
+class CommandInput(QLineEdit):
+
+    upArrowPressed = Signal() 
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.logger = logging.getLogger(__name__)
+
+    def keyPressEvent(self, event):
+        # 检查是否按下了向上键
+        if event.key() == Qt.Key.Key_Up:
+            self.logger.debug("向上键被按下了！可以在这里实现调用历史记录等功能")
+            self.upArrowPressed.emit()
+            return 
+        
+        # 对于其他按键，必须调用父类方法，否则无法输入文字！
+        super().keyPressEvent(event)
+
+if __name__=="__main__":
+    import sys
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication(sys.argv)
+    widget = CommandWidget()
+    widget.setGeometry(900, 100, 500, 300)
+
+    widget.show()
+    sys.exit(app.exec())
