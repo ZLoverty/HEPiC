@@ -116,9 +116,11 @@ class MainWindow(QMainWindow):
         # self.test_mode = self.config.get("test_mode", False)
         self.tmp_data_maxlen = self.config.get("tmp_data_maxlen", 100)
         self.final_data_maxlen = self.config.get("final_data_maxlen", 1000000)
+        self.klipper_query_delay = self.config.get("klipper_query_delay", 0.1)
+
+        # color scheme
         self.background_color = self.config.get("background_color", "black")
         self.foreground_color = self.config.get("foreground_color", "white")
-        self.klipper_query_delay = self.config.get("klipper_query_delay", 0.1)
         self.gcode_highlight_background = self.config.get("gcode_highlight_background", "#435663")
         self.hover_color = self.config.get("hover_color", "#A3B087")
 
@@ -162,7 +164,7 @@ class MainWindow(QMainWindow):
         
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
-        items = ["hotend_temperature_C", "die_temperature_C", "feedrate_mms", "measured_feedrate_mms", "extrusion_force_N", "die_diameter_px", "meter_count_mm", "time_s"]
+        items = ["time_s", "temperature_C", "feedrate_mms", "extrusion_force_N", "die_diameter_px", "die_temperature_C", "measured_temperature_C", "measured_feedrate_mms", "meter_count_mm"]
         # should define functions that can fetch the quantities from workers
         self.data = {}
         self.data_tmp = {} # temporary buffer to slow down writing frequency
@@ -368,7 +370,7 @@ class MainWindow(QMainWindow):
     
     @Slot()
     def on_timer_tick(self):
-        """Record data into tmp queue on every timer tick."""
+        """Update homepage graphs on each timer tick by recording data into tmp queue."""
         # set variable to show on the homepage
         self.grab_status()
         for item in self.data_tmp:
@@ -391,7 +393,7 @@ class MainWindow(QMainWindow):
                 self.data_tmp[item].clear()
 
     def on_status_timer_tick(self):
-        """Update status panel"""
+        """Update the status panel."""
         self.grab_status()
         self.sigNewStatus.emit(self.data_status)
         self.sigProgress.emit(self.klipper_worker.progress)
@@ -409,9 +411,9 @@ class MainWindow(QMainWindow):
                     self.data_status[item] = self.ir_worker.die_temperature
                 else:
                     self.data_status[item] = np.nan
-            elif item == "hotend_temperature_C":
+            elif item == "measured_temperature_C":
                 self.data_status[item] = self.klipper_worker.hotend_temperature
-            elif item == "target_hotend_temperature_C":
+            elif item == "temperature_C":
                 self.data_status[item] = self.klipper_worker.target_hotend_temperature
             elif item == "feedrate_mms":
                 self.data_status[item] = self.klipper_worker.active_feedrate_mms

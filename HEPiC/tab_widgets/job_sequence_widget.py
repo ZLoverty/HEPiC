@@ -14,10 +14,12 @@ from utils import parse_gcode_time_series
 
 class JobSequenceWidget(QWidget):
 
-    def __init__(self, logger=None, line_width=2):
+    def __init__(self, line_width=2):
 
         super().__init__()
 
+        self.logger = logging.getLogger(__name__)
+        
         # create gcode widget
         self.gcode_widget = GcodeWidget()
 
@@ -51,7 +53,7 @@ class JobSequenceWidget(QWidget):
         # signal - slots
         self.gcode_widget.sigGcode.connect(self.show_plots)
 
-        self.logger = logger or logging.getLogger(__name__)
+        
 
     @Slot(str)
     def show_plots(self, gcode):
