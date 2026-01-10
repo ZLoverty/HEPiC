@@ -90,6 +90,8 @@ class MainWindow(QMainWindow):
         self.current_time = 0
         
         self.first_row = True
+        self.worker = None
+        self.klipper_worker = None
         self.video_worker = None
         self.ir_worker = None
         self.video_thread = None
@@ -482,8 +484,7 @@ def start_app():
     )
 
     ### Debug module logging ###
-    logging.getLogger("tab_widgets.gcode_widget").setLevel(logging.DEBUG)
-    logging.getLogger("communications.klipper_worker").setLevel(logging.DEBUG)
+    logging.getLogger("HEPiC.vision.video_worker").setLevel(logging.DEBUG)
     ############################
     
     app = QApplication(sys.argv)

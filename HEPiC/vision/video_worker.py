@@ -9,6 +9,7 @@ import os
 from vision_utils import binarize, filament_diameter, convert_to_grayscale, draw_filament_contour, ImageStreamer
 import time
 import cv2
+import logging
 
 if os.name == "nt":
     # if on windows OS, import the windows camera library
@@ -46,6 +47,7 @@ class VideoWorker(QObject):
         
         self.fps = 10
         self.frame = None
+        self.logger = logging.getLogger(__name__)
             
     def run(self):
         self._timer = QTimer(self)
@@ -91,7 +93,7 @@ class VideoWorker(QObject):
 
     @Slot()
     def stop(self):
-        print("Stopping video worker thread.")
+        self.logger.debug("Stopping video worker thread.")
         self.is_running = False
         self.cap.release()
 
@@ -107,7 +109,7 @@ class VideoWorker(QObject):
         while self.cap.is_open:
             time.sleep(1)
         if self.test_mode:
-            print("Test mode: exposure time setting will not have any effect.")
+            self.logger.warning("Test mode: exposure time setting will not have any effect.")
         else:
             self.cap = HikVideoCapture(width=512, height=512, exposure_time=exp_time*1000, center_roi=True)
 
@@ -126,7 +128,7 @@ class ProcessingWorker(QObject):
         self.die_diameter = np.nan
         self.invert = False
         self.calibration = False
-        
+        self.logger = logging.getLogger(__name__)
         
     @Slot(np.ndarray)
     def process_frame(self, img):
@@ -137,17 +139,25 @@ class ProcessingWorker(QObject):
             if self.invert:
                 binary = cv2.bitwise_not(binary)
             diameter, skeleton, dist_transform = filament_diameter(binary)
+            # self.logger.debug(f"Rough filament diameter: {diameter} px")
             skel_px = dist_transform[skeleton]
             skeleton_refine = skeleton.copy()
             skeleton_refine[dist_transform < skel_px.mean()] = False
+
             # filter the pixels on skeleton where dt is smaller than 0.9 of the max
             diameter_refine = dist_transform[skeleton_refine].mean() * 2.0
+            # self.logger.debug(f"Refined filament diameter: {diameter_refine} px")
+
+            # measure the time required for visualization
+            t0 = time.time()
             proc_frame = draw_filament_contour(gray, skeleton_refine, diameter_refine)
+            t1 = time.time()
+            self.logger.debug(f"Visualizing extrudate contour took {t1 - t0:.3f} seconds.")
             self.proc_frame_signal.emit(proc_frame)
             self.die_diameter = diameter_refine
         except ValueError as e:
             # 已知纯色图片会导致检测失败，在此情况下可以不必报错继续运行，将出口直径记为 np.nan 即可
-            print(f"图像无法处理: {e}")
+            self.logger.warning(f"图像无法处理: {e}")
             self.proc_frame_signal.emit(binary)
     
     @Slot(bool)

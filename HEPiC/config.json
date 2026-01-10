@@ -1,6 +1,6 @@
 {
     "name": "HEPiC",
-    "test_image_folder": "~/Documents/GitHub/HEPiC/test/filament_images_captured",
+    "test_image_folder": "~/Documents/GitHub/HEPiC/test/filament_images_simulated",
     "hepic_host": "192.168.0.81",
     "hepic_port": 10001,
     "rotary_encoder_steps_total": 1000,
@@ -13,7 +13,7 @@
     "foreground_color": "#FFF8D4",
     "gcode_highlight_background": "#435663",
     "hover_color": "#A3B087",
-    "data_frequency": 100,
+    "data_frequency": 10,
     "status_frequency": 5,
     "klipper_query_delay": 0.1
 }
