@@ -133,6 +133,8 @@ class ProcessingWorker(QObject):
         self.logger = logging.getLogger(__name__)
         self.is_running = False
         self.image_queue = asyncio.Queue(maxsize=10)
+        self.clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4,4))
+        
     
     async def run(self):
         self.is_running = True
@@ -161,6 +163,9 @@ class ProcessingWorker(QObject):
         """Find filament in image and update the `self.die_diameter` variable with detected filament diameter."""
         gray = convert_to_grayscale(img) # only process gray images
         try:
+            # preprocessing: CLAHE
+            gray = self.clahe.apply(gray)
+
             # preprocessing: binarization
             binary = binarize(gray)
             if self.invert:

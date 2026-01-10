@@ -1,6 +1,6 @@
 {
     "name": "HEPiC",
-    "test_image_folder": "~/Documents/GitHub/HEPiC/test/filament_images_simulated",
+    "test_image_folder": "~/Documents/GitHub/HEPiC/test/filament_images_captured",
     "hepic_host": "192.168.0.81",
     "hepic_port": 10001,
     "rotary_encoder_steps_total": 1000,
