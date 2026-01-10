@@ -276,11 +276,12 @@ class MainWindow(QMainWindow):
         
         # 创建 image processing worker 用于处理图像，探测熔体直径
         self.processing_worker = ProcessingWorker()
+        self.processing_worker.setObjectName("ProcessingWorker")
 
         if self.video_worker:
 
             # send cropped images to the processing worker for image analysis.
-            self.video_worker.roi_frame_signal.connect(self.processing_worker.process_frame)
+            self.video_worker.roi_frame_signal.connect(self.processing_worker.add_frame_to_queue)
 
             # the processed frame shall be sent to the home page of the UI for user to monitor.
             self.processing_worker.proc_frame_signal.connect(self.vision_page_widget.roi_vision_widget.update_live_display)
@@ -290,6 +291,11 @@ class MainWindow(QMainWindow):
 
             # allow user to invert the black and white to meet the image processing need in specific experiment.
             self.vision_page_widget.invert_button.toggled.connect(self.processing_worker.invert_toggle)
+
+        # connect thread start to run method
+        asyncio.create_task(self.processing_worker.run())
+        
+
 
     @Slot()
     def initiate_ir_imager(self):
@@ -453,7 +459,7 @@ class MainWindow(QMainWindow):
         self.sigEmergencyStop.emit()
 
     def closeEvent(self, event):
-        print("正在关闭应用程序...")
+        self.logger.info("正在关闭应用程序...")
         if self.worker:
             self.worker.stop()
             self.worker.deleteLater()
@@ -466,6 +472,8 @@ class MainWindow(QMainWindow):
         if self.ir_worker:
             self.ir_worker.stop()
             self.ir_worker.deleteLater()
+        if self.processing_worker:
+            self.processing_worker.stop()
         event.accept()
 
 

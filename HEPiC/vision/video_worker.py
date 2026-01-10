@@ -3,13 +3,15 @@ import sys
 current_path = Path(__file__).resolve().parent
 sys.path.append(str(current_path))
 
-from PySide6.QtCore import QObject, Signal, Slot, QTimer
+from PySide6.QtCore import QObject, Signal, Slot, QTimer, QThread
 import numpy as np
 import os
 from vision_utils import binarize, filament_diameter, convert_to_grayscale, draw_filament_contour, ImageStreamer
 import time
 import cv2
 import logging
+import asyncio
+from qasync import asyncSlot
 
 if os.name == "nt":
     # if on windows OS, import the windows camera library
@@ -129,24 +131,53 @@ class ProcessingWorker(QObject):
         self.invert = False
         self.calibration = False
         self.logger = logging.getLogger(__name__)
-        
-    @Slot(np.ndarray)
+        self.is_running = False
+        self.image_queue = asyncio.Queue(maxsize=10)
+    
+    async def run(self):
+        self.is_running = True
+        self.logger.debug("开始图像处理工作线程。")
+        while self.is_running:
+            try:
+                img = await self.image_queue.get()
+                if img is not None:
+                    self.process_frame(img)
+                else:
+                    self.logger.debug("Received stop signal for processing worker.")
+                    break
+            except asyncio.CancelledError:
+                break
+
+    @asyncSlot(np.ndarray)
+    async def add_frame_to_queue(self, img):
+        """Add frame to processing queue."""
+        try:
+            self.image_queue.put_nowait(img)
+        except asyncio.QueueFull:
+            self.logger.warning("Processing queue is full. Dropping frame.")
+    
+    
     def process_frame(self, img):
         """Find filament in image and update the `self.die_diameter` variable with detected filament diameter."""
         gray = convert_to_grayscale(img) # only process gray images
         try:
+            # preprocessing: binarization
             binary = binarize(gray)
             if self.invert:
                 binary = cv2.bitwise_not(binary)
+
+            if binary.std() == 0:
+                raise ValueError("No valid skeleton pixels found after refinement.")
+            
+            # measure rough filament diameter
             diameter, skeleton, dist_transform = filament_diameter(binary)
-            # self.logger.debug(f"Rough filament diameter: {diameter} px")
             skel_px = dist_transform[skeleton]
             skeleton_refine = skeleton.copy()
+            
+            # filter the pixels on skeleton where dt pixel value is above average
             skeleton_refine[dist_transform < skel_px.mean()] = False
-
-            # filter the pixels on skeleton where dt is smaller than 0.9 of the max
+            
             diameter_refine = dist_transform[skeleton_refine].mean() * 2.0
-            # self.logger.debug(f"Refined filament diameter: {diameter_refine} px")
 
             # measure the time required for visualization
             t0 = time.time()
@@ -165,7 +196,10 @@ class ProcessingWorker(QObject):
         """Sometimes the filament is the darker part of the image and background is brighter. In such cases, we may invert the binary image to make the algorithm work correctly. This is a toggle for the user to manually switch on/off whether to invert."""
         self.invert = checked
     
-    
+    def stop(self):
+        self.is_running = False
+        self.image_queue.put_nowait(None)
+        self.deleteLater()
 
 if __name__ == "__main__":
 
