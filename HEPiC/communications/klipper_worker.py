@@ -185,8 +185,8 @@ class KlipperWorker(QObject):
             # 标记任务完成，这对于优雅退出很重要
             self.message_queue.task_done()
 
-    @asyncSlot()
-    async def stop(self):
+    @Slot()
+    def stop(self):
         """停止线程"""
         self.is_running = False
         if self.listener_task:

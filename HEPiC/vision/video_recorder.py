@@ -10,6 +10,10 @@ class VideoRecorder(QThread):
 
     def __init__(self, filename, width=512, height=512, fps=30, logger=None):
         super().__init__()
+
+        # name the thread for easier debugging
+        self.setObjectName("VideoRecorder")
+
         self.command = [
             'ffmpeg',
             '-y',                 # 覆盖同名文件

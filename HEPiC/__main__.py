@@ -243,6 +243,7 @@ class MainWindow(QMainWindow):
             # 创建 video worker （用于接收和处理视频信号）
             self.video_worker = VideoWorker(test_mode=self.test_mode, test_image_folder=self.config.get("test_image_folder", ""))
             self.video_thread = QThread()
+            self.video_thread.setObjectName("VideoThread")
             self.video_worker.moveToThread(self.video_thread)
             self.hikcam_ok = True
             # when a new frame is read by the video worker, send it over to the UI to display.
@@ -294,6 +295,7 @@ class MainWindow(QMainWindow):
         try: # 创建 IR image worker 处理红外成像仪图像，探测熔体出口温度   
             self.ir_worker = IRWorker()
             self.ir_thread = QThread()
+            self.ir_thread.setObjectName("IRThread")
             self.ir_worker.moveToThread(self.ir_thread)
 
             # when IR worker receives a new frame, send it to the IR page to shown on the canvas
@@ -323,7 +325,10 @@ class MainWindow(QMainWindow):
             self.ir_thread.start()
 
         except Exception as e:
-            self.logger.error(f"初始化热成像仪失败，热成像仪不可用: {e}")
+            if self.test_mode:
+                self.logger.info(f"由于测试模式开启，热成像仪模块被跳过")
+            else:
+                self.logger.warning(f"初始化热成像仪失败，热成像仪不可用: {e}")
             self.ir_worker = None
             
         self.show_UI(1) # show main UI anyway
@@ -337,8 +342,8 @@ class MainWindow(QMainWindow):
             self.autosave_prefix = datetime.now().strftime("%Y%m%d_%H%M%S")
             self.autosave_filename = Path(f"{self.autosave_prefix}_autosave.csv").resolve()
             
-            self.logger.info("Recording started ...")
-            self.statusBar().showMessage(f"Autosave file at {self.autosave_filename}")
+            self.logger.info("开始记录数据 ...")
+            self.statusBar().showMessage(f"文件路径：{self.autosave_filename}")
             self.is_recording = True
             if self.record_timelapse and self.video_worker:
                 # init video recorder
@@ -351,7 +356,7 @@ class MainWindow(QMainWindow):
                 
         else:
             self.home_widget.play_pause_button.setIcon(self.home_widget.play_icon)
-            self.logger.info("Recording stopped.")
+            self.logger.info("停止记录数据 ...")
             self.autosave_filename = None
             self.first_row = True
             self.is_recording = False
@@ -445,17 +450,17 @@ class MainWindow(QMainWindow):
         self.home_widget.play_pause_button.setChecked(False)
         self.sigEmergencyStop.emit()
 
-    async def closeEvent(self, event):
+    def closeEvent(self, event):
         print("正在关闭应用程序...")
         if self.worker:
-            await self.worker.stop()
+            self.worker.stop()
             self.worker.deleteLater()
         if self.klipper_worker:
-            await self.klipper_worker.stop()
+            self.klipper_worker.stop()
             self.klipper_worker.deleteLater()
-        if self.video_worker:
-            self.video_worker.stop()
-            self.video_worker.deleteLater()
+        if self.video_thread:
+            self.video_thread.quit()
+            self.video_thread.wait()
         if self.ir_worker:
             self.ir_worker.stop()
             self.ir_worker.deleteLater()
