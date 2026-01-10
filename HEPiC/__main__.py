@@ -221,7 +221,6 @@ class MainWindow(QMainWindow):
         # 连接信号槽
         self.klipper_worker.connection_status.connect(self.update_status)
         self.klipper_worker.gcode_response.connect(self.home_widget.command_widget.display_message)
-        # self.klipper_worker.gcode_error.connect(self.home_widget.command_widget.display_message)
         self.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
         self.home_widget.command_widget.command.connect(self.klipper_worker.send_gcode)
         self.home_widget.sigRestart.connect(self.klipper_worker.restart_firmware)
@@ -229,6 +228,9 @@ class MainWindow(QMainWindow):
         self.sigProgress.connect(self.status_widget.update_progress)
         self.job_sequence_widget.gcode_widget.sigFilePath.connect(self.klipper_worker.upload_gcode_to_klipper)
         self.job_sequence_widget.gcode_widget.sigActiveGcode.connect(self.klipper_worker.set_active_gcode)
+        self.home_widget.sigExtrude.connect(self.klipper_worker.send_gcode)
+        self.home_widget.sigRetract.connect(self.klipper_worker.send_gcode)
+
         # Let all workers run
         tcp_task = self.worker.run()
         klipper_task = self.klipper_worker.run()
@@ -459,7 +461,6 @@ class MainWindow(QMainWindow):
         self.sigEmergencyStop.emit()
 
     def closeEvent(self, event):
-        self.logger.info("正在关闭应用程序...")
         if self.worker:
             self.worker.stop()
             self.worker.deleteLater()
@@ -474,6 +475,7 @@ class MainWindow(QMainWindow):
             self.ir_worker.deleteLater()
         if self.processing_worker:
             self.processing_worker.stop()
+        self.logger.info("正在关闭应用程序...")
         event.accept()
 
 
@@ -492,7 +494,8 @@ def start_app():
     )
 
     ### Debug module logging ###
-    logging.getLogger("HEPiC.vision.video_worker").setLevel(logging.DEBUG)
+    # logging.getLogger("HEPiC.communications.klipper_worker").setLevel(logging.DEBUG)
+    # logging.getLogger("HEPiC.tab_widgets.home_widget").setLevel(logging.DEBUG)
     ############################
     
     app = QApplication(sys.argv)
