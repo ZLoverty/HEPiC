@@ -1,4 +1,4 @@
-from PySide6.QtCore import QObject, Signal, QTimer
+from PySide6.QtCore import QObject, Signal, QTimer, Slot
 import asyncio
 from qasync import asyncSlot
 import json
@@ -57,9 +57,7 @@ class TCPClient(QObject):
         while self.is_running:
             try:      
                 self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.host, self.port), timeout=2.0) 
-                self.logger.info(f"Reconnected to server at {self.host}:{self.port}")
-                self.connection_status.emit("hepic_server 重连成功！")
-                await self.send_data("start")
+                self.logger.info(f"HEPiC 服务器连接成功 {self.host}:{self.port}")
                 self.receive_task = asyncio.create_task(self.receive_data())
                 self.process_task = asyncio.create_task(self.process_data())
                 done, pending = await asyncio.wait(
@@ -78,7 +76,7 @@ class TCPClient(QObject):
             except Exception as e:
                 self.logger.error(f"未知错误: {e}")
             finally: # 无论如何中断，都关闭 writer，并关闭两个任务
-                self.logger.info("Closing the writer ...")
+                self.logger.info("关闭 HEPiC 服务器连接 ...")
                 self.writer.close()
                 await self.writer.wait_closed()
 
@@ -154,7 +152,7 @@ class TCPClient(QObject):
                     self.logger.error(f"Error in process_data: {e}")
 
         except asyncio.CancelledError:
-            self.logger.info("Process data task cancelled.") # 正常停止
+            self.logger.debug("Process data task cancelled.") # 正常停止
             
     def set_extrusion_force_offset(self):
         """将当前的挤出力读数设为零点偏移"""
@@ -195,8 +193,8 @@ class TCPClient(QObject):
 
         self.logger.debug(f"Computed filament velocity: {self.filament_velocity} mm/s")
 
-    @asyncSlot()
-    async def stop(self):
+    @Slot()
+    def stop(self):
         """
         关闭连接并停止接收线程。
         """

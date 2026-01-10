@@ -72,7 +72,7 @@ class KlipperWorker(QObject):
 
                     self.listener_task = asyncio.create_task(self.message_listener(websocket))
                     self.processor_task = asyncio.create_task(self.data_processor(websocket))
-                    self.query_task = asyncio.create_task(self.query_klipper(websocket))
+                    self.query_task = asyncio.create_task(self.query_klipper())
                     
                     done, pending = await asyncio.wait(
                         [self.listener_task, self.processor_task],
@@ -140,7 +140,7 @@ class KlipperWorker(QObject):
         }
 
         await self.message_queue.put(gcode_message)
-        self.logger.debug("put gcode message into queue: {self.gcode[:30]} ..")
+        self.logger.debug(f"put gcode message into queue: {self.gcode[:30]} ..")
        
     async def data_processor(self, websocket):
         """
@@ -185,8 +185,8 @@ class KlipperWorker(QObject):
             # 标记任务完成，这对于优雅退出很重要
             self.message_queue.task_done()
 
-    @asyncSlot()
-    async def stop(self):
+    @Slot()
+    def stop(self):
         """停止线程"""
         self.is_running = False
         if self.listener_task:
@@ -225,7 +225,7 @@ class KlipperWorker(QObject):
         
         await self.message_queue.put(subscribe_message)
     
-    async def query_klipper(self, websocket):
+    async def query_klipper(self):
         query_msg = {
             "jsonrpc": "2.0",
             "method": "printer.objects.query",

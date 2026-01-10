@@ -3,12 +3,15 @@ import sys
 current_path = Path(__file__).resolve().parent
 sys.path.append(str(current_path))
 
-from PySide6.QtCore import QObject, Signal, Slot, QTimer
+from PySide6.QtCore import QObject, Signal, Slot, QTimer, QThread
 import numpy as np
 import os
 from vision_utils import binarize, filament_diameter, convert_to_grayscale, draw_filament_contour, ImageStreamer
 import time
 import cv2
+import logging
+import asyncio
+from qasync import asyncSlot
 
 if os.name == "nt":
     # if on windows OS, import the windows camera library
@@ -46,6 +49,7 @@ class VideoWorker(QObject):
         
         self.fps = 10
         self.frame = None
+        self.logger = logging.getLogger(__name__)
             
     def run(self):
         self._timer = QTimer(self)
@@ -91,7 +95,7 @@ class VideoWorker(QObject):
 
     @Slot()
     def stop(self):
-        print("Stopping video worker thread.")
+        self.logger.debug("Stopping video worker thread.")
         self.is_running = False
         self.cap.release()
 
@@ -107,7 +111,7 @@ class VideoWorker(QObject):
         while self.cap.is_open:
             time.sleep(1)
         if self.test_mode:
-            print("Test mode: exposure time setting will not have any effect.")
+            self.logger.warning("Test mode: exposure time setting will not have any effect.")
         else:
             self.cap = HikVideoCapture(width=512, height=512, exposure_time=exp_time*1000, center_roi=True)
 
@@ -126,28 +130,70 @@ class ProcessingWorker(QObject):
         self.die_diameter = np.nan
         self.invert = False
         self.calibration = False
+        self.logger = logging.getLogger(__name__)
+        self.is_running = False
+        self.image_queue = asyncio.Queue(maxsize=10)
+        self.clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4,4))
         
-        
-    @Slot(np.ndarray)
+    
+    async def run(self):
+        self.is_running = True
+        self.logger.debug("开始图像处理工作线程。")
+        while self.is_running:
+            try:
+                img = await self.image_queue.get()
+                if img is not None:
+                    self.process_frame(img)
+                else:
+                    self.logger.debug("Received stop signal for processing worker.")
+                    break
+            except asyncio.CancelledError:
+                break
+
+    @asyncSlot(np.ndarray)
+    async def add_frame_to_queue(self, img):
+        """Add frame to processing queue."""
+        try:
+            self.image_queue.put_nowait(img)
+        except asyncio.QueueFull:
+            self.logger.warning("Processing queue is full. Dropping frame.")
+    
+    
     def process_frame(self, img):
         """Find filament in image and update the `self.die_diameter` variable with detected filament diameter."""
         gray = convert_to_grayscale(img) # only process gray images
         try:
+            # preprocessing: CLAHE
+            gray = self.clahe.apply(gray)
+
+            # preprocessing: binarization
             binary = binarize(gray)
             if self.invert:
                 binary = cv2.bitwise_not(binary)
+
+            if binary.std() == 0:
+                raise ValueError("No valid skeleton pixels found after refinement.")
+            
+            # measure rough filament diameter
             diameter, skeleton, dist_transform = filament_diameter(binary)
             skel_px = dist_transform[skeleton]
             skeleton_refine = skeleton.copy()
+            
+            # filter the pixels on skeleton where dt pixel value is above average
             skeleton_refine[dist_transform < skel_px.mean()] = False
-            # filter the pixels on skeleton where dt is smaller than 0.9 of the max
+            
             diameter_refine = dist_transform[skeleton_refine].mean() * 2.0
+
+            # measure the time required for visualization
+            t0 = time.time()
             proc_frame = draw_filament_contour(gray, skeleton_refine, diameter_refine)
+            t1 = time.time()
+            self.logger.debug(f"Visualizing extrudate contour took {t1 - t0:.3f} seconds.")
             self.proc_frame_signal.emit(proc_frame)
             self.die_diameter = diameter_refine
         except ValueError as e:
             # 已知纯色图片会导致检测失败，在此情况下可以不必报错继续运行，将出口直径记为 np.nan 即可
-            print(f"图像无法处理: {e}")
+            self.logger.warning(f"图像无法处理: {e}")
             self.proc_frame_signal.emit(binary)
     
     @Slot(bool)
@@ -155,7 +201,10 @@ class ProcessingWorker(QObject):
         """Sometimes the filament is the darker part of the image and background is brighter. In such cases, we may invert the binary image to make the algorithm work correctly. This is a toggle for the user to manually switch on/off whether to invert."""
         self.invert = checked
     
-    
+    def stop(self):
+        self.is_running = False
+        self.image_queue.put_nowait(None)
+        self.deleteLater()
 
 if __name__ == "__main__":
 

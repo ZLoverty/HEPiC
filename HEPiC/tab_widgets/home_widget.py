@@ -6,14 +6,19 @@ from .command_widget import CommandWidget
 from .data_plot_widget import DataPlotWidget
 from .platform_status_widget import PlatformStatusWidget
 from .vision_widget import VisionWidget
+import logging
 
 class HomeWidget(QWidget):
     """主页控件，包含 G-code 控件和数据状态监视控件"""
 
     sigRestart = Signal()
+    sigExtrude = Signal(str)
+    sigRetract = Signal(str)
 
     def __init__(self):
         super().__init__()
+
+        self.logger = logging.getLogger(__name__)
         self.command_widget = CommandWidget()
         self.command_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.data_widget = DataPlotWidget()
@@ -22,7 +27,8 @@ class HomeWidget(QWidget):
         self.dieswell_widget.mouse_enabled = False
         self.ir_roi_widget = VisionWidget()
         self.ir_roi_widget.mouse_enabled = False
-        # play pause button
+
+        # play / pause button, emergency stop button, restart button
         style = self.style()
         self.play_icon = style.standardIcon(QStyle.StandardPixmap.SP_MediaPlay)
         self.pause_icon = style.standardIcon(QStyle.StandardPixmap.SP_MediaPause)
@@ -73,15 +79,21 @@ class HomeWidget(QWidget):
         self.stop_button.setStyleSheet(qss_style)
 
         self.restart_button = QPushButton("🍓")
-        # self.restart_icon = style.standardIcon(QStyle.StandardPixmap.SP_MediaStop)
-        # self.restart_button.setIcon(self.restart_icon)
         self.restart_button.setFixedSize(button_size, button_size)
         self.restart_button.setIconSize(QSize(button_size // 2, button_size // 2))
         self.restart_button.setStyleSheet(qss_style)
 
+        # extrude, retract buttons
+        self.extrude_button = QPushButton("挤出 10 mm")
+        self.retract_button = QPushButton("回抽 10 mm")
+
         # 布局
         layout = QHBoxLayout()
         control_layout = QVBoxLayout()
+        extrude_retract_layout = QHBoxLayout()
+        extrude_retract_layout.addWidget(self.extrude_button)
+        extrude_retract_layout.addWidget(self.retract_button)
+        control_layout.addLayout(extrude_retract_layout)
         control_layout.addWidget(self.command_widget)
         control_button_layout = QHBoxLayout()
         control_button_layout.addWidget(self.play_pause_button)
@@ -102,7 +114,17 @@ class HomeWidget(QWidget):
 
         # Signal and slot
         self.restart_button.clicked.connect(self.on_restart_clicked)
+        self.extrude_button.clicked.connect(self.on_extrude_clicked)
+        self.retract_button.clicked.connect(self.on_retract_clicked)
 
     @Slot()
     def on_restart_clicked(self):
         self.sigRestart.emit()
+    
+    def on_extrude_clicked(self):
+        self.logger.debug("Extrude button clicked")
+        self.sigExtrude.emit("G91\nG1 E10 F300\n")
+    
+    def on_retract_clicked(self):
+        self.logger.debug("Retract button clicked")
+        self.sigRetract.emit("G91\nG1 E-10 F300\n")

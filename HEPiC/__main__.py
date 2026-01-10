@@ -90,6 +90,8 @@ class MainWindow(QMainWindow):
         self.current_time = 0
         
         self.first_row = True
+        self.worker = None
+        self.klipper_worker = None
         self.video_worker = None
         self.ir_worker = None
         self.video_thread = None
@@ -219,7 +221,6 @@ class MainWindow(QMainWindow):
         # 连接信号槽
         self.klipper_worker.connection_status.connect(self.update_status)
         self.klipper_worker.gcode_response.connect(self.home_widget.command_widget.display_message)
-        # self.klipper_worker.gcode_error.connect(self.home_widget.command_widget.display_message)
         self.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
         self.home_widget.command_widget.command.connect(self.klipper_worker.send_gcode)
         self.home_widget.sigRestart.connect(self.klipper_worker.restart_firmware)
@@ -227,6 +228,9 @@ class MainWindow(QMainWindow):
         self.sigProgress.connect(self.status_widget.update_progress)
         self.job_sequence_widget.gcode_widget.sigFilePath.connect(self.klipper_worker.upload_gcode_to_klipper)
         self.job_sequence_widget.gcode_widget.sigActiveGcode.connect(self.klipper_worker.set_active_gcode)
+        self.home_widget.sigExtrude.connect(self.klipper_worker.send_gcode)
+        self.home_widget.sigRetract.connect(self.klipper_worker.send_gcode)
+
         # Let all workers run
         tcp_task = self.worker.run()
         klipper_task = self.klipper_worker.run()
@@ -243,6 +247,7 @@ class MainWindow(QMainWindow):
             # 创建 video worker （用于接收和处理视频信号）
             self.video_worker = VideoWorker(test_mode=self.test_mode, test_image_folder=self.config.get("test_image_folder", ""))
             self.video_thread = QThread()
+            self.video_thread.setObjectName("VideoThread")
             self.video_worker.moveToThread(self.video_thread)
             self.hikcam_ok = True
             # when a new frame is read by the video worker, send it over to the UI to display.
@@ -273,11 +278,12 @@ class MainWindow(QMainWindow):
         
         # 创建 image processing worker 用于处理图像，探测熔体直径
         self.processing_worker = ProcessingWorker()
+        self.processing_worker.setObjectName("ProcessingWorker")
 
         if self.video_worker:
 
             # send cropped images to the processing worker for image analysis.
-            self.video_worker.roi_frame_signal.connect(self.processing_worker.process_frame)
+            self.video_worker.roi_frame_signal.connect(self.processing_worker.add_frame_to_queue)
 
             # the processed frame shall be sent to the home page of the UI for user to monitor.
             self.processing_worker.proc_frame_signal.connect(self.vision_page_widget.roi_vision_widget.update_live_display)
@@ -288,12 +294,18 @@ class MainWindow(QMainWindow):
             # allow user to invert the black and white to meet the image processing need in specific experiment.
             self.vision_page_widget.invert_button.toggled.connect(self.processing_worker.invert_toggle)
 
+        # connect thread start to run method
+        asyncio.create_task(self.processing_worker.run())
+        
+
+
     @Slot()
     def initiate_ir_imager(self):
         """Try to initiate the IR image. If failed, the status flag should be marked False. Ideally, the software should attempt reconnection a few times if connection is lost. This should be handled in the IR imager class."""
         try: # 创建 IR image worker 处理红外成像仪图像，探测熔体出口温度   
             self.ir_worker = IRWorker()
             self.ir_thread = QThread()
+            self.ir_thread.setObjectName("IRThread")
             self.ir_worker.moveToThread(self.ir_thread)
 
             # when IR worker receives a new frame, send it to the IR page to shown on the canvas
@@ -323,7 +335,10 @@ class MainWindow(QMainWindow):
             self.ir_thread.start()
 
         except Exception as e:
-            self.logger.error(f"初始化热成像仪失败，热成像仪不可用: {e}")
+            if self.test_mode:
+                self.logger.info(f"由于测试模式开启，热成像仪模块被跳过")
+            else:
+                self.logger.warning(f"初始化热成像仪失败，热成像仪不可用: {e}")
             self.ir_worker = None
             
         self.show_UI(1) # show main UI anyway
@@ -337,8 +352,8 @@ class MainWindow(QMainWindow):
             self.autosave_prefix = datetime.now().strftime("%Y%m%d_%H%M%S")
             self.autosave_filename = Path(f"{self.autosave_prefix}_autosave.csv").resolve()
             
-            self.logger.info("Recording started ...")
-            self.statusBar().showMessage(f"Autosave file at {self.autosave_filename}")
+            self.logger.info("开始记录数据 ...")
+            self.statusBar().showMessage(f"文件路径：{self.autosave_filename}")
             self.is_recording = True
             if self.record_timelapse and self.video_worker:
                 # init video recorder
@@ -351,7 +366,7 @@ class MainWindow(QMainWindow):
                 
         else:
             self.home_widget.play_pause_button.setIcon(self.home_widget.play_icon)
-            self.logger.info("Recording stopped.")
+            self.logger.info("停止记录数据 ...")
             self.autosave_filename = None
             self.first_row = True
             self.is_recording = False
@@ -445,20 +460,22 @@ class MainWindow(QMainWindow):
         self.home_widget.play_pause_button.setChecked(False)
         self.sigEmergencyStop.emit()
 
-    async def closeEvent(self, event):
-        print("正在关闭应用程序...")
+    def closeEvent(self, event):
         if self.worker:
-            await self.worker.stop()
+            self.worker.stop()
             self.worker.deleteLater()
         if self.klipper_worker:
-            await self.klipper_worker.stop()
+            self.klipper_worker.stop()
             self.klipper_worker.deleteLater()
-        if self.video_worker:
-            self.video_worker.stop()
-            self.video_worker.deleteLater()
+        if self.video_thread:
+            self.video_thread.quit()
+            self.video_thread.wait()
         if self.ir_worker:
             self.ir_worker.stop()
             self.ir_worker.deleteLater()
+        if self.processing_worker:
+            self.processing_worker.stop()
+        self.logger.info("正在关闭应用程序...")
         event.accept()
 
 
@@ -477,8 +494,8 @@ def start_app():
     )
 
     ### Debug module logging ###
-    logging.getLogger("tab_widgets.gcode_widget").setLevel(logging.DEBUG)
-    logging.getLogger("communications.klipper_worker").setLevel(logging.DEBUG)
+    # logging.getLogger("HEPiC.communications.klipper_worker").setLevel(logging.DEBUG)
+    # logging.getLogger("HEPiC.tab_widgets.home_widget").setLevel(logging.DEBUG)
     ############################
     
     app = QApplication(sys.argv)

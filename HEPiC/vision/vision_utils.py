@@ -112,27 +112,39 @@ def draw_filament_contour(img, skeleton, diameter):
     reconstructed_mask = np.zeros_like(img, dtype=np.uint8)
     
     # Find coordinates of skeleton points
-    y_coords, x_coords = np.where(skeleton)
+    # y_coords, x_coords = np.where(skeleton)
     
-    for (x, y) in zip(x_coords, y_coords):
-        center = (x, y) # OpenCV坐标是(x, y)
+    # for (x, y) in zip(x_coords, y_coords):
+    #     center = (x, y) # OpenCV坐标是(x, y)
         
-        # 绘制白色的实心圆 (颜色255, thickness=-1表示填充)
-        try:
-            cv2.circle(reconstructed_mask, center, int(round(diameter//2)), 255, thickness=-1)
-        except ValueError as e:
-            # return img
-            pass
-        except Exception as e:
-            # print(f"未知错误: {e}")
-            pass
+    #     # 绘制白色的实心圆 (颜色255, thickness=-1表示填充)
+    #     try:
+    #         cv2.circle(reconstructed_mask, center, int(round(diameter//2)), 255, thickness=-1)
+    #     except ValueError as e:
+    #         # return img
+    #         pass
+    #     except Exception as e:
+    #         # print(f"未知错误: {e}")
+    #         pass
 
+    # 1. 创建一个圆形的结构元素 (Kernel)，大小等于 diameter
+    if diameter < img.shape[0]:
+        radius = int(round(diameter // 2))
+        kernel_size = 2 * radius + 1
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+
+        # 2. 直接对骨架图进行膨胀操作
+        # 这步操作等价于你在每个白点上画了一个白色的实心圆，但速度快几个数量级
+        skeleton_uint8 = skeleton.astype(np.uint8) * 255
+        reconstructed_mask = cv2.dilate(skeleton_uint8, kernel)
+
+     # 3. 查找轮廓并绘制
     contours, _ = cv2.findContours(reconstructed_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     img_rgb = cv2.cvtColor(cv2.cvtColor(to8bit(img), cv2.COLOR_GRAY2BGR), cv2.COLOR_BGR2RGB)
 
     labeled_image = cv2.drawContours(img_rgb.copy(), contours, -1, (255, 0, 0), 2)
-
+    
     return labeled_image
 
 def find_longest_branch(skeleton):
@@ -251,17 +263,21 @@ if __name__ == "__main__":
     from pathlib import Path
 
     test_folder = Path(__file__).resolve().parent.parent.parent / "test"
-    img_path = test_folder / "filament_images_simulated" / "curly_50px.png"
+    img_path = test_folder / "filament_images_simulated" / "speckle copy.jpg"
     img = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
+    binary = binarize(img)
     diameter, skeleton, dist_transform = filament_diameter(img) # the rough estimate
     print(f"Rough estimate: {diameter} px")
-    longest_branch = find_longest_branch(skeleton)
-    diameter_refine = dist_transform[longest_branch].mean() * 2.0
+    # longest_branch = find_longest_branch(skeleton)
+    skel_px = dist_transform[skeleton]
+    skeleton_refine = skeleton.copy()
+    skeleton_refine[dist_transform < skel_px.mean()] = False
+    diameter_refine = dist_transform[skeleton_refine].mean() * 2.0
     print(f"Refined: {diameter_refine}")
 
     fig, ax = plt.subplots(ncols=2, figsize=(10, 5), dpi=100)
     label_rough = draw_filament_contour(img, skeleton, diameter)
-    label_refine = draw_filament_contour(img, longest_branch, diameter_refine)
+    label_refine = draw_filament_contour(img, skeleton_refine, diameter_refine)
     ax[0].imshow(label_rough)
     ax[1].imshow(label_refine)
     plt.show()
