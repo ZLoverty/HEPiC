@@ -68,7 +68,7 @@ class MainWindow(QMainWindow):
         self.config_file = current_file_path.parent / "config.json"
         self.load_config()
         self.setWindowTitle(f"{__app_name__} v{__version__}")
-        self.setGeometry(900, 100, 1024, 768)
+        self.setGeometry(0, 0, 1024, 768)
         self.setStyleSheet(f"background-color: {self.background_color}; color: {self.foreground_color}") 
         pg.setConfigOption("background", self.background_color)
         pg.setConfigOption("foreground", self.foreground_color)
