@@ -99,7 +99,7 @@ class PlatformStatusWidget(QWidget):
     @Slot(dict)
     def update_display(self, data):
         for item in data:
-            if item == "hotend_temperature_C":
+            if item == "measured_temperature_C":
                 temperature = data[item]
                 if temperature:
                     self.hotend_temperature_value.setText(f"{temperature:5.1f} /")
