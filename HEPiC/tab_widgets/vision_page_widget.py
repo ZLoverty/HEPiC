@@ -54,7 +54,10 @@ class VisionPageWidget(QWidget):
         control_layout.addWidget(self.invert_button)
         control_layout.addWidget(self.calibration_button)
         control_layout.addStretch(1)
-        layout.addLayout(control_layout)
+        control_panel = QWidget()
+        control_panel.setLayout(control_layout)
+        control_panel.setMaximumWidth(200)
+        layout.addWidget(control_panel)
         layout.addWidget(self.vision_widget)
         layout.addWidget(self.roi_vision_widget)
         
