@@ -8,10 +8,18 @@ class VisionWidget(pg.GraphicsLayoutWidget):
     sigRoiChanged = Signal(tuple) # 发射 (x, y, w, h)
     sigRoiImage = Signal(np.ndarray)
 
-    def __init__(self, logger=None):
+    def __init__(self):
 
         super().__init__()
 
+        # 1. 获取中央布局对象 (Central Item)
+        layout = self.ci 
+        
+        # 2. 核心修复：将布局的边距设置为 0
+        # GraphicsLayout 内部封装了 QGraphicsGridLayout
+        layout.layout.setContentsMargins(0, 0, 0, 0)
+        layout.layout.setSpacing(0)
+        
         self.roi = {
             "item": None,
             "pos": (0, 0),
@@ -37,15 +45,15 @@ class VisionWidget(pg.GraphicsLayoutWidget):
         self.view_box.setMouseEnabled(x=False, y=False)
 
         # 4. 对于纯图像显示，我们通常不希望看到坐标轴，可以隐藏它们
-        self.plot_item.hideAxis('left')
-        self.plot_item.hideAxis('bottom')
+        # self.plot_item.hideAxis('left')
+        # self.plot_item.hideAxis('bottom')
         
         # 5. 创建 ImageItem 并将其添加到 PlotItem 中
         self.img_item = pg.ImageItem()
         self.plot_item.addItem(self.img_item)
 
         # logger
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logging.getLogger(__name__)
         self.frame = None
 
     @Slot(np.ndarray)
@@ -66,8 +74,12 @@ class VisionWidget(pg.GraphicsLayoutWidget):
             if self.roi:
                 self.plot_item.removeItem(self.roi["item"])
 
-            pos = event.scenePosition()
-            mousePoint = self.plot_item.vb.mapSceneToView(pos)
+            pos = event.pos()
+            self.logger.debug(f"event.pos() = {pos}")
+            scene_pos = self.plot_item.mapToScene(pos)
+            self.logger.debug(f"scene_pos = {scene_pos}")
+            mousePoint = self.plot_item.vb.mapSceneToView(scene_pos)
+            self.logger.debug(f"view_pos = {mousePoint}")
             self.roi_start_pos = mousePoint
             
             self.mousePressed = True
@@ -75,6 +87,7 @@ class VisionWidget(pg.GraphicsLayoutWidget):
             # 创建新的RectROI
             x0, y0 = self.roi_start_pos.x(), self.roi_start_pos.y()
             self.roi["pos"] = (x0, y0)
+            self.logger.debug(f"ROI start position set to {self.roi['pos']}")
             self.roi["item"] = pg.Qt.QtWidgets.QGraphicsRectItem(x0, y0, 0, 0)
             self.pen = pg.mkPen(color=(200, 0, 0), width=3, style=pg.QtCore.Qt.PenStyle.DashLine)
             self.roi["item"].setPen(self.pen)
@@ -87,7 +100,9 @@ class VisionWidget(pg.GraphicsLayoutWidget):
 
     def mouseMoveEvent(self, event):
         if self.roi and event.buttons() == pg.QtCore.Qt.MouseButton.LeftButton and self.mouse_enabled:
-            current_pos = self.plot_item.getViewBox().mapSceneToView(event.scenePosition())
+            pos = event.pos()
+            scene_pos = self.plot_item.mapToScene(pos)
+            current_pos = self.plot_item.getViewBox().mapSceneToView(scene_pos)
             # 更新ROI的位置和大小，以确保拖拽行为符合直觉
             # min()确保左上角坐标正确，abs()确保宽高为正
             if 'item' in self.roi:
@@ -119,9 +134,13 @@ class VisionWidget(pg.GraphicsLayoutWidget):
         """当ROI被用户修改完成时被调用。"""
         if not self.roi:
             return
-        self.roi_info = (int(self.roi["pos"][0]), int(self.roi["pos"][1]), int(self.roi["size"][0]), int(self.roi["size"][1]))
-        self.sigRoiChanged.emit(self.roi_info) 
-        self.logger.debug(f"New ROI set {self.roi_info}.")
+        if self.roi["size"][0] == 0 or self.roi["size"][1] == 0:
+            self.roi["item"] = None
+            self.logger.debug("ROI size is zero, ignoring.")
+        else:
+            self.roi_info = (int(self.roi["pos"][0]), int(self.roi["pos"][1]), int(self.roi["size"][0]), int(self.roi["size"][1]))
+            self.sigRoiChanged.emit(self.roi_info) 
+            self.logger.debug(f"New ROI set {self.roi_info}.")
     
     def enable_mouse(self):
         self.mouse_enabled = True

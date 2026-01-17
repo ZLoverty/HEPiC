@@ -1,5 +1,7 @@
 from pathlib import Path
 import sys
+
+from qasync import QEventLoop
 current_path = Path(__file__).resolve().parent
 sys.path.append(str(current_path))
 
@@ -11,6 +13,7 @@ from PySide6.QtCore import Signal, QObject
 from vision_widget import VisionWidget
 from calibration_dialog import CalibrationDialog
 import numpy as np
+import logging
 
 class VisionPageWidget(QWidget):
     """Video + control widgets"""
@@ -109,7 +112,14 @@ if __name__ == "__main__":
     from PySide6.QtWidgets import QApplication
     from threading import Thread
     from vision import ProcessingWorker
-    
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)] # 确保输出到 stdout
+    )
+
+    logging.getLogger("vision_widget").setLevel(logging.DEBUG)
     app = QApplication(sys.argv)
     widget = VisionPageWidget()
 
@@ -123,6 +133,7 @@ if __name__ == "__main__":
     widget.vision_widget.sigRoiImage.connect(processing_worker.process_frame)
     processing_worker.proc_frame_signal.connect(widget.roi_vision_widget.update_live_display)
     
-    
     widget.show()
+
     sys.exit(app.exec())
+    
