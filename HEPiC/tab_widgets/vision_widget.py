@@ -19,7 +19,7 @@ class VisionWidget(pg.GraphicsLayoutWidget):
         # GraphicsLayout 内部封装了 QGraphicsGridLayout
         layout.layout.setContentsMargins(0, 0, 0, 0)
         layout.layout.setSpacing(0)
-        
+
         self.roi = {
             "item": None,
             "pos": (0, 0),
@@ -45,8 +45,8 @@ class VisionWidget(pg.GraphicsLayoutWidget):
         self.view_box.setMouseEnabled(x=False, y=False)
 
         # 4. 对于纯图像显示，我们通常不希望看到坐标轴，可以隐藏它们
-        # self.plot_item.hideAxis('left')
-        # self.plot_item.hideAxis('bottom')
+        self.plot_item.hideAxis('left')
+        self.plot_item.hideAxis('bottom')
         
         # 5. 创建 ImageItem 并将其添加到 PlotItem 中
         self.img_item = pg.ImageItem()
