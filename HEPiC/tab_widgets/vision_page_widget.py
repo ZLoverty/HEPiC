@@ -106,10 +106,10 @@ class ImageGenerator(QObject):
 
         offset = 0
         while True:
-            img = np.sin(X+Y+offset)
+            img = np.sin(0.01*X+0.1*Y+offset)
             self.sigImage.emit(img)
             offset += .1
-            time.sleep(.033)
+            time.sleep(.05)
 
 if __name__ == "__main__":
     from PySide6.QtWidgets import QApplication
@@ -123,6 +123,7 @@ if __name__ == "__main__":
     )
 
     logging.getLogger("vision_widget").setLevel(logging.DEBUG)
+    logging.getLogger("vision.video_worker").setLevel(logging.DEBUG)
     app = QApplication(sys.argv)
     widget = VisionPageWidget()
 

@@ -11,6 +11,7 @@ from myimagelib import to8bit
 from skan import Skeleton, summarize
 import os
 import glob
+import random
 
 def binarize(img):
     """Convert gray image to binary using a threshold filter.
@@ -92,7 +93,7 @@ def convert_to_grayscale(img) -> np.ndarray:
         
     return gray_img
 
-def draw_filament_contour(img, skeleton, diameter):
+def draw_filament_contour(img, skeleton, diameter, skeleton_max_points=50):
     """Draw the contour of the filament based on its skeleton and diameter.
     
     Parameters:
@@ -103,6 +104,8 @@ def draw_filament_contour(img, skeleton, diameter):
         Binary image of the filament skeleton.
     diameter: float
         Estimated diameter of the filament in pixels.
+    skeleton_max_points: int
+        Maximum number of skeleton points to draw.
         
     Returns:
     --------
@@ -112,31 +115,37 @@ def draw_filament_contour(img, skeleton, diameter):
     reconstructed_mask = np.zeros_like(img, dtype=np.uint8)
     
     # Find coordinates of skeleton points
-    # y_coords, x_coords = np.where(skeleton)
+    y_coords, x_coords = np.where(skeleton)
     
-    # for (x, y) in zip(x_coords, y_coords):
-    #     center = (x, y) # OpenCV坐标是(x, y)
+    # # if number of skeleton points is too great, downsample before visualizing to make sure the UI runs smoothly.
+    if len(y_coords) > skeleton_max_points:
+        index = random.sample(range(len(y_coords)), skeleton_max_points)
+        x_coords = x_coords[index]
+        y_coords = y_coords[index]
+
+    for (x, y) in zip(x_coords, y_coords):
+        center = (x, y) # OpenCV坐标是(x, y)
         
-    #     # 绘制白色的实心圆 (颜色255, thickness=-1表示填充)
-    #     try:
-    #         cv2.circle(reconstructed_mask, center, int(round(diameter//2)), 255, thickness=-1)
-    #     except ValueError as e:
-    #         # return img
-    #         pass
-    #     except Exception as e:
-    #         # print(f"未知错误: {e}")
-    #         pass
+        # 绘制白色的实心圆 (颜色255, thickness=-1表示填充)
+        try:
+            cv2.circle(reconstructed_mask, center, int(round(diameter//2)), 255, thickness=-1)
+        except ValueError as e:
+            # return img
+            pass
+        except Exception as e:
+            # print(f"未知错误: {e}")
+            pass
 
     # 1. 创建一个圆形的结构元素 (Kernel)，大小等于 diameter
-    if diameter < img.shape[0]:
-        radius = int(round(diameter // 2))
-        kernel_size = 2 * radius + 1
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+    # if diameter < img.shape[0]:
+    #     radius = int(round(diameter // 2))
+    #     kernel_size = 2 * radius + 1
+    #     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
 
-        # 2. 直接对骨架图进行膨胀操作
-        # 这步操作等价于你在每个白点上画了一个白色的实心圆，但速度快几个数量级
-        skeleton_uint8 = skeleton.astype(np.uint8) * 255
-        reconstructed_mask = cv2.dilate(skeleton_uint8, kernel)
+    #     # 2. 直接对骨架图进行膨胀操作
+    #     # 这步操作等价于你在每个白点上画了一个白色的实心圆，但速度快几个数量级
+    #     skeleton_uint8 = skeleton.astype(np.uint8) * 255
+    #     reconstructed_mask = cv2.dilate(skeleton_uint8, kernel)
 
      # 3. 查找轮廓并绘制
     contours, _ = cv2.findContours(reconstructed_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)

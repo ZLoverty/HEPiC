@@ -184,6 +184,7 @@ class ProcessingWorker(QObject):
             # filter the pixels on skeleton where dt pixel value is above average
             skeleton_refine[dist_transform < skel_px.mean()] = False
             
+            self.logger.debug(f"Skeleton has {skeleton_refine.astype(int).sum():d} points.")
             diameter_refine = dist_transform[skeleton_refine].mean() * 2.0
 
             # measure the time required for visualization
