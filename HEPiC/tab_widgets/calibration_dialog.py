@@ -5,7 +5,7 @@ sys.path.append(str(current_path))
 sys.path.append(str(current_path.parent))
 from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QDialog, 
                                QHBoxLayout, QVBoxLayout, QFormLayout, QLineEdit, QSpinBox, 
-                               QDialogButtonBox, QMessageBox, QWidget, QLabel)
+                               QDialogButtonBox, QMessageBox, QWidget, QLabel, QSizePolicy)
 from vision_widget import VisionWidget
 from log_widget import LogWidget
 
@@ -21,51 +21,38 @@ class CalibrationDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("棋盘格尺寸校准")
-        self.resize(300, 450)
+        self.resize(800, 600)
 
         self.vision_widget = VisionWidget()
-        self.vision_widget.disable_mouse()
+        self.vision_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.vision_widget.set_mode("measure")
         self.calibration_button = QPushButton("校准")
-        self.mpp_label = QLabel("像素尺寸（mm）: ")
+        # self.mpp_label = QLabel("像素尺寸（mm）: ")
         self.log_widget = LogWidget()
+        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.realsize_input = QLineEdit()
 
         # layout
-        layout = QVBoxLayout()
-        
-        # form layout
+        layout = QHBoxLayout()
         form_layout = QFormLayout()
-        self.gridsize_input = QLineEdit()
-        self.rnum_input = QSpinBox()
-        self.rnum_input.setRange(2, 20)
-        self.rnum_input.setValue(9)
-        self.cnum_input = QSpinBox()
-        self.cnum_input.setRange(2, 20)
-        self.cnum_input.setValue(12)
+        form_layout.addRow("实际尺寸（mm）:", self.realsize_input)
+        info_widget = QWidget()
+        info_layout = QVBoxLayout()
+        info_widget.setLayout(info_layout)
+        info_widget.setMaximumWidth(400)
+        info_layout.addLayout(form_layout)
+        info_layout.addWidget(self.calibration_button)
+        info_layout.addWidget(self.log_widget)
+        info_layout.addWidget(self.buttons)
+        layout.addWidget(info_widget)
+        layout.addWidget(self.vision_widget)
+        self.setLayout(layout)
 
-        form_layout.addRow("棋盘格格子尺寸（mm）:", self.gridsize_input)
-        form_layout.addRow("行数", self.rnum_input)
-        form_layout.addRow("列数", self.cnum_input)
-
-        # 4. 创建标准按钮 (OK / Cancel)
-        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        
         # 5. 连接信号与槽
-        # accept() 会关闭对话框并返回 1 (True)
-        # reject() 会关闭对话框并返回 0 (False)
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
         self.calibration_button.pressed.connect(self.on_calibration_pressed)
         self.sigMessage.connect(self.log_widget.update_log)
-
-        # 6. 组装布局
-        layout.addWidget(self.vision_widget)
-        layout.addLayout(form_layout)
-        layout.addWidget(self.mpp_label)
-        layout.addWidget(self.calibration_button)
-        layout.addWidget(self.log_widget)
-
-        layout.addWidget(self.buttons)
-        self.setLayout(layout)
 
         # variables
         self.mpp = float("nan")
@@ -79,43 +66,27 @@ class CalibrationDialog(QDialog):
     def on_calibration_pressed(self):
         # inspect if grid size has a valid value
         try:
-            size_mm = float(self.gridsize_input.text())
+            size_mm = float(self.realsize_input.text())
             self.sigMessage.emit(f"棋盘格子尺寸为 {size_mm:.1f} mm")
         except:
             msgBox = QMessageBox()
-            msgBox.setText(f"无效尺寸{self.gridsize_input.text()}，请输入一个数字。")
+            msgBox.setText(f"无效尺寸{self.realsize_input.text()}，请输入一个数字。")
             msgBox.exec()
             return
         
-        # get grid pattern size
-        rnum = self.rnum_input.value()
-        cnum = self.cnum_input.value()
-        pattern_size = (rnum-1, cnum-1)
-
-        # execute the grid recognization algorithm
-        try:
-            frame = self.vision_widget.frame
-            result = calibration.analyze_raw_pixel_sizes(frame, pattern_size=pattern_size)
-
-            if result: # not None
-                img_labeled, messages, size_px = result
-            else:
-                self.sigMessage.emit("Chessboard not detected.")
-                return
-        except:
-            self.sigMessage.emit("Failed to analyze image.")
-            return
+        messages = []
         
         # show analysis result message
+        size_px = self.vision_widget.get_measure_length()
+        if size_px is not None:
+            mpp = size_mm / size_px
+            messages.append(f"测量长度为 {size_px:.2f} px, 对应实际长度 {size_mm:.2f} mm。")
+            messages.append(f"像素尺寸为 {mpp:.4f} mm/px。")
+        else:
+            messages = "请先画出测量线段。"
+        
         for message in messages:
-            self.log_widget.update_log(message)
-
-        # display labeled image
-        self.vision_widget.update_live_display(img_labeled)
-
-        # display size in pixel size label
-        mpp = size_mm / size_px
-        self.mpp_label.setText(f"像素尺寸（mm）: {mpp:.3f}")
+            self.sigMessage.emit(message)
 
 class ImageGenerator(QObject):
     
