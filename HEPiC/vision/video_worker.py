@@ -12,6 +12,7 @@ import cv2
 import logging
 import asyncio
 from qasync import asyncSlot
+from myimagelib import to8bit
 
 if os.name == "nt":
     # if on windows OS, import the windows camera library
@@ -162,6 +163,7 @@ class ProcessingWorker(QObject):
     def process_frame(self, img):
         """Find filament in image and update the `self.die_diameter` variable with detected filament diameter."""
         gray = convert_to_grayscale(img) # only process gray images
+        gray = to8bit(gray)
         try:
             # preprocessing: CLAHE
             gray = self.clahe.apply(gray)
@@ -182,6 +184,7 @@ class ProcessingWorker(QObject):
             # filter the pixels on skeleton where dt pixel value is above average
             skeleton_refine[dist_transform < skel_px.mean()] = False
             
+            self.logger.debug(f"Skeleton has {skeleton_refine.astype(int).sum():d} points.")
             diameter_refine = dist_transform[skeleton_refine].mean() * 2.0
 
             # measure the time required for visualization

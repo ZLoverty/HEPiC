@@ -110,6 +110,9 @@ class JobSequenceDialog(QDialog):
                 ext_length = V*t_each
                 job_sequence_list.append(f"G1 E{ext_length:.2f} F{V*60:.2f}")
                 job_sequence_list.append("M400")
+                
+        job_sequence_list.append("M118 Test finished. Lowering hotend temperature.")
+        job_sequence_list.append("M109 S0")
 
         return "\n".join(job_sequence_list)
     

@@ -1,5 +1,7 @@
 from pathlib import Path
 import sys
+
+from qasync import QEventLoop
 current_path = Path(__file__).resolve().parent
 sys.path.append(str(current_path))
 
@@ -11,6 +13,7 @@ from PySide6.QtCore import Signal, QObject
 from vision_widget import VisionWidget
 from calibration_dialog import CalibrationDialog
 import numpy as np
+import logging
 
 class VisionPageWidget(QWidget):
     """Video + control widgets"""
@@ -51,7 +54,10 @@ class VisionPageWidget(QWidget):
         control_layout.addWidget(self.invert_button)
         control_layout.addWidget(self.calibration_button)
         control_layout.addStretch(1)
-        layout.addLayout(control_layout)
+        control_panel = QWidget()
+        control_panel.setLayout(control_layout)
+        control_panel.setMaximumWidth(200)
+        layout.addWidget(control_panel)
         layout.addWidget(self.vision_widget)
         layout.addWidget(self.roi_vision_widget)
         
@@ -100,16 +106,24 @@ class ImageGenerator(QObject):
 
         offset = 0
         while True:
-            img = np.sin(X+Y+offset)
+            img = np.sin(0.01*X+0.1*Y+offset)
             self.sigImage.emit(img)
             offset += .1
-            time.sleep(.033)
+            time.sleep(.05)
 
 if __name__ == "__main__":
     from PySide6.QtWidgets import QApplication
     from threading import Thread
     from vision import ProcessingWorker
-    
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)] # 确保输出到 stdout
+    )
+
+    logging.getLogger("vision_widget").setLevel(logging.DEBUG)
+    logging.getLogger("vision.video_worker").setLevel(logging.DEBUG)
     app = QApplication(sys.argv)
     widget = VisionPageWidget()
 
@@ -123,6 +137,7 @@ if __name__ == "__main__":
     widget.vision_widget.sigRoiImage.connect(processing_worker.process_frame)
     processing_worker.proc_frame_signal.connect(widget.roi_vision_widget.update_live_display)
     
-    
     widget.show()
+
     sys.exit(app.exec())
+    

@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit, QLabel, QLabel
 )
 from PySide6.QtCore import Slot
+from datetime import datetime
 
 class LogWidget(QWidget):
 
@@ -21,7 +22,11 @@ class LogWidget(QWidget):
 
     @Slot(str)
     def update_log(self, message):
-        self.log_display.appendPlainText(f"<-- [接收]: {message}")
+        # time stamp
+        now = datetime.now()
+        time_str = now.strftime("%H:%M")
+
+        self.log_display.appendPlainText(f"{time_str}    {message}")
 
 
 if __name__ == "__main__":
