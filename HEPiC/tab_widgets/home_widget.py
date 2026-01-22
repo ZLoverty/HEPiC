@@ -24,9 +24,7 @@ class HomeWidget(QWidget):
         self.data_widget = DataPlotWidget()
         self.status_widget = PlatformStatusWidget()
         self.dieswell_widget = VisionWidget() # hik cam roi
-        self.dieswell_widget.mouse_enabled = False
         self.ir_roi_widget = VisionWidget()
-        self.ir_roi_widget.mouse_enabled = False
 
         # play / pause button, emergency stop button, restart button
         style = self.style()

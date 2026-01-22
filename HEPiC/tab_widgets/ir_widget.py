@@ -20,6 +20,7 @@ class IRPageWidget(QWidget):
         self.focus_bar.setMinimum(0)
         self.focus_bar.setMaximum(100)
         self.image_widget = VisionWidget()
+        self.image_widget.set_mode("roi")
         control_layout = QHBoxLayout()
         control_layout.addWidget(self.mode_menu)
         control_layout.addWidget(self.focus_bar)

@@ -120,11 +120,11 @@ class VisionWidget(pg.GraphicsLayoutWidget):
                     state = self.roi.getState()
                     new_size = current_pos.x() - state["pos"][0], current_pos.y() - state["pos"][1]
 
-                    if new_size[0] < 1 or new_size[1] < 1:
-                        self.roi = None
-                        return
-                    else:
-                        self.roi.setSize(new_size)
+                    # if new_size[0] < 1 or new_size[1] < 1:
+                    #     self.roi = None
+                    #     return
+                    # else:
+                    self.roi.setSize(new_size)
 
             elif self.mode == "measure":
                 if self.roi:
@@ -276,7 +276,7 @@ if __name__ == "__main__":
 
     app = QApplication(sys.argv)
     widget = VisionWidget()
-    widget.set_mode("measure")
+    widget.set_mode("roi")
     X, Y = np.meshgrid(np.linspace(0, np.pi, 512), np.linspace(0, np.pi, 512))
     widget.update_live_display(np.sin(X+Y))
     widget.show()
