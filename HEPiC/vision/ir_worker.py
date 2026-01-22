@@ -53,7 +53,7 @@ class IRWorker(QObject):
                 self.logger.debug(f"Available Optris ranges: {self.ranges}")
             self.cap = self._initialize_cap()
             self._timer.timeout.connect(self.read_one_frame)
-            self._timer.start(0)
+            self._timer.start(30)
             self.thread().exec()
         finally:
             self.cleanup()
@@ -105,7 +105,7 @@ class IRWorker(QObject):
         self.cap = OptrisCamera(temp_range_index=range_index)
 
         if self.cap and self._timer:
-            self._timer.start(0)
+            self._timer.start(30)
 
     @Slot(int)
     def set_position(self, position):
