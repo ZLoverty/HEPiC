@@ -31,8 +31,8 @@ class VisionPageWidget(QWidget):
         self.exp_time.setMaximumWidth(30)
         self.exp_time_unit = QLabel("ms")
         self.vision_widget = VisionWidget()
+        self.vision_widget.set_mode("roi")
         self.roi_vision_widget = VisionWidget()
-        self.roi_vision_widget.mouse_enabled = False
         self.invert_button = QCheckBox("黑白反转")
         self.calibration_button = QPushButton("棋盘校准")
 
