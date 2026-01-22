@@ -4,9 +4,6 @@ communications.py
 Handles serial port / IP communications.
 """
 from pathlib import Path
-import sys
-current_path = Path(__file__).resolve().parent
-
 from PySide6.QtCore import QObject, Signal, QTimer, Slot
 import numpy as np
 from vision_utils import ImageStreamer
@@ -25,31 +22,51 @@ class IRWorker(QObject):
     sigRoiFrame = Signal(np.ndarray)
     sigFinished = Signal()
 
-    def __init__(self, test_mode=False, test_image_folder="", logger=None):
+    def __init__(self, test_mode=False, test_image_folder=""):
 
         super().__init__()
+        self.test_mode = test_mode
+        self.test_image_folder = test_image_folder
         self.is_running = True
         self.roi = None
         self.die_temperature = np.nan
         self._timer = QTimer(self)
-        # logging 
-        self.logger = logger or logging.getLogger(__name__)
+        self.cap = None
 
-        if test_mode:  # 调试用图片流
-            test_image_folder = Path(test_image_folder).expanduser().resolve()
-            self.cap = ImageStreamer(str(test_image_folder), fps=10)
+        # logging 
+        self.logger = logging.getLogger(__name__)
+        
+    
+    def _initialize_cap(self, range_index=0):
+
+        if self.test_mode:  # 调试用图片流
+            test_image_folder = Path(self.test_image_folder).expanduser().resolve()
+            return ImageStreamer(str(test_image_folder), fps=10)
         else:
-            self.ranges = OptrisCamera.list_available_ranges(0)
-            self.cap = OptrisCamera()
+            return OptrisCamera(temp_range_index=range_index)
             
     def run(self):
-        self._timer.timeout.connect(self.read_one_frame)
-        self._timer.start(0)
-        self.thread().exec()
 
-        print("IRWorker 事件循环已停止。")
-        self.cap.release()
+        try:
+            if not self.test_mode:
+                self.ranges = OptrisCamera.list_available_ranges(0)
+                self.logger.debug(f"Available Optris ranges: {self.ranges}")
+            self.cap = self._initialize_cap()
+            self._timer.timeout.connect(self.read_one_frame)
+            self._timer.start(0)
+            self.thread().exec()
+        finally:
+            self.cleanup()
+
+    def cleanup(self):
+        """Cleanup resources."""
+        self._timer.stop()
+        if self.cap:
+            self.cap.release()
+            self.cap = None
+
         self.sigFinished.emit() # 通知主线程
+        self.logger.info("IRWorker resources released.")
     
     def read_one_frame(self):
 
@@ -69,7 +86,7 @@ class IRWorker(QObject):
                 self.sigRoiFrame.emit(frame[y:y+h, x:x+w])
                 self.die_temperature = temps[y:y+h, x:x+w].max()
         else:
-            print("Fail to read frame.")
+            self.logger.warning("Fail to read frame.")
 
     @Slot(tuple)
     def set_roi(self, roi):
@@ -77,11 +94,14 @@ class IRWorker(QObject):
 
     @Slot(int)
     def set_range(self, range_index):
+        if self.test_mode:
+            return
         if self._timer:
             self._timer.stop()
         if self.cap:
             self.cap.release()
             self.cap = None
+
         self.cap = OptrisCamera(temp_range_index=range_index)
 
         if self.cap and self._timer:
@@ -93,4 +113,6 @@ class IRWorker(QObject):
             self.cap.set_focus(position)
 
     def stop(self):
-        self.is_running = False
+        """Properly shuts down the worker."""
+        self._timer.stop()
+        self.thread().quit() # Stops the exec() loop
