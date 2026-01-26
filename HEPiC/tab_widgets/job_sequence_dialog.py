@@ -59,7 +59,7 @@ class JobSequenceDialog(QDialog):
 
         job_sequence_list = [
             "M118 Set to relative mode",
-            "G91"
+            "G91",
             "M118 Nozzle heating"
         ]
 
