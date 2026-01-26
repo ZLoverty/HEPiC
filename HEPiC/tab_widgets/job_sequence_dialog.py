@@ -59,18 +59,8 @@ class JobSequenceDialog(QDialog):
 
         job_sequence_list = [
             "M118 Set to relative mode",
-            "M109 S250",
-            "G91",
-            "G1 E10 F100",
-            "M118 Try to extrude ...",
-            "M400",
-            "G1 E20 F200",
-            "M118 Try to extrude at higher rate ...",
-            "M400",
-            "G1 E30 F300",
-            "M118 Try to extrude at even higher rate ...",
-            "M400",
-            "M118 Finished testing"
+            "G91"
+            "M118 Nozzle heating"
         ]
 
         Ts = np.linspace(float(self.tmin_input.text()), float(self.tmax_input.text()), self.tnum_input.value())
@@ -93,7 +83,7 @@ class JobSequenceDialog(QDialog):
                     "G4 P1500",
                     "M118 Make sure to zero extrusion force and meter values.",
                     "G4 P1500",
-                    "M118 Starting test in 3 seconds ..."
+                    "M118 Starting test in 3 seconds ...",
                     "G4 P1000",
                     "M118 3 ...",
                     "M400",
