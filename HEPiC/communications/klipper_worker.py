@@ -176,9 +176,9 @@ class KlipperWorker(QObject):
                         sub_msg = data.get("result", {}).get("status", {})
                         self.hotend_temperature = sub_msg.get("extruder", {}).get("temperature", np.nan)
                         self.target_hotend_temperature = sub_msg.get("extruder", {}).get("target", np.nan)
-                        self.active_feedrate_mms = sub_msg.get("motion_report", {}).get("live_extruder_velocity")
-                        self.progress = sub_msg.get("virtual_sdcard", {}).get("progress")
-                        self.file_position = sub_msg.get("virtual_sdcard", {}).get("file_position")
+                        self.active_feedrate_mms = sub_msg.get("motion_report", {}).get("live_extruder_velocity", 0.0)
+                        self.progress = sub_msg.get("virtual_sdcard", {}).get("progress", 0.0)
+                        self.file_position = sub_msg.get("virtual_sdcard", {}).get("file_position", 0.0)
             else:
                 self.logger.debug(data)
 
