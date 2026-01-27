@@ -101,6 +101,8 @@ class CommandWidget(QWidget):
         color = self.colors.get(msg_type, self.colors["normal"])
         tf = QTextCharFormat()
         tf.setForeground(color)
+        timestamp_tf = QTextCharFormat()
+        timestamp_tf.setForeground(QColor("#999999"))
 
         # 3. 移动光标到末尾并插入文本
         cursor = self.command_display.textCursor()
@@ -111,7 +113,8 @@ class CommandWidget(QWidget):
         time_str = now.strftime("%H:%M")
                 
         # 插入带格式的文本
-        cursor.insertText(f"{time_str} | {message}\n", tf)
+        cursor.insertText(f"{time_str}  ", timestamp_tf)
+        cursor.insertText(f"{message}\n", tf)
         
         # 4. 自动滚动到底部
         self.command_display.setTextCursor(cursor)
