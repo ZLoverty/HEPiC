@@ -35,9 +35,13 @@ class IRWorker(QObject):
 
         # logging 
         self.logger = logging.getLogger(__name__)
+
+        if not self.test_mode:
+            self.ranges = OptrisCamera.list_available_ranges(0)
+            self.logger.debug(f"Available Optris ranges: {self.ranges}")
         
     
-    def _initialize_cap(self, range_index=0):
+    def _initialize_cap(self, range_index=2):
 
         if self.test_mode:  # 调试用图片流
             test_image_folder = Path(self.test_image_folder).expanduser().resolve()
@@ -48,9 +52,6 @@ class IRWorker(QObject):
     def run(self):
 
         try:
-            if not self.test_mode:
-                self.ranges = OptrisCamera.list_available_ranges(0)
-                self.logger.debug(f"Available Optris ranges: {self.ranges}")
             self.cap = self._initialize_cap()
             self._timer.timeout.connect(self.read_one_frame)
             self._timer.start(30)
