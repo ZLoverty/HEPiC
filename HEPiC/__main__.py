@@ -138,10 +138,12 @@ class MainWindow(QMainWindow):
         # 标签页们
         self.connection_widget = ConnectionWidget(host=self.host)  
         self.home_widget = HomeWidget()
+        self.home_widget.command_widget.set_background_color("#2b2b2b")
         self.vision_page_widget = VisionPageWidget()
         self.status_widget = self.home_widget.status_widget
         self.ir_page_widget = IRPageWidget()
         self.job_sequence_widget = JobSequenceWidget()
+        self.job_sequence_widget.gcode_widget.set_background_color("#2b2b2b")
 
         # 添加标签页到标签栏
         self.stacked_widget.addWidget(self.connection_widget)
