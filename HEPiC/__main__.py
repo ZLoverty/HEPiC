@@ -12,7 +12,7 @@ from collections import deque
 from pathlib import Path
 from .communications import TCPClient, KlipperWorker, ConnectionTester
 from .vision import VideoWorker, ProcessingWorker, IRWorker, VideoRecorder
-from .tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget, JobSequenceWidget
+from .tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget, JobSequenceWidget, DataProcessorWidget
 import asyncio
 from qasync import asyncSlot, QEventLoop
 import numpy as np
@@ -22,6 +22,7 @@ import logging
 import json
 import argparse
 from importlib.metadata import packages_distributions, version, PackageNotFoundError
+
 
 def _get_package_info():
     # 1. 获取当前模块的“导入名” (即文件夹名，例如 hepic)
@@ -69,7 +70,51 @@ class MainWindow(QMainWindow):
         self.load_config()
         self.setWindowTitle(f"{__app_name__} v{__version__}")
         self.setGeometry(0, 0, 1024, 768)
-        self.setStyleSheet(f"background-color: {self.background_color}; color: {self.foreground_color}") 
+        self.setStyleSheet(f"""
+        QMainWindow, QWidget {{
+            background-color: {self.background_color};
+            color: {self.foreground_color};
+        }}
+        QPushButton {{
+            background-color: {self.background_color};
+            color: {self.foreground_color};
+            border: 2px solid {self.secondary_foreground_color};
+            border-radius: 10px;
+            padding: 4px 10px;
+        }}
+        QPushButton:hover {{
+            background-color: {self.secondary_foreground_color};
+            color: {self.background_color};
+        }}
+        QPushButton:pressed {{
+            background-color: {self.secondary_background_color};
+        }}
+        QPushButton:disabled {{
+            background-color: #666666;
+            color: #b0b0b0;
+            border-color: #777777;
+        }}
+        QTextEdit, QPlainTextEdit {{
+            background-color: "#2b2b2b";
+            color: {self.foreground_color};
+            border-radius: 10px;
+            selection-background-color: {self.secondary_foreground_color};
+            selection-color: {self.background_color};
+        }}
+        QTabWidget::pane {{
+            border: 1px solid {self.secondary_background_color};
+        }}
+        QTabBar::tab {{
+            background-color: {self.secondary_background_color};
+            color: {self.foreground_color};
+            padding: 6px 10px;
+            margin: 1px;
+        }}
+        QTabBar::tab:selected {{
+            background-color: {self.secondary_foreground_color};
+            color: {self.background_color};
+        }}
+        """)
         pg.setConfigOption("background", self.background_color)
         pg.setConfigOption("foreground", self.foreground_color)
 
@@ -123,8 +168,8 @@ class MainWindow(QMainWindow):
         # color scheme
         self.background_color = self.config.get("background_color", "black")
         self.foreground_color = self.config.get("foreground_color", "white")
-        self.gcode_highlight_background = self.config.get("gcode_highlight_background", "#435663")
-        self.hover_color = self.config.get("hover_color", "#A3B087")
+        self.secondary_background_color = self.config.get("gcode_highlight_background", "#435663")
+        self.secondary_foreground_color = self.config.get("hover_color", "#A3B087")
 
     def initUI(self):
         # --- 创建控件 ---
@@ -138,12 +183,11 @@ class MainWindow(QMainWindow):
         # 标签页们
         self.connection_widget = ConnectionWidget(host=self.host)  
         self.home_widget = HomeWidget()
-        self.home_widget.command_widget.set_background_color("#2b2b2b")
         self.vision_page_widget = VisionPageWidget()
         self.status_widget = self.home_widget.status_widget
         self.ir_page_widget = IRPageWidget()
         self.job_sequence_widget = JobSequenceWidget()
-        self.job_sequence_widget.gcode_widget.set_background_color("#2b2b2b")
+        self.data_processor_widget = DataProcessorWidget()
 
         # 添加标签页到标签栏
         self.stacked_widget.addWidget(self.connection_widget)
@@ -153,6 +197,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.vision_page_widget, "视觉")
         self.tabs.addTab(self.ir_page_widget, "红外")
         self.tabs.addTab(self.job_sequence_widget, "G-code")
+        self.tabs.addTab(self.data_processor_widget, "数据处理")
         self.setCentralWidget(self.stacked_widget)
 
         # 设置状态栏
