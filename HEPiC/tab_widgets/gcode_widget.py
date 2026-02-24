@@ -184,7 +184,14 @@ class GcodeWidget(QWidget):
             self.sigActiveGcode.emit(self.gcode_list[current_line])
         else:
             pass
-
+    
+    def set_background_color(self, color):
+        """设置背景颜色"""
+        self.logger.debug(f"Setting background color to {color}")
+        current_style = self.gcode_display.styleSheet()
+        new_style = current_style + f"background-color: {color};"
+        self.gcode_display.setStyleSheet(new_style)
+        
 def update_position_test(widget):
     pos = range(0, 300, 10)
     for fp in pos:

@@ -16,7 +16,6 @@ class LogWidget(QWidget):
         self.log_display.setPlaceholderText("这里会显示原始数据和调试信息...")
 
         layout = QVBoxLayout()
-        layout.addWidget(QLabel("原始数据日志:"))
         layout.addWidget(self.log_display) # 占据多行多列
         self.setLayout(layout)
 
@@ -26,7 +25,7 @@ class LogWidget(QWidget):
         now = datetime.now()
         time_str = now.strftime("%H:%M")
 
-        self.log_display.appendPlainText(f"{time_str}    {message}")
+        self.log_display.appendPlainText(f"{time_str}  {message}")
 
 
 if __name__ == "__main__":

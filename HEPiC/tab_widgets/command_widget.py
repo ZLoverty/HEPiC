@@ -18,7 +18,7 @@ class CommandWidget(QWidget):
         # layout
         self.command_display = QPlainTextEdit()
         self.command_display.setReadOnly(True)
-        self.command_display.setStyleSheet("background-color: #2b2b2b; color: #a9b7c6; font-family: Consolas, monaco, monospace;")
+        self.command_display.setStyleSheet("color: #a9b7c6; font-family: Consolas, monaco, monospace;")
         self.command_input = CommandInput()
         self.command_input.setPlaceholderText("输入 G-code 指令 (如 G1 E10 F300)")
         self.send_button = QPushButton("发送指令")
@@ -49,6 +49,9 @@ class CommandWidget(QWidget):
 
         # variables
         self.command_cache = []
+
+        # logger
+        self.logger = logging.getLogger(__name__)
 
     @Slot(bool)
     def update_button_status(self, connected):
@@ -119,6 +122,13 @@ class CommandWidget(QWidget):
         # 4. 自动滚动到底部
         self.command_display.setTextCursor(cursor)
         self.command_display.ensureCursorVisible()
+
+    def set_background_color(self, color):
+        """设置背景颜色"""
+        self.logger.debug(f"Setting background color to {color}")
+        current_style = self.command_display.styleSheet()
+        new_style = current_style + f"background-color: {color};"
+        self.command_display.setStyleSheet(new_style)
 
 class CommandInput(QLineEdit):
 
