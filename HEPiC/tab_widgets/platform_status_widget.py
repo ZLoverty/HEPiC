@@ -101,8 +101,7 @@ class PlatformStatusWidget(QWidget):
         for item in data:
             if item == "measured_temperature_C":
                 temperature = data[item]
-                if temperature:
-                    self.hotend_temperature_value.setText(f"{temperature:5.1f} /")
+                self.hotend_temperature_value.setText(f"{temperature:5.1f} /")
             elif item == "extrusion_force_N":
                 extrusion_force = data[item]
                 self.extrusion_force_value.setText(f"{extrusion_force:5.1f} N")
@@ -114,8 +113,7 @@ class PlatformStatusWidget(QWidget):
                 self.measured_feedrate_value.setText(f"{meansured_feedrate:5.1f} /")
             elif item == "feedrate_mms":
                 feedrate = data[item]
-                if feedrate:
-                    self.feedrate_value.setText(f"{feedrate:5.1f} mm/s")
+                self.feedrate_value.setText(f"{feedrate:5.1f} mm/s")
             elif item == "die_temperature_C":
                 die_temperature = data[item]
                 self.die_temperature_value.setText(f"{die_temperature:5.1f} ℃")
