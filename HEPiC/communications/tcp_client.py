@@ -127,8 +127,8 @@ class TCPClient(QObject):
         """这个函数持续从队列中提取数据并发射信号，最后将数据存至主程序中的list中。数据以
         
         {
-            "extrusion_force": 123,
-            "meter_count": 321
+            "extrusion_force_N": 123.0,
+            "meter_count_mm": 321.0
         }
         
         的形式从服务器发送。
@@ -137,12 +137,15 @@ class TCPClient(QObject):
             while self.is_running:
                 try:
                     message_dict = await self.queue.get()
-                    if "extrusion_force" in message_dict:
-                        self.extrusion_force_raw = message_dict["extrusion_force"]
+                    self.logger.debug(f"Processing message: {message_dict}")
+                    if "extrusion_force_N" in message_dict:
+                        self.extrusion_force_raw = float(message_dict["extrusion_force_N"])
                         self.extrusion_force = self.extrusion_force_raw - self.extrusion_force_offset
-                    if "meter_count" in message_dict:
-                        self.meter_count_raw = message_dict["meter_count"]
-                        self.meter_count = (self.meter_count_raw - self.meter_count_offset) / self.steps_total * np.pi * self.wheel_diameter
+
+                    if "meter_count_mm" in message_dict:
+                        # Server sends millimeters directly in the new protocol.
+                        self.meter_count_raw = float(message_dict["meter_count_mm"])
+                        self.meter_count = self.meter_count_raw - self.meter_count_offset
                         self.compute_filament_velocity()
 
                 # 标记队列任务已完成（好习惯）
