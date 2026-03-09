@@ -213,7 +213,16 @@ class MainWindow(QMainWindow):
         
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
-        items = ["time_s", "temperature_C", "feedrate_mms", "extrusion_force_N", "die_diameter_px", "die_temperature_C", "measured_temperature_C", "measured_feedrate_mms", "meter_count_mm"]
+        existing_sensor_items = list(getattr(self, "sensor_data_items", []))
+        self.base_data_items = [
+            "time_s",
+            "temperature_C",
+            "feedrate_mms",
+            "measured_temperature_C",
+            "measured_feedrate_mms",
+        ]
+        self.sensor_data_items = existing_sensor_items
+        items = list(self.base_data_items) + list(self.sensor_data_items)
         # should define functions that can fetch the quantities from workers
         self.data = {}
         self.data_tmp = {} # temporary buffer to slow down writing frequency
@@ -223,6 +232,35 @@ class MainWindow(QMainWindow):
             self.data[item] = deque(maxlen=self.config.get("final_data_maxlen", 1000000))
             self.data_tmp[item] = deque(maxlen=self.config.get("tmp_data_maxlen", 100))
             self.data_status[item] = np.nan
+        if hasattr(self, "home_widget"):
+            self.home_widget.data_widget.set_sensor_items(self.sensor_data_items)
+
+    def _ensure_data_keys(self, items):
+        for item in items:
+            if item not in self.data:
+                self.data[item] = deque(maxlen=self.final_data_maxlen)
+            if item not in self.data_tmp:
+                self.data_tmp[item] = deque(maxlen=self.tmp_data_maxlen)
+            if item not in self.data_status:
+                self.data_status[item] = np.nan
+
+    def _register_sensor_items(self, items):
+        added = False
+        for item in items:
+            if item and item not in self.sensor_data_items:
+                self.sensor_data_items.append(item)
+                added = True
+        if added:
+            self._ensure_data_keys(self.sensor_data_items)
+            self.home_widget.data_widget.set_sensor_items(self.sensor_data_items)
+
+    @Slot(list)
+    def on_sensor_config_received(self, sensor_columns):
+        sensor_items = [col for col in sensor_columns if col not in self.base_data_items]
+        self._register_sensor_items(sensor_items)
+        zeroable_sensor_names = self.worker.get_zeroable_sensor_names() if self.worker else []
+        self.status_widget.configure_tcp_sensors(sensor_items, zeroable_sensor_names)
+        self.logger.info(f"Configured sensor recording columns: {sensor_columns}")
 
     @Slot(int)
     def show_UI(self, UI_index):
@@ -259,8 +297,8 @@ class MainWindow(QMainWindow):
         
         # 连接信号槽
         self.worker.connection_status.connect(self.update_status)
-        self.status_widget.meter_count_zero_button.clicked.connect(self.worker.set_meter_count_offset)
-        self.status_widget.extrusion_force_zero_button.clicked.connect(self.worker.set_extrusion_force_offset)
+        self.worker.sensor_config_received.connect(self.on_sensor_config_received)
+        self.status_widget.zero_sensor.connect(self.worker.zero_sensor)
         
         # 创建 klipper worker（用于查询平台状态和发送动作指令）
         klipper_port = 7125
@@ -317,6 +355,7 @@ class MainWindow(QMainWindow):
             self.video_thread.finished.connect(self.video_thread.deleteLater)
 
             self.video_thread.start()
+            self._register_sensor_items(["die_diameter_px"])
             self.logger.info("熔体相机初始化成功！")
 
         except Exception as e:
@@ -380,6 +419,7 @@ class MainWindow(QMainWindow):
             self.ir_page_widget.focus_bar.valueChanged.connect(self.ir_worker.set_position)
 
             self.ir_thread.start()
+            self._register_sensor_items(["die_temperature_C"])
 
         except Exception as e:
             if self.test_mode:
@@ -443,7 +483,7 @@ class MainWindow(QMainWindow):
         self.current_time += self.time_delay # current time step forward
         
         # save additional data to file
-        if len(self.data_tmp["extrusion_force_N"]) >= self.tmp_data_maxlen and self.is_recording:
+        if len(self.data_tmp["time_s"]) >= self.tmp_data_maxlen and self.is_recording:
             # construct pd.DataFrame
             df = pd.DataFrame(self.data_tmp)
             if self.first_row:
@@ -462,17 +502,16 @@ class MainWindow(QMainWindow):
         self.sigFilePosition.emit(self.klipper_worker.file_position)
 
     def grab_status(self):
+        latest_sensor = dict(self.worker.latest_sensor_data) if self.worker else {}
+        if "die_temperature_C" in self.sensor_data_items and self.ir_worker:
+            latest_sensor["die_temperature_C"] = self.ir_worker.die_temperature
+        if "die_diameter_px" in self.sensor_data_items and self.processing_worker:
+            latest_sensor["die_diameter_px"] = self.processing_worker.die_diameter
+
         for item in self.data_status:
             # NOTE: here we append new data to both data_tmp and data. The idea is to grow both data together, so that in the preview panel we can use data to see the temporal evolution of the numbers at any time, mean time having a good file writing frequency (using the cached data_tmp) file, so that I/O is not a bottleneck.
-            if item == "extrusion_force_N":
-                self.data_status[item] = self.worker.extrusion_force
-            elif item == "meter_count_mm":
-                self.data_status[item] = self.worker.meter_count
-            elif item == "die_temperature_C":
-                if self.ir_worker:
-                    self.data_status[item] = self.ir_worker.die_temperature
-                else:
-                    self.data_status[item] = np.nan
+            if item in self.sensor_data_items:
+                self.data_status[item] = latest_sensor.get(item, np.nan)
             elif item == "measured_temperature_C":
                 self.data_status[item] = self.klipper_worker.hotend_temperature
             elif item == "temperature_C":
@@ -480,12 +519,9 @@ class MainWindow(QMainWindow):
             elif item == "feedrate_mms":
                 self.data_status[item] = self.klipper_worker.active_feedrate_mms
             elif item == "measured_feedrate_mms":
-                measured_feedrate = self.worker.filament_velocity
-                self.data_status[item] = measured_feedrate
+                self.data_status[item] = latest_sensor.get("measured_feedrate_mms", np.nan)
             elif item == "time_s":
                 self.data_status[item] = self.current_time
-            elif item == "die_diameter_px":
-                self.data_status[item] = self.processing_worker.die_diameter
             elif item == "gcode":
                 if self.klipper_worker:
                     self.data_status[item] = self.klipper_worker.active_gcode
@@ -541,7 +577,7 @@ def start_app():
     )
 
     ### Debug module logging ###
-    # logging.getLogger("HEPiC.communications.klipper_worker").setLevel(logging.DEBUG)
+    logging.getLogger("HEPiC.communications.tcp_client").setLevel(logging.DEBUG)
     # logging.getLogger("HEPiC.tab_widgets.home_widget").setLevel(logging.DEBUG)
     ############################
     
