@@ -577,7 +577,7 @@ def start_app():
     )
 
     ### Debug module logging ###
-    logging.getLogger("HEPiC.communications.tcp_client").setLevel(logging.DEBUG)
+    # logging.getLogger("HEPiC.communications.tcp_client").setLevel(logging.DEBUG)
     # logging.getLogger("HEPiC.tab_widgets.home_widget").setLevel(logging.DEBUG)
     ############################
     
