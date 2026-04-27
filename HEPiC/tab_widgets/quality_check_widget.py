@@ -406,7 +406,7 @@ class QualityCheckWidget(QWidget):
         props = self.material_properties.get(material, {})
         temperature = props.get("temperature", 200)
         speed_mms = props.get("speed", 5)
-        extrude_length_mm = props.get("quality_check_extrude_length_mm", 10)
+        extrude_length_mm = props.get("quality_check_extrude_length_mm", float(speed_mms) * 60.0)
         feedrate = max(float(speed_mms) * 60.0, 1.0)
         return "\n".join(
             [
