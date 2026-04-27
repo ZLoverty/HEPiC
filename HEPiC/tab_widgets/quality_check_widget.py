@@ -18,9 +18,9 @@ from PySide6.QtWidgets import (
 
 
 class StatusIndicator(QFrame):
-    """Simple circular status indicator."""
+    """Circular status indicator."""
 
-    def __init__(self, size=60):
+    def __init__(self, size=32):
         super().__init__()
         self._size = size
         self.status = "unknown"
@@ -41,6 +41,37 @@ class StatusIndicator(QFrame):
             QFrame {{
                 background-color: {color};
                 border-radius: {self._size // 2}px;
+                border: 2px solid white;
+            }}
+            """
+        )
+
+
+class StabilityBarIndicator(QFrame):
+    """Rounded bar indicator for stability."""
+
+    def __init__(self, width=52, height=32):
+        super().__init__()
+        self._width = width
+        self._height = height
+        self.status = "unknown"
+        self.setFixedSize(width, height)
+        self.update_status("unknown")
+
+    def update_status(self, status: str):
+        self.status = status
+        colors = {
+            "unknown": "#888888",
+            "stable": "#27ae60",
+            "warning": "#f39c12",
+            "unstable": "#e74c3c",
+        }
+        color = colors.get(status, "#888888")
+        self.setStyleSheet(
+            f"""
+            QFrame {{
+                background-color: {color};
+                border-radius: {self._height // 3}px;
                 border: 2px solid white;
             }}
             """
@@ -203,15 +234,15 @@ class QualityCheckWidget(QWidget):
         self.check_button = QPushButton("开始质检")
         self.check_button.clicked.connect(self.on_quality_check_clicked)
         self.check_button.setMinimumHeight(56)
-        self.status_indicator = StatusIndicator(size=50)
-        self.force_expectation_indicator = StatusIndicator(size=32)
-        self.force_expectation_label = QLabel("挤出力均值预期: --")
+        self.force_expectation_indicator = StatusIndicator(size=40)
+        self.status_indicator = StabilityBarIndicator(width=48, height=36)
         action_layout.addWidget(self.check_button)
-        action_layout.addWidget(QLabel("稳定性:"))
-        action_layout.addWidget(self.status_indicator, alignment=Qt.AlignmentFlag.AlignLeft)
-        action_layout.addWidget(QLabel("均值是否符合预期:"))
-        action_layout.addWidget(self.force_expectation_indicator, alignment=Qt.AlignmentFlag.AlignLeft)
-        action_layout.addWidget(self.force_expectation_label)
+        action_layout.addWidget(QLabel("挤出力 | 稳定性"))
+        indicator_row = QHBoxLayout()
+        indicator_row.addWidget(self.force_expectation_indicator)
+        indicator_row.addWidget(self.status_indicator)
+        indicator_row.addStretch()
+        action_layout.addLayout(indicator_row)
         action_layout.addStretch()
         info_row.addWidget(action_block, 1)
 
@@ -268,9 +299,9 @@ class QualityCheckWidget(QWidget):
             self.extrusion_force_cache.clear()
             self.time_cache.clear()
             self.current_time = 0
-            self.system_force_label.setText("实时挤出力: -- N | 均值±标准差: -- N")
+            self.system_force_label.setText("实时挤出力: -- N")
             self.force_expectation_indicator.update_status("unknown")
-            self.force_expectation_label.setText("挤出力均值预期: --")
+            self.status_indicator.update_status("unknown")
             self.update_material_properties_display()
             material = self.material_combo.currentText()
             self.quality_check_started.emit(material)
@@ -284,7 +315,6 @@ class QualityCheckWidget(QWidget):
             self.data_timer.stop()
             self.status_indicator.update_status("unknown")
             self.force_expectation_indicator.update_status("unknown")
-            self.force_expectation_label.setText("挤出力均值预期: --")
             self.logger.info("Quality check stopped")
 
     @Slot()
@@ -338,19 +368,16 @@ class QualityCheckWidget(QWidget):
             self.status_indicator.update_status("unknown")
             self.system_force_label.setText("实时挤出力: -- N")
             self.force_expectation_indicator.update_status("unknown")
-            self.force_expectation_label.setText("挤出力均值预期: --")
             return
 
         recent_data = list(self.extrusion_force_cache)[-20:]
-        latest_force = recent_data[-1]
         mean = np.mean(recent_data)
         std = np.std(recent_data)
         stability_threshold = self.get_current_stability_threshold()
         force_min, force_max = self.get_current_force_range()
 
-        self.system_force_label.setText(
-            f"实时挤出力: {mean:.2f} ± {std:.2f} N"
-        )
+        # Keep the user's adjusted force display format.
+        self.system_force_label.setText(f"实时挤出力: {mean:.2f} ± {std:.2f} N")
 
         if std < stability_threshold:
             self.status_indicator.update_status("stable")
@@ -361,10 +388,8 @@ class QualityCheckWidget(QWidget):
 
         if force_min <= mean <= force_max:
             self.force_expectation_indicator.update_status("stable")
-            self.force_expectation_label.setText("挤出力均值预期: 符合")
         else:
             self.force_expectation_indicator.update_status("unstable")
-            self.force_expectation_label.setText("挤出力均值预期: 不符合")
 
     def get_current_stability_threshold(self) -> float:
         material = self.material_combo.currentText() if hasattr(self, "material_combo") else ""
