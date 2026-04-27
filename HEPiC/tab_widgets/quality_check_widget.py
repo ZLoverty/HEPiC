@@ -17,17 +17,18 @@ class StatusIndicator(QFrame):
     def __init__(self, size=60):
         super().__init__()
         self._size = size
-        self.status = "unknown"  # unknown, stable, unstable
+        self.status = "unknown"  # unknown, stable, warning, unstable
         self.setFixedSize(size, size)
         self.setStyleSheet("border-radius: {}px;".format(size // 2))
         self.update_status("unknown")
 
     def update_status(self, status: str):
-        """更新状态: unknown (灰), stable (绿), unstable (红)"""
+        """更新状态: unknown (灰), stable (绿), warning (黄), unstable (红)"""
         self.status = status
         colors = {
             "unknown": "#888888",
             "stable": "#27ae60",
+            "warning": "#f39c12",
             "unstable": "#e74c3c"
         }
         color = colors.get(status, "#888888")
@@ -55,7 +56,7 @@ class QualityCheckWidget(QWidget):
         self.time_cache = deque(maxlen=300)
         self.current_time = 0
         self.is_checking = False
-        self.stability_threshold = 2.0  # 标准差阈值
+        self.stability_threshold = 0.1  # 标准差阈值
         
         # 材料属性数据库（简单版本，可后续扩展为真实数据库）
         self.material_properties = {
@@ -279,8 +280,11 @@ class QualityCheckWidget(QWidget):
         # 稳定性指示器
         stability_label = QLabel("稳定性:")
         self.status_indicator = StatusIndicator(size=50)
+        self.std_dev_label = QLabel("均值±标准差: -- N")
+        self.std_dev_label.setStyleSheet("font-weight: bold;")
         control_row.addWidget(stability_label)
         control_row.addWidget(self.status_indicator)
+        control_row.addWidget(self.std_dev_label)
         
         control_row.addStretch()
         layout.addLayout(control_row)
@@ -455,15 +459,22 @@ class QualityCheckWidget(QWidget):
         if len(self.extrusion_force_cache) < 10:
             # 数据太少，无法判断
             self.status_indicator.update_status("unknown")
+            self.std_dev_label.setText("均值±标准差: -- N")
             return
         
-        # 计算最近数据的标准差
+        # 计算最近数据的统计信息
         recent_data = list(self.extrusion_force_cache)[-20:]
+        mean = np.mean(recent_data)
         std = np.std(recent_data)
+        
+        # 更新标准差显示为均值±标准差格式
+        self.std_dev_label.setText(f"挤出力: {mean:.2f}±{std:.3f} N")
         
         # 根据标准差判断稳定性
         if std < self.stability_threshold:
             self.status_indicator.update_status("stable")
+        elif std < self.stability_threshold * 2:
+            self.status_indicator.update_status("warning")
         else:
             self.status_indicator.update_status("unstable")
     
