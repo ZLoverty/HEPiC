@@ -11,3 +11,4 @@ from .ir_widget import IRPageWidget
 from .job_sequence_widget import JobSequenceWidget
 from .calibration_dialog import CalibrationDialog
 from .data_processor_widget import DataProcessorWidget
+from .quality_check_widget import QualityCheckWidget

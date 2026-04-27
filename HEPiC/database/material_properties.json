@@ -1,0 +1,38 @@
+{
+  "PLA": {
+    "name": "聚乳酸 (PLA)",
+    "expected_force": 5.0,
+    "force_range": [3.0, 7.0],
+    "temperature": 200,
+    "speed": 30,
+    "description": "通用 3D 打印材料，易于打印",
+    "stability_threshold": 2.0
+  },
+  "PETG": {
+    "name": "聚对苯二甲酸乙二酯 (PETG)",
+    "expected_force": 6.0,
+    "force_range": [4.0, 8.0],
+    "temperature": 230,
+    "speed": 25,
+    "description": "高强度材料，耐用性好",
+    "stability_threshold": 2.5
+  },
+  "TPU": {
+    "name": "热塑性聚氨酯 (TPU)",
+    "expected_force": 3.0,
+    "force_range": [1.5, 4.5],
+    "temperature": 210,
+    "speed": 20,
+    "description": "柔性材料，适合制作橡胶类部件",
+    "stability_threshold": 1.5
+  },
+  "ABS": {
+    "name": "丙烯腈-丁二烯-苯乙烯共聚物 (ABS)",
+    "expected_force": 7.0,
+    "force_range": [5.0, 9.0],
+    "temperature": 240,
+    "speed": 20,
+    "description": "高强度，耐冲击",
+    "stability_threshold": 3.0
+  }
+}

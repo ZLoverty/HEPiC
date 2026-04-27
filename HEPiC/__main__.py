@@ -12,7 +12,8 @@ from collections import deque
 from pathlib import Path
 from .communications import TCPClient, KlipperWorker, ConnectionTester
 from .vision import VideoWorker, ProcessingWorker, IRWorker, VideoRecorder
-from .tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget, JobSequenceWidget, DataProcessorWidget
+from .tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget, JobSequenceWidget, DataProcessorWidget, QualityCheckWidget
+from .database import get_material_database
 import asyncio
 from qasync import asyncSlot, QEventLoop
 import numpy as np
@@ -188,6 +189,7 @@ class MainWindow(QMainWindow):
         self.ir_page_widget = IRPageWidget()
         self.job_sequence_widget = JobSequenceWidget()
         self.data_processor_widget = DataProcessorWidget()
+        self.quality_check_widget = QualityCheckWidget()
 
         # 添加标签页到标签栏
         self.stacked_widget.addWidget(self.connection_widget)
@@ -198,6 +200,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.ir_page_widget, "红外")
         self.tabs.addTab(self.job_sequence_widget, "G-code")
         self.tabs.addTab(self.data_processor_widget, "数据处理")
+        self.tabs.addTab(self.quality_check_widget, "质检模式")
         self.setCentralWidget(self.stacked_widget)
 
         # 设置状态栏
@@ -206,10 +209,13 @@ class MainWindow(QMainWindow):
         # --- 连接信号与槽 ---
         self.connection_widget.host.connect(self.update_host_and_connect)
         self.sigNewData.connect(self.home_widget.data_widget.update_display)
+        self.sigNewData.connect(self.quality_check_widget.update_sensor_data)
         self.home_widget.play_pause_button.toggled.connect(self.on_toggle_play_pause)
         self.home_widget.stop_button.clicked.connect(self.on_stop_clicked)
         self.sigNewStatus.connect(self.status_widget.update_display)
         self.sigFilePosition.connect(self.job_sequence_widget.gcode_widget.update_file_position)
+        
+        # --- 质检模式的材料属性会在第一次显示时自动初始化 ---
         
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
