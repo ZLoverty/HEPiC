@@ -317,7 +317,7 @@ class QualityCheckWidget(QWidget):
         # 创建曲线
         self.force_curve = self.plot_widget.plot(
             pen=pg.mkPen("#2980b9", width=2),
-            name="Extrusion Force"
+            name="Extrusion Force (N)"
         )
         
         # 添加参考线（预期值）
@@ -413,14 +413,14 @@ class QualityCheckWidget(QWidget):
         接收传感器数据更新
         
         参数:
-            data: 包含传感器数据的字典，应包含 'time_s' 和 'extrusion_force' 等字段
+            data: 包含传感器数据的字典，应包含 'time_s' 和 'extrusion_force_N' 等字段
         """
         if not self.is_checking:
             return
         
         # 获取最新数据
         time_data = data.get("time_s", [])
-        force_data = data.get("extrusion_force", [])
+        force_data = data.get("extrusion_force_N", [])
         
         if not time_data or not force_data:
             return
@@ -432,6 +432,10 @@ class QualityCheckWidget(QWidget):
             
             self.time_cache.append(latest_time)
             self.extrusion_force_cache.append(latest_force)
+            
+            # 只在开始时记录一次数据信息
+            if len(self.extrusion_force_cache) == 1:
+                self.logger.info(f"Quality check started - receiving extrusion_force_N data: {latest_force} N")
         
         # 更新图表
         self.update_plot()
