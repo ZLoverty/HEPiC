@@ -48,9 +48,10 @@ class StatusIndicator(QFrame):
 
 
 class QualityCheckWidget(QWidget):
-    """质检模式页。"""
+    """Quality check page."""
 
     quality_check_started = Signal(str)
+    quality_check_gcode_requested = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -115,9 +116,7 @@ class QualityCheckWidget(QWidget):
         try:
             if doc_path.exists():
                 with open(doc_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                self.logger.info(f"Loaded quality check process document from {doc_path}")
-                return content
+                    return f.read()
         except Exception as exc:
             self.logger.error(f"Failed to load quality check process document: {exc}")
         return self._get_default_process_content()
@@ -128,14 +127,14 @@ class QualityCheckWidget(QWidget):
 
 1. 选择材料
 2. 点击开始质检
-3. 观察稳定性指示器和实时挤出力曲线
+3. 观察系统状态、稳定性和实时挤出力曲线
 4. 停止质检
 """
 
     def init_ui(self):
         main_layout = QHBoxLayout()
         main_layout.addWidget(self.create_left_panel())
-        main_layout.addWidget(self.create_right_panel())
+        main_layout.addWidget(self.create_right_panel(), 1)
         self.setLayout(main_layout)
         self.update_material_properties_display()
 
@@ -152,48 +151,71 @@ class QualityCheckWidget(QWidget):
         panel.setMaximumWidth(350)
         return panel
 
+    def _make_info_block(self, title: str) -> tuple[QFrame, QVBoxLayout]:
+        block = QFrame()
+        block.setFrameShape(QFrame.Shape.StyledPanel)
+        layout = QVBoxLayout()
+        title_label = QLabel(title)
+        title_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(title_label)
+        block.setLayout(layout)
+        return block, layout
+
     def create_right_panel(self):
         panel = QWidget()
         layout = QVBoxLayout()
 
-        control_row = QHBoxLayout()
-        material_label = QLabel("材料选择:")
+        info_row = QHBoxLayout()
+
+        material_block, material_layout = self._make_info_block("材料信息")
+        material_selector_row = QHBoxLayout()
+        material_selector_row.addWidget(QLabel("材料选择:"))
         self.material_combo = QComboBox()
         self.material_combo.addItems(list(self.material_properties.keys()))
         self.material_combo.currentTextChanged.connect(self.update_material_properties_display)
-        control_row.addWidget(material_label)
-        control_row.addWidget(self.material_combo)
+        material_selector_row.addWidget(self.material_combo)
+        material_layout.addLayout(material_selector_row)
 
-        self.check_button = QPushButton("开始质检")
-        self.check_button.clicked.connect(self.on_quality_check_clicked)
-        control_row.addWidget(self.check_button)
-
-        stability_label = QLabel("稳定性:")
-        self.status_indicator = StatusIndicator(size=50)
-        self.std_dev_label = QLabel("均值±标准差: -- N")
-        self.std_dev_label.setStyleSheet("font-weight: bold;")
-        control_row.addWidget(stability_label)
-        control_row.addWidget(self.status_indicator)
-        control_row.addWidget(self.std_dev_label)
-        control_row.addStretch()
-        layout.addLayout(control_row)
-
-        properties_row = QHBoxLayout()
-        properties_label = QLabel("预期属性:")
-        properties_label.setStyleSheet("font-weight: bold;")
-        self.expected_force_label = QLabel("预期挤出力: -- N")
-        self.force_range_label = QLabel("力值范围: -- N")
         self.temperature_label = QLabel("温度: -- °C")
         self.speed_label = QLabel("速度: -- mm/s")
+        self.expected_force_label = QLabel("预期挤出力: -- N")
+        self.force_range_label = QLabel("力值范围: -- N")
         self.stability_threshold_label = QLabel("稳定阈值: -- N")
-        properties_row.addWidget(properties_label)
-        properties_row.addWidget(self.temperature_label)
-        properties_row.addWidget(self.speed_label)
-        properties_row.addWidget(self.expected_force_label)
-        properties_row.addWidget(self.force_range_label)
-        properties_row.addWidget(self.stability_threshold_label)
-        properties_row.addStretch()
-        layout.addLayout(properties_row)
+        material_layout.addWidget(self.temperature_label)
+        material_layout.addWidget(self.speed_label)
+        material_layout.addWidget(self.expected_force_label)
+        material_layout.addWidget(self.force_range_label)
+        material_layout.addWidget(self.stability_threshold_label)
+        material_layout.addStretch()
+        info_row.addWidget(material_block, 2)
+
+        system_block, system_layout = self._make_info_block("系统信息")
+        self.system_temperature_label = QLabel("实时温度: -- °C")
+        self.system_feedrate_label = QLabel("实时挤出速度: -- mm/s")
+        self.system_force_label = QLabel("实时挤出力: -- N | 均值±标准差: -- N")
+        system_layout.addWidget(self.system_temperature_label)
+        system_layout.addWidget(self.system_feedrate_label)
+        system_layout.addWidget(self.system_force_label)
+        system_layout.addStretch()
+        info_row.addWidget(system_block, 2)
+
+        action_block, action_layout = self._make_info_block("质检操作")
+        self.check_button = QPushButton("开始质检")
+        self.check_button.clicked.connect(self.on_quality_check_clicked)
+        self.check_button.setMinimumHeight(56)
+        self.status_indicator = StatusIndicator(size=50)
+        self.force_expectation_indicator = StatusIndicator(size=32)
+        self.force_expectation_label = QLabel("挤出力均值预期: --")
+        action_layout.addWidget(self.check_button)
+        action_layout.addWidget(QLabel("稳定性:"))
+        action_layout.addWidget(self.status_indicator, alignment=Qt.AlignmentFlag.AlignLeft)
+        action_layout.addWidget(QLabel("均值是否符合预期:"))
+        action_layout.addWidget(self.force_expectation_indicator, alignment=Qt.AlignmentFlag.AlignLeft)
+        action_layout.addWidget(self.force_expectation_label)
+        action_layout.addStretch()
+        info_row.addWidget(action_block, 1)
+
+        layout.addLayout(info_row)
 
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.setLabel("bottom", "Time", units="s")
@@ -226,11 +248,11 @@ class QualityCheckWidget(QWidget):
     def update_material_properties_display(self):
         material = self.material_combo.currentText()
         props = self.material_properties.get(material, {})
+        self.temperature_label.setText(f"温度: {props.get('temperature', '--')} °C")
+        self.speed_label.setText(f"速度: {props.get('speed', '--')} mm/s")
         self.expected_force_label.setText(f"预期挤出力: {props.get('expected_force', '--')} N")
         force_min, force_max = props.get("force_range", ("--", "--"))
         self.force_range_label.setText(f"力值范围: {force_min} - {force_max} N")
-        self.temperature_label.setText(f"温度: {props.get('temperature', '--')} °C")
-        self.speed_label.setText(f"速度: {props.get('speed', '--')} mm/s")
         stability_threshold = props.get("stability_threshold", self.default_stability_threshold)
         self.stability_threshold_label.setText(f"稳定阈值: {stability_threshold} N")
         force_range = props.get("force_range", (0, 0))
@@ -246,9 +268,13 @@ class QualityCheckWidget(QWidget):
             self.extrusion_force_cache.clear()
             self.time_cache.clear()
             self.current_time = 0
+            self.system_force_label.setText("实时挤出力: -- N | 均值±标准差: -- N")
+            self.force_expectation_indicator.update_status("unknown")
+            self.force_expectation_label.setText("挤出力均值预期: --")
             self.update_material_properties_display()
             material = self.material_combo.currentText()
             self.quality_check_started.emit(material)
+            self.quality_check_gcode_requested.emit(self.build_quality_check_gcode(material))
             self.data_timer.start(100)
             self.logger.info(f"Quality check started for material: {material}")
         else:
@@ -257,6 +283,8 @@ class QualityCheckWidget(QWidget):
             self.check_button.setStyleSheet("")
             self.data_timer.stop()
             self.status_indicator.update_status("unknown")
+            self.force_expectation_indicator.update_status("unknown")
+            self.force_expectation_label.setText("挤出力均值预期: --")
             self.logger.info("Quality check stopped")
 
     @Slot()
@@ -286,6 +314,21 @@ class QualityCheckWidget(QWidget):
         self.update_plot()
         self.update_stability_indicator()
 
+    @Slot(dict)
+    def update_klipper_status(self, data: dict):
+        temperature = data.get("measured_temperature_C", np.nan)
+        feedrate = data.get("feedrate_mms", np.nan)
+
+        if np.isnan(temperature):
+            self.system_temperature_label.setText("实时温度: -- °C")
+        else:
+            self.system_temperature_label.setText(f"实时温度: {temperature:.1f} °C")
+
+        if np.isnan(feedrate):
+            self.system_feedrate_label.setText("实时挤出速度: -- mm/s")
+        else:
+            self.system_feedrate_label.setText(f"实时挤出速度: {feedrate:.1f} mm/s")
+
     def update_plot(self):
         if len(self.time_cache) > 0:
             self.force_curve.setData(list(self.time_cache), list(self.extrusion_force_cache))
@@ -293,15 +336,21 @@ class QualityCheckWidget(QWidget):
     def update_stability_indicator(self):
         if len(self.extrusion_force_cache) < 10:
             self.status_indicator.update_status("unknown")
-            self.std_dev_label.setText("均值±标准差: -- N")
+            self.system_force_label.setText("实时挤出力: -- N")
+            self.force_expectation_indicator.update_status("unknown")
+            self.force_expectation_label.setText("挤出力均值预期: --")
             return
 
         recent_data = list(self.extrusion_force_cache)[-20:]
+        latest_force = recent_data[-1]
         mean = np.mean(recent_data)
         std = np.std(recent_data)
         stability_threshold = self.get_current_stability_threshold()
+        force_min, force_max = self.get_current_force_range()
 
-        self.std_dev_label.setText(f"挤出力: {mean:.2f}±{std:.3f} N")
+        self.system_force_label.setText(
+            f"实时挤出力: {mean:.2f} ± {std:.2f} N"
+        )
 
         if std < stability_threshold:
             self.status_indicator.update_status("stable")
@@ -310,10 +359,37 @@ class QualityCheckWidget(QWidget):
         else:
             self.status_indicator.update_status("unstable")
 
+        if force_min <= mean <= force_max:
+            self.force_expectation_indicator.update_status("stable")
+            self.force_expectation_label.setText("挤出力均值预期: 符合")
+        else:
+            self.force_expectation_indicator.update_status("unstable")
+            self.force_expectation_label.setText("挤出力均值预期: 不符合")
+
     def get_current_stability_threshold(self) -> float:
         material = self.material_combo.currentText() if hasattr(self, "material_combo") else ""
         props = self.material_properties.get(material, {})
         return props.get("stability_threshold", self.default_stability_threshold)
+
+    def get_current_force_range(self) -> tuple[float, float]:
+        material = self.material_combo.currentText() if hasattr(self, "material_combo") else ""
+        props = self.material_properties.get(material, {})
+        force_range = props.get("force_range", (0.0, 0.0))
+        return float(force_range[0]), float(force_range[1])
+
+    def build_quality_check_gcode(self, material: str) -> str:
+        props = self.material_properties.get(material, {})
+        temperature = props.get("temperature", 200)
+        speed_mms = props.get("speed", 5)
+        extrude_length_mm = props.get("quality_check_extrude_length_mm", 10)
+        feedrate = max(float(speed_mms) * 60.0, 1.0)
+        return "\n".join(
+            [
+                f"M109 S{float(temperature):.0f}",
+                "M83",
+                f"G1 E{float(extrude_length_mm):.2f} F{feedrate:.2f}",
+            ]
+        )
 
     def set_material_properties(self, properties: dict):
         self.logger.info(f"Setting material properties: {list(properties.keys())}")

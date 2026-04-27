@@ -210,6 +210,8 @@ class MainWindow(QMainWindow):
         self.connection_widget.host.connect(self.update_host_and_connect)
         self.sigNewData.connect(self.home_widget.data_widget.update_display)
         self.sigNewData.connect(self.quality_check_widget.update_sensor_data)
+        self.sigNewStatus.connect(self.quality_check_widget.update_klipper_status)
+        self.quality_check_widget.quality_check_gcode_requested.connect(self.on_quality_check_gcode_requested)
         self.home_widget.play_pause_button.toggled.connect(self.on_toggle_play_pause)
         self.home_widget.stop_button.clicked.connect(self.on_stop_clicked)
         self.sigNewStatus.connect(self.status_widget.update_display)
@@ -329,6 +331,14 @@ class MainWindow(QMainWindow):
         self.initiate_ir_imager()
 
         await asyncio.gather(tcp_task, klipper_task)
+
+    @asyncSlot(str)
+    async def on_quality_check_gcode_requested(self, gcode: str):
+        """Send the quality-check startup G-code through Klipper when available."""
+        if not getattr(self, "klipper_worker", None):
+            self.logger.warning("Quality check startup G-code requested before klipper_worker is ready")
+            return
+        await self.klipper_worker.send_gcode(gcode)
 
     @Slot()
     def initiate_camera(self):
