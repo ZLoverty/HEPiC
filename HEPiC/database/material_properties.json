@@ -25,14 +25,5 @@
     "speed": 20,
     "description": "柔性材料，适合制作橡胶类部件",
     "stability_threshold": 1.5
-  },
-  "ABS": {
-    "name": "丙烯腈-丁二烯-苯乙烯共聚物 (ABS)",
-    "expected_force": 7.0,
-    "force_range": [5.0, 9.0],
-    "temperature": 240,
-    "speed": 20,
-    "description": "高强度，耐冲击",
-    "stability_threshold": 3.0
   }
 }
