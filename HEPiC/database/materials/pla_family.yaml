@@ -2,6 +2,7 @@
 _pla_base: &pla_default
   name: "PLA"
   expected_force: 10.0
+  excellent_force_range: [9.0, 11.0]
   force_range: [8.0, 12.0]
   temperature: 220
   speed: 10
@@ -12,16 +13,19 @@ L1002:
   <<: *pla_default
   PI_Code: "L1002"
   expected_force: 5.0
+  excellent_force_range: [4.5, 5.5]
   force_range: [3.0, 7.0]
 
 L3002:
   <<: *pla_default
   PI_Code: "L3002"
   expected_force: 12.0
+  excellent_force_range: [11.0, 13.0]
   force_range: [10.0, 14.0]
 
 L2003:
   <<: *pla_default
   PI_Code: "L2003"
   expected_force: 5.5 # 碳纤维增韧，预期挤出抗力略大
+  excellent_force_range: [5.0, 6.0]
   force_range: [4.0, 7.0]

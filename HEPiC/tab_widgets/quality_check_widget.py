@@ -102,6 +102,7 @@ class QualityCheckWidget(QWidget):
                     "family": "PLA",
                     "name": "PLA",
                     "expected_force": 5.0,
+                    "excellent_force_range": (4.5, 5.5),
                     "force_range": (3.0, 7.0),
                     "temperature": 200,
                     "speed": 30,
@@ -210,11 +211,13 @@ class QualityCheckWidget(QWidget):
         self.temperature_label = QLabel("温度: -- °C")
         self.speed_label = QLabel("速度: -- mm/s")
         self.expected_force_label = QLabel("预期挤出力: -- N")
-        self.force_range_label = QLabel("力值范围: -- N")
+        self.excellent_force_range_label = QLabel("优秀范围: -- N")
+        self.force_range_label = QLabel("合格范围: -- N")
         self.stability_threshold_label = QLabel("稳定阈值: -- N")
         material_layout.addWidget(self.temperature_label)
         material_layout.addWidget(self.speed_label)
         material_layout.addWidget(self.expected_force_label)
+        material_layout.addWidget(self.excellent_force_range_label)
         material_layout.addWidget(self.force_range_label)
         material_layout.addWidget(self.stability_threshold_label)
         material_layout.addStretch()
@@ -257,20 +260,52 @@ class QualityCheckWidget(QWidget):
             pen=pg.mkPen("#2980b9", width=2),
             name="Extrusion Force (N)",
         )
-        self.expected_upper = pg.InfiniteLine(
+        self.qualified_band = pg.LinearRegionItem(
+            values=(0, 0),
+            orientation="horizontal",
+            movable=False,
+            brush=pg.mkBrush(241, 196, 15, 35),
+            pen=pg.mkPen(None),
+        )
+        self.qualified_band.setZValue(-20)
+        self.excellent_band = pg.LinearRegionItem(
+            values=(0, 0),
+            orientation="horizontal",
+            movable=False,
+            brush=pg.mkBrush(39, 174, 96, 45),
+            pen=pg.mkPen(None),
+        )
+        self.excellent_band.setZValue(-10)
+        self.excellent_upper = pg.InfiniteLine(
             pos=0,
             angle=0,
             pen=pg.mkPen("#27ae60", width=1, style=Qt.PenStyle.DashLine),
-            label="预期上限",
+            label="优秀上限",
         )
-        self.expected_lower = pg.InfiniteLine(
+        self.excellent_lower = pg.InfiniteLine(
             pos=0,
             angle=0,
             pen=pg.mkPen("#27ae60", width=1, style=Qt.PenStyle.DashLine),
-            label="预期下限",
+            label="优秀下限",
         )
-        self.plot_widget.addItem(self.expected_upper)
-        self.plot_widget.addItem(self.expected_lower)
+        self.qualified_upper = pg.InfiniteLine(
+            pos=0,
+            angle=0,
+            pen=pg.mkPen("#f1c40f", width=1, style=Qt.PenStyle.DashLine),
+            label="合格上限",
+        )
+        self.qualified_lower = pg.InfiniteLine(
+            pos=0,
+            angle=0,
+            pen=pg.mkPen("#f1c40f", width=1, style=Qt.PenStyle.DashLine),
+            label="合格下限",
+        )
+        self.plot_widget.addItem(self.qualified_band)
+        self.plot_widget.addItem(self.excellent_band)
+        self.plot_widget.addItem(self.excellent_upper)
+        self.plot_widget.addItem(self.excellent_lower)
+        self.plot_widget.addItem(self.qualified_upper)
+        self.plot_widget.addItem(self.qualified_lower)
         layout.addWidget(self.plot_widget, 1)
 
         panel.setLayout(layout)
@@ -314,13 +349,22 @@ class QualityCheckWidget(QWidget):
         self.temperature_label.setText(f"温度: {props.get('temperature', '--')} °C")
         self.speed_label.setText(f"速度: {props.get('speed', '--')} mm/s")
         self.expected_force_label.setText(f"预期挤出力: {props.get('expected_force', '--')} N")
+        excellent_force_min, excellent_force_max = props.get("excellent_force_range", ("--", "--"))
+        self.excellent_force_range_label.setText(
+            f"优秀范围: {excellent_force_min} - {excellent_force_max} N"
+        )
         force_min, force_max = props.get("force_range", ("--", "--"))
         self.force_range_label.setText(f"力值范围: {force_min} - {force_max} N")
         stability_threshold = props.get("stability_threshold", self.default_stability_threshold)
         self.stability_threshold_label.setText(f"稳定阈值: {stability_threshold} N")
+        excellent_force_range = props.get("excellent_force_range", (0, 0))
         force_range = props.get("force_range", (0, 0))
-        self.expected_upper.setPos(force_range[1])
-        self.expected_lower.setPos(force_range[0])
+        self.excellent_band.setRegion(excellent_force_range)
+        self.qualified_band.setRegion(force_range)
+        self.excellent_upper.setPos(excellent_force_range[1])
+        self.excellent_lower.setPos(excellent_force_range[0])
+        self.qualified_upper.setPos(force_range[1])
+        self.qualified_lower.setPos(force_range[0])
 
     @Slot()
     def on_quality_check_clicked(self):
@@ -411,6 +455,7 @@ class QualityCheckWidget(QWidget):
         mean = np.mean(recent_data)
         std = np.std(recent_data)
         stability_threshold = self.get_current_stability_threshold()
+        excellent_force_min, excellent_force_max = self.get_current_excellent_force_range()
         force_min, force_max = self.get_current_force_range()
 
         self.system_force_label.setText(f"实时挤出力: {mean:.2f} ± {std:.2f} N")
@@ -422,8 +467,10 @@ class QualityCheckWidget(QWidget):
         else:
             self.status_indicator.update_status("unstable")
 
-        if force_min <= mean <= force_max:
+        if excellent_force_min <= mean <= excellent_force_max:
             self.force_expectation_indicator.update_status("stable")
+        elif force_min <= mean <= force_max:
+            self.force_expectation_indicator.update_status("warning")
         else:
             self.force_expectation_indicator.update_status("unstable")
 
@@ -435,6 +482,13 @@ class QualityCheckWidget(QWidget):
         props = self.get_current_material_properties()
         force_range = props.get("force_range", (0.0, 0.0))
         return float(force_range[0]), float(force_range[1])
+
+    def get_current_excellent_force_range(self) -> tuple[float, float]:
+        props = self.get_current_material_properties()
+        excellent_force_range = props.get("excellent_force_range")
+        if excellent_force_range is None:
+            return self.get_current_force_range()
+        return float(excellent_force_range[0]), float(excellent_force_range[1])
 
     def build_quality_check_gcode(self, material: str) -> str:
         props = self.get_current_material_properties(material)
