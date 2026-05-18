@@ -3,16 +3,24 @@ etp_ctl: A PySide6 GUI application for the Extrusion Test Platform experiment co
 """
 
 import sys
+import traceback
+from pathlib import Path
+
+if __name__ == "__main__" and not __package__ and "__compiled__" not in globals():
+    package_dir = Path(__file__).resolve().parent
+    sys.path.insert(0, str(package_dir.parent))
+    __package__ = package_dir.name
+
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QStackedWidget
 )
 from PySide6.QtCore import Signal, Slot, QThread, QTimer
 import pyqtgraph as pg
 from collections import deque
-from pathlib import Path
 from .communications import TCPClient, KlipperWorker, ConnectionTester
 from .vision import VideoWorker, ProcessingWorker, IRWorker, VideoRecorder
-from .tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget, JobSequenceWidget, DataProcessorWidget
+from .tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget, JobSequenceWidget, DataProcessorWidget, QualityCheckWidget
+from .database import get_material_database
 import asyncio
 from qasync import asyncSlot, QEventLoop
 import numpy as np
@@ -51,6 +59,42 @@ __app_name__, __version__ = _get_package_info()
 current_file_path = Path(__file__).resolve()
 
 
+def _find_app_file(filename):
+    candidates = [current_file_path.parent / filename]
+
+    if "__compiled__" in globals():
+        executable_dir = Path(sys.executable).resolve().parent
+        candidates.extend([
+            executable_dir / filename,
+            executable_dir / "HEPiC" / filename,
+        ])
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
+def _show_startup_error(exc):
+    message = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    log_path = Path(sys.argv[0]).resolve().parent / "startup_error.log"
+    try:
+        log_path.write_text(message, encoding="utf-8")
+    except OSError:
+        pass
+
+    try:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(
+            None,
+            f"{message}\n\nLog: {log_path}",
+            "HEPiC startup error",
+            0x10,
+        )
+    except Exception:
+        print(message, file=sys.stderr)
+
+
 # ====================================================================
 # 2. 创建主窗口类
 # ====================================================================
@@ -66,7 +110,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.test_mode = test_mode
         self.logger = logging.getLogger(__name__)
-        self.config_file = current_file_path.parent / "config.json"
+        self.config_file = _find_app_file("config.json")
         self.load_config()
         self.setWindowTitle(f"{__app_name__} v{__version__}")
         self.setGeometry(0, 0, 1024, 768)
@@ -188,6 +232,7 @@ class MainWindow(QMainWindow):
         self.ir_page_widget = IRPageWidget()
         self.job_sequence_widget = JobSequenceWidget()
         self.data_processor_widget = DataProcessorWidget()
+        self.quality_check_widget = QualityCheckWidget()
 
         # 添加标签页到标签栏
         self.stacked_widget.addWidget(self.connection_widget)
@@ -198,6 +243,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.ir_page_widget, "红外")
         self.tabs.addTab(self.job_sequence_widget, "G-code")
         self.tabs.addTab(self.data_processor_widget, "数据处理")
+        self.tabs.addTab(self.quality_check_widget, "质检模式")
         self.setCentralWidget(self.stacked_widget)
 
         # 设置状态栏
@@ -206,10 +252,15 @@ class MainWindow(QMainWindow):
         # --- 连接信号与槽 ---
         self.connection_widget.host.connect(self.update_host_and_connect)
         self.sigNewData.connect(self.home_widget.data_widget.update_display)
+        self.sigNewData.connect(self.quality_check_widget.update_sensor_data)
+        self.sigNewStatus.connect(self.quality_check_widget.update_klipper_status)
+        self.quality_check_widget.quality_check_gcode_requested.connect(self.on_quality_check_gcode_requested)
         self.home_widget.play_pause_button.toggled.connect(self.on_toggle_play_pause)
         self.home_widget.stop_button.clicked.connect(self.on_stop_clicked)
         self.sigNewStatus.connect(self.status_widget.update_display)
         self.sigFilePosition.connect(self.job_sequence_widget.gcode_widget.update_file_position)
+        
+        # --- 质检模式的材料属性会在第一次显示时自动初始化 ---
         
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
@@ -323,6 +374,14 @@ class MainWindow(QMainWindow):
         self.initiate_ir_imager()
 
         await asyncio.gather(tcp_task, klipper_task)
+
+    @asyncSlot(str)
+    async def on_quality_check_gcode_requested(self, gcode: str):
+        """Send the quality-check startup G-code through Klipper when available."""
+        if not getattr(self, "klipper_worker", None):
+            self.logger.warning("Quality check startup G-code requested before klipper_worker is ready")
+            return
+        await self.klipper_worker.send_gcode(gcode)
 
     @Slot()
     def initiate_camera(self):
@@ -577,7 +636,7 @@ def start_app():
     )
 
     ### Debug module logging ###
-    logging.getLogger("HEPiC.communications.tcp_client").setLevel(logging.DEBUG)
+    # logging.getLogger("HEPiC.communications.tcp_client").setLevel(logging.DEBUG)
     # logging.getLogger("HEPiC.tab_widgets.home_widget").setLevel(logging.DEBUG)
     ############################
     
@@ -596,5 +655,9 @@ def start_app():
 # 3. 应用程序入口
 # ====================================================================
 if __name__ == "__main__":
-    start_app()
+    try:
+        start_app()
+    except Exception as exc:
+        _show_startup_error(exc)
+        raise
     

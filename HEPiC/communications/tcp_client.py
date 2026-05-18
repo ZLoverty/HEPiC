@@ -47,6 +47,7 @@ class SensorData:
 
     def zero(self) -> bool:
         if not self.can_zero:
+            print(f"Sensor {self.name} is not zeroable.")
             return False
         if np.isnan(self.raw_value):
             return False
@@ -99,6 +100,7 @@ class TCPClient(QObject):
 
         self.reader: asyncio.StreamReader | None = None
         self.writer: asyncio.StreamWriter | None = None
+        self.sensor_config: dict | None = None
 
         self.logger = logging.getLogger(__name__)
 
@@ -204,7 +206,16 @@ class TCPClient(QObject):
         return deduped
 
     def _is_zeroable_sensor(self, sensor_name: str) -> bool:
-        return sensor_name in {"extrusion_force_N", "meter_count_mm"}
+        if self.sensor_config is not None:
+            for item in self.sensor_config.get("sensors", []):
+                if not isinstance(item, dict):
+                    continue
+                name = item.get("name")
+                if name == sensor_name:
+                    return bool(item.get("zeroable", False))
+        else:
+            self.logger.info(f"Sensor config not received yet, cannot determine if {sensor_name} is zeroable.")
+            return False
 
     def _ensure_sensor(self, sensor_name: str):
         if sensor_name not in self.sensor_data_map:
@@ -212,6 +223,11 @@ class TCPClient(QObject):
                 name=sensor_name,
                 can_zero=self._is_zeroable_sensor(sensor_name),
             )
+            return
+
+        sensor = self.sensor_data_map[sensor_name]
+        if not sensor.can_zero:
+            sensor.can_zero = self._is_zeroable_sensor(sensor_name)
 
     def _filter_payload_by_sensor_columns(self, payload: dict) -> dict:
         if not self.sensor_columns:
@@ -249,10 +265,14 @@ class TCPClient(QObject):
                     payload = message.get("payload")
 
                     if message_type == "sensor_config" and isinstance(payload, dict):
+                        self.logger.info("Received sensor_config from server.")
                         self.sensor_columns = self._extract_sensor_columns(payload)
+                        self.sensor_config = payload
                         for sensor_name in self.sensor_columns:
                             self._ensure_sensor(sensor_name)
+                        
                         self.sensor_config_received.emit(self.sensor_columns)
+                        
 
                     if message_type == "sensor_data" and isinstance(payload, dict):
                         filtered_payload = self._filter_payload_by_sensor_columns(payload)
@@ -280,11 +300,6 @@ class TCPClient(QObject):
         except asyncio.CancelledError:
             self.logger.debug("Process data task cancelled.")
 
-    def set_extrusion_force_offset(self):
-        self.zero_sensor("extrusion_force_N")
-
-    def set_meter_count_offset(self):
-        self.zero_sensor("meter_count_mm")
 
     def zero_sensor(self, sensor_name: str):
         sensor = self.sensor_data_map.get(sensor_name)
@@ -295,18 +310,7 @@ class TCPClient(QObject):
             self.logger.warning(f"Cannot set zero offset for {sensor_name}: no data or not zeroable.")
             return
 
-        if sensor_name == "extrusion_force_N":
-            self.extrusion_force_offset = sensor.offset
-            self.extrusion_force = sensor.value
-            self.logger.info(f"Extrusion force offset set to {self.extrusion_force_offset}")
-        elif sensor_name == "meter_count_mm":
-            self.meter_count_offset = sensor.offset
-            self.meter_count = sensor.value
-            self.meter_count_cache.clear()
-            self.time_cache.clear()
-            self.logger.info(f"Meter count offset set to {self.meter_count_offset}")
-        else:
-            self.logger.info(f"Offset set for {sensor_name}: {sensor.offset}")
+        self.logger.info(f"{sensor.name} offset set to {sensor.offset}")
 
     def get_zeroable_sensor_names(self) -> list[str]:
         return [name for name, sensor in self.sensor_data_map.items() if sensor.can_zero]
