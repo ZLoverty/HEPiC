@@ -30,7 +30,8 @@ dependencies = [
     "aiohttp", 
     "scikit-image", 
     "myimagelib", 
-    "skan"
+    "skan",
+    "requests"
 ]
 
 # 命令行入口 (安装后用户可以在终端直接输入 'my-app-cmd' 运行)
