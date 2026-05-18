@@ -5,14 +5,15 @@ _pla_base: &pla_default
   excellent_force_range: [9.0, 11.0]
   force_range: [8.0, 12.0]
   temperature: 220
-  speed: 10
+  speed: 6.7
   stability_threshold: 0.5
 
 # 2. 具体的材料条目直接继承模板，只需写“差异化”的参数
 L1002:
   <<: *pla_default
   PI_Code: "L1002"
-  expected_force: 6.7
+  speed: 6.7
+  expected_force: 12.5
   excellent_force_range: [10.0, 15.0]
   force_range: [10.0, 15.0]
 
