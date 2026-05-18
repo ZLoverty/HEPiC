@@ -357,6 +357,7 @@ class MainWindow(QMainWindow):
         # 连接信号槽
         self.klipper_worker.connection_status.connect(self.update_status)
         self.klipper_worker.gcode_response.connect(self.home_widget.command_widget.display_message)
+        self.klipper_worker.gcode_response.connect(self.handle_gcode_response)
         self.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
         self.home_widget.command_widget.command.connect(self.klipper_worker.send_gcode)
         self.home_widget.sigRestart.connect(self.klipper_worker.restart_firmware)
@@ -382,6 +383,48 @@ class MainWindow(QMainWindow):
             self.logger.warning("Quality check startup G-code requested before klipper_worker is ready")
             return
         await self.klipper_worker.send_gcode(gcode)
+
+    @Slot(str)
+    def handle_gcode_response(self, response: str):
+        """Execute software-side actions embedded in G-code responses."""
+        action = self._extract_software_action(response)
+        if not action:
+            return
+
+        self.logger.info("Executing software action from G-code response: %s", action)
+
+        if action == "START_RECORDING":
+            self._set_recording_enabled_from_gcode(True)
+        elif action == "STOP_RECORDING":
+            self._set_recording_enabled_from_gcode(False)
+        else:
+            self.logger.warning("Unsupported software action from G-code response: %s", action)
+
+    def _extract_software_action(self, response: str) -> str:
+        normalized = response.strip()
+        for prefix in ("//", "echo:", "action:"):
+            if normalized.lower().startswith(prefix.lower()):
+                normalized = normalized[len(prefix):].strip()
+
+        normalized = normalized.replace("\r", " ").replace("\n", " ").strip()
+        if not normalized:
+            return ""
+
+        first_token = normalized.split()[0].strip().upper()
+        supported_actions = {"START_RECORDING", "STOP_RECORDING"}
+        return first_token if first_token in supported_actions else ""
+
+    def _set_recording_enabled_from_gcode(self, enabled: bool):
+        if not hasattr(self, "home_widget") or self.home_widget is None:
+            return
+
+        if enabled == self.is_recording and self.home_widget.play_pause_button.isChecked() == enabled:
+            return
+
+        self.home_widget.command_widget.display_message(
+            f"action: {'START_RECORDING' if enabled else 'STOP_RECORDING'}"
+        )
+        self.home_widget.play_pause_button.setChecked(enabled)
 
     @Slot()
     def initiate_camera(self):
@@ -615,7 +658,7 @@ class MainWindow(QMainWindow):
         if self.ir_worker:
             self.ir_worker.stop()
             self.ir_worker.deleteLater()
-        if self.processing_worker:
+        if hasattr(self, "processing_worker") and self.processing_worker:
             self.processing_worker.stop()
         self.logger.info("正在关闭应用程序...")
         event.accept()
