@@ -279,26 +279,22 @@ class QualityCheckWidget(QWidget):
         self.excellent_upper = pg.InfiniteLine(
             pos=0,
             angle=0,
-            pen=pg.mkPen("#27ae60", width=1, style=Qt.PenStyle.DashLine),
-            label="优秀上限",
+            pen=pg.mkPen("#27ae60", width=1, style=Qt.PenStyle.DashLine)
         )
         self.excellent_lower = pg.InfiniteLine(
             pos=0,
             angle=0,
-            pen=pg.mkPen("#27ae60", width=1, style=Qt.PenStyle.DashLine),
-            label="优秀下限",
+            pen=pg.mkPen("#27ae60", width=1, style=Qt.PenStyle.DashLine)
         )
         self.qualified_upper = pg.InfiniteLine(
             pos=0,
             angle=0,
-            pen=pg.mkPen("#f1c40f", width=1, style=Qt.PenStyle.DashLine),
-            label="合格上限",
+            pen=pg.mkPen("#f1c40f", width=1, style=Qt.PenStyle.DashLine)
         )
         self.qualified_lower = pg.InfiniteLine(
             pos=0,
             angle=0,
-            pen=pg.mkPen("#f1c40f", width=1, style=Qt.PenStyle.DashLine),
-            label="合格下限",
+            pen=pg.mkPen("#f1c40f", width=1, style=Qt.PenStyle.DashLine)
         )
         self.plot_widget.addItem(self.qualified_band)
         self.plot_widget.addItem(self.excellent_band)
