@@ -1,0 +1,15 @@
+# 1. 定义一个 PLA 的标准模板 (Base Template)
+_petg_base: &petg_default
+  name: "PETG"
+  expected_force: 10.0
+  force_range: [8.0, 12.0]
+  temperature: 220
+  speed: 10
+  stability_threshold: 0.5
+
+# 2. 具体的材料条目直接继承模板，只需写“差异化”的参数
+G235:
+  <<: *petg_default
+  PI_Code: "G235"
+  expected_force: 5.0
+  force_range: [3.0, 7.0]

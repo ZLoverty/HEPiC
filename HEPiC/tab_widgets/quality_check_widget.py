@@ -95,28 +95,19 @@ class QualityCheckWidget(QWidget):
         self.default_stability_threshold = 0.1
         self.material_properties_initialized = False
 
-        self.material_properties = {
+        self.material_families = {
             "PLA": {
-                "expected_force": 5.0,
-                "force_range": (3.0, 7.0),
-                "temperature": 200,
-                "speed": 30,
-                "stability_threshold": 0.1,
-            },
-            "PETG": {
-                "expected_force": 6.0,
-                "force_range": (4.0, 8.0),
-                "temperature": 230,
-                "speed": 25,
-                "stability_threshold": 0.1,
-            },
-            "TPU": {
-                "expected_force": 3.0,
-                "force_range": (1.5, 4.5),
-                "temperature": 210,
-                "speed": 20,
-                "stability_threshold": 0.1,
-            },
+                "L1002": {
+                    "PI_Code": "L1002",
+                    "family": "PLA",
+                    "name": "PLA",
+                    "expected_force": 5.0,
+                    "force_range": (3.0, 7.0),
+                    "temperature": 200,
+                    "speed": 30,
+                    "stability_threshold": 0.1,
+                }
+            }
         }
 
         self.process_markdown = self._load_process_document()
@@ -137,7 +128,7 @@ class QualityCheckWidget(QWidget):
             from ..database import get_material_database
 
             material_db = get_material_database()
-            self.set_material_properties(material_db.get_all_materials())
+            self.set_material_families(material_db.get_material_families())
             self.logger.info("Material properties initialized from database")
         except Exception as exc:
             self.logger.error(f"Failed to initialize material properties: {exc}")
@@ -156,10 +147,11 @@ class QualityCheckWidget(QWidget):
         return """
 # 质检流程
 
-1. 选择材料
-2. 点击开始质检
-3. 观察系统状态、稳定性和实时挤出力曲线
-4. 停止质检
+1. 选择材料 family
+2. 选择 PI_Code
+3. 点击开始质检
+4. 观察系统状态、稳定性和实时挤出力曲线
+5. 停止质检
 """
 
     def init_ui(self):
@@ -199,13 +191,21 @@ class QualityCheckWidget(QWidget):
         info_row = QHBoxLayout()
 
         material_block, material_layout = self._make_info_block("材料信息")
-        material_selector_row = QHBoxLayout()
-        material_selector_row.addWidget(QLabel("材料选择:"))
+
+        family_selector_row = QHBoxLayout()
+        family_selector_row.addWidget(QLabel("Family:"))
+        self.material_family_combo = QComboBox()
+        self.material_family_combo.addItems(list(self.material_families.keys()))
+        self.material_family_combo.currentTextChanged.connect(self.on_material_family_changed)
+        family_selector_row.addWidget(self.material_family_combo)
+        material_layout.addLayout(family_selector_row)
+
+        pi_code_selector_row = QHBoxLayout()
+        pi_code_selector_row.addWidget(QLabel("PI_Code:"))
         self.material_combo = QComboBox()
-        self.material_combo.addItems(list(self.material_properties.keys()))
         self.material_combo.currentTextChanged.connect(self.update_material_properties_display)
-        material_selector_row.addWidget(self.material_combo)
-        material_layout.addLayout(material_selector_row)
+        pi_code_selector_row.addWidget(self.material_combo)
+        material_layout.addLayout(pi_code_selector_row)
 
         self.temperature_label = QLabel("温度: -- °C")
         self.speed_label = QLabel("速度: -- mm/s")
@@ -223,7 +223,7 @@ class QualityCheckWidget(QWidget):
         system_block, system_layout = self._make_info_block("系统信息")
         self.system_temperature_label = QLabel("实时温度: -- °C")
         self.system_feedrate_label = QLabel("实时挤出速度: -- mm/s")
-        self.system_force_label = QLabel("实时挤出力: -- N | 均值±标准差: -- N")
+        self.system_force_label = QLabel("实时挤出力: -- N")
         system_layout.addWidget(self.system_temperature_label)
         system_layout.addWidget(self.system_feedrate_label)
         system_layout.addWidget(self.system_force_label)
@@ -274,11 +274,43 @@ class QualityCheckWidget(QWidget):
         layout.addWidget(self.plot_widget, 1)
 
         panel.setLayout(layout)
+        self._populate_pi_code_combo_box(self.get_current_family())
         return panel
 
+    @Slot(str)
+    def on_material_family_changed(self, family: str):
+        self._populate_pi_code_combo_box(family)
+        self.update_material_properties_display()
+
+    def _populate_pi_code_combo_box(self, family: str, preferred_pi_code: str | None = None):
+        pi_codes = list(self.material_families.get(family, {}).keys())
+        self.material_combo.blockSignals(True)
+        self.material_combo.clear()
+        self.material_combo.addItems(pi_codes)
+        target_pi_code = preferred_pi_code if preferred_pi_code in pi_codes else None
+        if target_pi_code:
+            index = self.material_combo.findText(target_pi_code)
+            if index >= 0:
+                self.material_combo.setCurrentIndex(index)
+        self.material_combo.blockSignals(False)
+
+    def get_current_family(self) -> str:
+        if hasattr(self, "material_family_combo") and self.material_family_combo is not None:
+            return self.material_family_combo.currentText()
+        return ""
+
+    def get_current_pi_code(self) -> str:
+        if hasattr(self, "material_combo") and self.material_combo is not None:
+            return self.material_combo.currentText()
+        return ""
+
+    def get_current_material_properties(self, pi_code: str | None = None) -> dict:
+        family = self.get_current_family()
+        selected_pi_code = pi_code or self.get_current_pi_code()
+        return self.material_families.get(family, {}).get(selected_pi_code, {})
+
     def update_material_properties_display(self):
-        material = self.material_combo.currentText()
-        props = self.material_properties.get(material, {})
+        props = self.get_current_material_properties()
         self.temperature_label.setText(f"温度: {props.get('temperature', '--')} °C")
         self.speed_label.setText(f"速度: {props.get('speed', '--')} mm/s")
         self.expected_force_label.setText(f"预期挤出力: {props.get('expected_force', '--')} N")
@@ -303,11 +335,16 @@ class QualityCheckWidget(QWidget):
             self.force_expectation_indicator.update_status("unknown")
             self.status_indicator.update_status("unknown")
             self.update_material_properties_display()
-            material = self.material_combo.currentText()
-            self.quality_check_started.emit(material)
-            self.quality_check_gcode_requested.emit(self.build_quality_check_gcode(material))
+
+            pi_code = self.get_current_pi_code()
+            self.quality_check_started.emit(pi_code)
+            self.quality_check_gcode_requested.emit(self.build_quality_check_gcode(pi_code))
             self.data_timer.start(100)
-            self.logger.info(f"Quality check started for material: {material}")
+            self.logger.info(
+                "Quality check started for material: %s/%s",
+                self.get_current_family(),
+                pi_code,
+            )
         else:
             self.is_checking = False
             self.check_button.setText("开始质检")
@@ -376,7 +413,6 @@ class QualityCheckWidget(QWidget):
         stability_threshold = self.get_current_stability_threshold()
         force_min, force_max = self.get_current_force_range()
 
-        # Keep the user's adjusted force display format.
         self.system_force_label.setText(f"实时挤出力: {mean:.2f} ± {std:.2f} N")
 
         if std < stability_threshold:
@@ -392,18 +428,16 @@ class QualityCheckWidget(QWidget):
             self.force_expectation_indicator.update_status("unstable")
 
     def get_current_stability_threshold(self) -> float:
-        material = self.material_combo.currentText() if hasattr(self, "material_combo") else ""
-        props = self.material_properties.get(material, {})
+        props = self.get_current_material_properties()
         return props.get("stability_threshold", self.default_stability_threshold)
 
     def get_current_force_range(self) -> tuple[float, float]:
-        material = self.material_combo.currentText() if hasattr(self, "material_combo") else ""
-        props = self.material_properties.get(material, {})
+        props = self.get_current_material_properties()
         force_range = props.get("force_range", (0.0, 0.0))
         return float(force_range[0]), float(force_range[1])
 
     def build_quality_check_gcode(self, material: str) -> str:
-        props = self.material_properties.get(material, {})
+        props = self.get_current_material_properties(material)
         temperature = props.get("temperature", 200)
         speed_mms = props.get("speed", 5)
         extrude_length_mm = props.get("quality_check_extrude_length_mm", float(speed_mms) * 60.0)
@@ -416,21 +450,33 @@ class QualityCheckWidget(QWidget):
             ]
         )
 
-    def set_material_properties(self, properties: dict):
-        self.logger.info(f"Setting material properties: {list(properties.keys())}")
-        self.material_properties.update(properties)
+    def set_material_families(self, families: dict):
+        self.logger.info(f"Setting material families: {list(families.keys())}")
+        self.material_families = families or {}
         QTimer.singleShot(10, self._update_material_combo_box)
 
     def _update_material_combo_box(self):
         try:
-            if hasattr(self, "material_combo") and self.material_combo is not None:
-                current_material = self.material_combo.currentText()
-                self.material_combo.clear()
-                self.material_combo.addItems(list(self.material_properties.keys()))
-                if current_material and current_material in self.material_properties:
-                    index = self.material_combo.findText(current_material)
+            if (
+                hasattr(self, "material_family_combo")
+                and self.material_family_combo is not None
+                and hasattr(self, "material_combo")
+                and self.material_combo is not None
+            ):
+                current_family = self.get_current_family()
+                current_pi_code = self.get_current_pi_code()
+
+                self.material_family_combo.blockSignals(True)
+                self.material_family_combo.clear()
+                self.material_family_combo.addItems(list(self.material_families.keys()))
+                if current_family and current_family in self.material_families:
+                    index = self.material_family_combo.findText(current_family)
                     if index >= 0:
-                        self.material_combo.setCurrentIndex(index)
+                        self.material_family_combo.setCurrentIndex(index)
+                self.material_family_combo.blockSignals(False)
+
+                selected_family = self.get_current_family() or self.material_family_combo.currentText()
+                self._populate_pi_code_combo_box(selected_family, current_pi_code)
                 self.update_material_properties_display()
         except RuntimeError as exc:
             self.logger.error(f"Error updating material combo box: {exc}")

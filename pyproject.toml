@@ -22,6 +22,7 @@ dependencies = [
     "pandas",             # 不指定版本，默认最新
     "pyside6", 
     "pyqtgraph",
+    "PyYAML",
     "numpy==1.26", 
     "opencv-python==4.8.1.78", # for compatibility with Optris camera SDK 
     "qasync", 
