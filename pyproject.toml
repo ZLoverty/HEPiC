@@ -45,5 +45,5 @@ Issues = "https://github.com/zloverty/HEPiC/issues"
 [tool.setuptools.packages.find]
 where = ["."]  # 代码在当前目录
 include = ["HEPiC*"]  # 只包含 HEPiC 文件夹
-exclude = ["notebooks*", "tests*", "docs*"]  # 明确排除 notebooks
+exclude = ["notebooks*", "test*", "tests*", "docs*"]  # 明确排除实验、测试和文档目录
 namespaces = false

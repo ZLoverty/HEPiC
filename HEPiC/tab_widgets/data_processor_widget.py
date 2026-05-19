@@ -1,7 +1,4 @@
 from pathlib import Path
-import sys
-current_path = Path(__file__).resolve().parent.parent
-sys.path.append(str(current_path))
 import logging
 import pandas as pd
 from PySide6.QtWidgets import (
@@ -10,8 +7,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 import numpy as np
 import pyqtgraph as pg
-from log_widget import LogWidget
-from utils import data_cleaning
+from .log_widget import LogWidget
+from ..utils import data_cleaning
 
 class DataProcessorWidget(QWidget):
     def __init__(self):
