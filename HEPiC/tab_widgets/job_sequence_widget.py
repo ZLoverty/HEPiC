@@ -1,16 +1,11 @@
-from pathlib import Path
-import sys
-current_path = Path(__file__).resolve().parent.parent
-sys.path.append(str(current_path))
-
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout
 )
 from PySide6.QtCore import Slot, Signal, QThread, QObject
-from tab_widgets import GcodeWidget
+from .gcode_widget import GcodeWidget
 import pyqtgraph as pg
 import logging
-from utils import parse_gcode_time_series
+from ..utils.gcode_parser import parse_gcode_time_series
 
 class JobSequenceWidget(QWidget):
 

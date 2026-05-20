@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "HEPiC"
-version = "1.2.0"
+dynamic = ["version"]
 description = "The App for Polymaker extrusion platform."
 readme = "README.md"  # 也就是 PyPI 上的项目主页介绍
 requires-python = ">=3.12" # 指定支持的 Python 版本
@@ -42,8 +42,11 @@ hepic = "HEPiC.__main__:start_app"
 Homepage = "https://github.com/zloverty/HEPiC"
 Issues = "https://github.com/zloverty/HEPiC/issues"
 
+[tool.setuptools.dynamic]
+version = {attr = "HEPiC.__version__"}
+
 [tool.setuptools.packages.find]
 where = ["."]  # 代码在当前目录
 include = ["HEPiC*"]  # 只包含 HEPiC 文件夹
-exclude = ["notebooks*", "tests*", "docs*"]  # 明确排除 notebooks
+exclude = ["notebooks*", "test*", "tests*", "docs*"]  # 明确排除实验、测试和文档目录
 namespaces = false

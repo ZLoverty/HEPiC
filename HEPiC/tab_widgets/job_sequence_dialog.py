@@ -93,7 +93,8 @@ class JobSequenceDialog(QDialog):
                     "G4 P1000",
                     "M118 1 ...",
                     "M400",
-                    "M118 -- Test starts now! --"
+                    "M118 -- Test starts now! --",
+                    "M118 START_RECORDING"
                 ])
             for V in Vs:
                 job_sequence_list.append(f"M118 V = {V:.2f} mm/s")
@@ -102,6 +103,7 @@ class JobSequenceDialog(QDialog):
                 job_sequence_list.append("M400")
                 
         job_sequence_list.append("M118 Test finished. Lowering hotend temperature.")
+        job_sequence_list.append("M118 STOP_RECORDING")
         job_sequence_list.append("M109 S0")
 
         return "\n".join(job_sequence_list)

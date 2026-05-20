@@ -1,18 +1,15 @@
 from pathlib import Path
-import sys
-current_path = Path(__file__).resolve().parent.parent
-sys.path.append(str(current_path))
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog, QTextEdit, QLabel, QStyle
 )
 from PySide6.QtGui import QTextCursor, QTextCharFormat, QColor
 from PySide6.QtCore import Signal, Slot, QSize, QObject
-from utils import GcodePositionMapper
+from ..utils.gcode_position_mapper import GcodePositionMapper
 import time
 from threading import Thread
 import logging
-from tab_widgets.job_sequence_dialog import JobSequenceDialog
+from .job_sequence_dialog import JobSequenceDialog
 
 class GcodeWidget(QWidget):
 

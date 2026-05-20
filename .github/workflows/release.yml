@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version tag to release (e.g. v1.2.0)"
+        required: true
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -e . pyinstaller pyinstaller-hooks-contrib
+
+      - name: Read version from package
+        id: version
+        run: |
+          $v = python -c "from HEPiC import __version__; print(__version__)"
+          echo "VERSION=$v" >> $env:GITHUB_ENV
+          echo "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Build with PyInstaller
+        run: |
+          python -m PyInstaller `
+            --name HEPiC `
+            --windowed `
+            --onedir `
+            --noconfirm `
+            --workpath build\pyinstaller `
+            --distpath dist `
+            --add-data "HEPiC\config.json;HEPiC" `
+            --add-data "HEPiC\tab_widgets\icons;HEPiC\tab_widgets\icons" `
+            --add-data "HEPiC\database;HEPiC\database" `
+            --hidden-import qasync `
+            --collect-all pyqtgraph `
+            run_hepic.py
+
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+
+      - name: Build installer
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $iscc /DAppVersion=$env:VERSION installer.iss
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name || inputs.tag }}
+          name: "HEPiC v${{ steps.version.outputs.version }}"
+          body: |
+            ## HEPiC v${{ steps.version.outputs.version }}
+
+            ### Installation
+            Download `HEPiC_v${{ steps.version.outputs.version }}_Setup.exe` and run it.
+
+            ### Release Notes
+            See [CHANGELOG](https://github.com/${{ github.repository }}/blob/master/release_notes) for details.
+          files: installer_output/HEPiC_v${{ steps.version.outputs.version }}_Setup.exe
+          draft: false
+          prerelease: false

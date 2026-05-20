@@ -1,9 +1,22 @@
 import logging
 from collections import deque
+from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
 import pyqtgraph as pg
+
+from ..quality_check import (
+    DEFAULT_MATERIAL_FAMILIES,
+    build_quality_check_gcode,
+    evaluate_force_window,
+)
+from ..quality_check.evaluator import (
+    DEFAULT_STABILITY_THRESHOLD,
+    get_excellent_force_range,
+    get_force_range,
+    get_stability_threshold,
+)
 from PySide6.QtCore import Qt, QTimer, Signal, Slot
 from PySide6.QtWidgets import (
     QComboBox,
@@ -92,24 +105,9 @@ class QualityCheckWidget(QWidget):
         self.time_cache = deque(maxlen=300)
         self.current_time = 0
         self.is_checking = False
-        self.default_stability_threshold = 0.1
+        self.default_stability_threshold = DEFAULT_STABILITY_THRESHOLD
         self.material_properties_initialized = False
-
-        self.material_families = {
-            "PLA": {
-                "L1002": {
-                    "PI_Code": "L1002",
-                    "family": "PLA",
-                    "name": "PLA",
-                    "expected_force": 5.0,
-                    "excellent_force_range": (4.5, 5.5),
-                    "force_range": (3.0, 7.0),
-                    "temperature": 200,
-                    "speed": 30,
-                    "stability_threshold": 0.1,
-                }
-            }
-        }
+        self.material_families = deepcopy(DEFAULT_MATERIAL_FAMILIES)
 
         self.process_markdown = self._load_process_document()
         self.init_ui()
@@ -378,7 +376,9 @@ class QualityCheckWidget(QWidget):
 
             pi_code = self.get_current_pi_code()
             self.quality_check_started.emit(pi_code)
-            self.quality_check_gcode_requested.emit(self.build_quality_check_gcode(pi_code))
+            self.quality_check_gcode_requested.emit(
+                build_quality_check_gcode(self.get_current_material_properties(pi_code))
+            )
             self.data_timer.start(100)
             self.logger.info(
                 "Quality check started for material: %s/%s",
@@ -441,64 +441,30 @@ class QualityCheckWidget(QWidget):
             self.force_curve.setData(list(self.time_cache), list(self.extrusion_force_cache))
 
     def update_stability_indicator(self):
-        if len(self.extrusion_force_cache) < 10:
+        evaluation = evaluate_force_window(
+            list(self.extrusion_force_cache),
+            self.get_current_material_properties(),
+        )
+        if evaluation is None:
             self.status_indicator.update_status("unknown")
             self.system_force_label.setText("实时挤出力: -- N")
             self.force_expectation_indicator.update_status("unknown")
             return
 
-        recent_data = list(self.extrusion_force_cache)[-20:]
-        mean = np.mean(recent_data)
-        std = np.std(recent_data)
-        stability_threshold = self.get_current_stability_threshold()
-        excellent_force_min, excellent_force_max = self.get_current_excellent_force_range()
-        force_min, force_max = self.get_current_force_range()
-
-        self.system_force_label.setText(f"实时挤出力: {mean:.2f} ± {std:.2f} N")
-
-        if std < stability_threshold:
-            self.status_indicator.update_status("stable")
-        elif std < stability_threshold * 2:
-            self.status_indicator.update_status("warning")
-        else:
-            self.status_indicator.update_status("unstable")
-
-        if excellent_force_min <= mean <= excellent_force_max:
-            self.force_expectation_indicator.update_status("stable")
-        elif force_min <= mean <= force_max:
-            self.force_expectation_indicator.update_status("warning")
-        else:
-            self.force_expectation_indicator.update_status("unstable")
+        self.system_force_label.setText(
+            f"实时挤出力: {evaluation.mean:.2f} ± {evaluation.std:.2f} N"
+        )
+        self.status_indicator.update_status(evaluation.stability_status)
+        self.force_expectation_indicator.update_status(evaluation.force_status)
 
     def get_current_stability_threshold(self) -> float:
-        props = self.get_current_material_properties()
-        return props.get("stability_threshold", self.default_stability_threshold)
+        return get_stability_threshold(self.get_current_material_properties())
 
     def get_current_force_range(self) -> tuple[float, float]:
-        props = self.get_current_material_properties()
-        force_range = props.get("force_range", (0.0, 0.0))
-        return float(force_range[0]), float(force_range[1])
+        return get_force_range(self.get_current_material_properties())
 
     def get_current_excellent_force_range(self) -> tuple[float, float]:
-        props = self.get_current_material_properties()
-        excellent_force_range = props.get("excellent_force_range")
-        if excellent_force_range is None:
-            return self.get_current_force_range()
-        return float(excellent_force_range[0]), float(excellent_force_range[1])
-
-    def build_quality_check_gcode(self, material: str) -> str:
-        props = self.get_current_material_properties(material)
-        temperature = props.get("temperature", 200)
-        speed_mms = props.get("speed", 5)
-        extrude_length_mm = props.get("quality_check_extrude_length_mm", float(speed_mms) * 60.0)
-        feedrate = max(float(speed_mms) * 60.0, 1.0)
-        return "\n".join(
-            [
-                f"M109 S{float(temperature):.0f}",
-                "M83",
-                f"G1 E{float(extrude_length_mm):.2f} F{feedrate:.2f}",
-            ]
-        )
+        return get_excellent_force_range(self.get_current_material_properties())
 
     def set_material_families(self, families: dict):
         self.logger.info(f"Setting material families: {list(families.keys())}")

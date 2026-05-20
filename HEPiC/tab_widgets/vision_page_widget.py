@@ -1,17 +1,10 @@
-from pathlib import Path
-import sys
-
-from qasync import QEventLoop
-current_path = Path(__file__).resolve().parent
-sys.path.append(str(current_path))
-
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, 
     QLineEdit, QLabel, QPushButton
 )
 from PySide6.QtCore import Signal, QObject
-from vision_widget import VisionWidget
-from calibration_dialog import CalibrationDialog
+from .vision_widget import VisionWidget
+from .calibration_dialog import CalibrationDialog
 import numpy as np
 import logging
 
@@ -112,9 +105,10 @@ class ImageGenerator(QObject):
             time.sleep(.05)
 
 if __name__ == "__main__":
+    import sys
     from PySide6.QtWidgets import QApplication
     from threading import Thread
-    from vision import ProcessingWorker
+    from ..vision import ProcessingWorker
 
     logging.basicConfig(
         level=logging.INFO,

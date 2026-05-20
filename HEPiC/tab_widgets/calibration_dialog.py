@@ -1,16 +1,15 @@
 import sys
 from pathlib import Path
-current_path = Path(__file__).resolve().parent
-sys.path.append(str(current_path))
-sys.path.append(str(current_path.parent))
+
+MODULE_DIR = Path(__file__).resolve().parent
 from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QDialog, 
                                QHBoxLayout, QVBoxLayout, QFormLayout, QLineEdit, QSpinBox, 
                                QDialogButtonBox, QMessageBox, QWidget, QLabel, QSizePolicy)
-from vision_widget import VisionWidget
-from log_widget import LogWidget
+from .vision_widget import VisionWidget
+from .log_widget import LogWidget
 
 from PySide6.QtCore import Slot, Signal, QObject
-from vision import calibration, vision_utils
+from ..vision import calibration, vision_utils
 import numpy as np
 
 class CalibrationDialog(QDialog):
@@ -99,7 +98,7 @@ class ImageGenerator(QObject):
 
         import time
 
-        test_folder = current_path.parent.parent / "test" / "calibration"
+        test_folder = MODULE_DIR.parent.parent / "test" / "calibration"
         cap = vision_utils.ImageStreamer(image_folder=str(test_folder), fps=3)
 
         while True:
@@ -113,8 +112,8 @@ if __name__ == "__main__":
     from PySide6.QtWidgets import QApplication
     from PySide6.QtCore import QTimer
     from threading import Thread
-    from vision import ProcessingWorker
-    from vision_page_widget import VisionPageWidget
+    from ..vision import ProcessingWorker
+    from .vision_page_widget import VisionPageWidget
     
     app = QApplication(sys.argv)
 

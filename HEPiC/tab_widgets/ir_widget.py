@@ -1,13 +1,8 @@
-from pathlib import Path
-import sys
-current_path = Path(__file__).resolve().parent.parent
-sys.path.append(str(current_path))
-
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QScrollBar
 )
 from PySide6.QtCore import QThread, Qt
-from tab_widgets import VisionWidget
+from .vision_widget import VisionWidget
 
 class IRPageWidget(QWidget):
     """红外相机模块页面组件"""
@@ -33,7 +28,7 @@ if __name__ == "__main__":
     import sys
     from qasync import QEventLoop, asyncSlot
     import asyncio
-    from vision import IRWorker
+    from ..vision import IRWorker
 
     app = QApplication(sys.argv)
     window = QMainWindow()

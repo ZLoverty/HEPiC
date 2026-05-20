@@ -20,59 +20,21 @@ from collections import deque
 from .communications import TCPClient, KlipperWorker, ConnectionTester
 from .vision import VideoWorker, ProcessingWorker, IRWorker, VideoRecorder
 from .tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget, JobSequenceWidget, DataProcessorWidget, QualityCheckWidget
-from .database import get_material_database
+from .app_config import (
+    build_main_window_stylesheet,
+    find_app_file,
+    load_config as load_app_config,
+)
+from . import __app_name__, __version__
 import asyncio
 from qasync import asyncSlot, QEventLoop
 import numpy as np
 import pandas as pd
 from datetime import datetime
 import logging
-import json
 import argparse
-from importlib.metadata import packages_distributions, version, PackageNotFoundError
 
 
-def _get_package_info():
-    # 1. 获取当前模块的“导入名” (即文件夹名，例如 hepic)
-    # __package__ 是 Python 内置变量，自动指向当前包名
-    import_name = __package__ or "unknown"
-    
-    # 2. 反查这个导入名属于哪个“安装包” (即 pyproject.toml 里的 name)
-    # 比如: 映射关系可能是 {'hepic': ['HEPiC']}
-    # 注意：packages_distributions 返回的是字典，value 是列表
-    dists = packages_distributions() 
-    dist_names = dists.get(import_name, [])
-    
-    # 通常一个文件夹只对应一个包，取第一个即可
-    dist_name = dist_names[0] if dist_names else import_name
-
-    # 3. 获取版本
-    try:
-        dist_version = version(dist_name)
-    except PackageNotFoundError:
-        dist_version = "unknown"
-
-    return dist_name, dist_version
-
-# 执行获取，导出常量
-__app_name__, __version__ = _get_package_info()
-current_file_path = Path(__file__).resolve()
-
-
-def _find_app_file(filename):
-    candidates = [current_file_path.parent / filename]
-
-    if "__compiled__" in globals():
-        executable_dir = Path(sys.executable).resolve().parent
-        candidates.extend([
-            executable_dir / filename,
-            executable_dir / "HEPiC" / filename,
-        ])
-
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return candidates[0]
 
 
 def _show_startup_error(exc):
@@ -110,55 +72,18 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.test_mode = test_mode
         self.logger = logging.getLogger(__name__)
-        self.config_file = _find_app_file("config.json")
+        self.config_file = find_app_file("config.json", Path(__file__), "__compiled__" in globals())
         self.load_config()
         self.setWindowTitle(f"{__app_name__} v{__version__}")
         self.setGeometry(0, 0, 1024, 768)
-        self.setStyleSheet(f"""
-        QMainWindow, QWidget {{
-            background-color: {self.background_color};
-            color: {self.foreground_color};
-        }}
-        QPushButton {{
-            background-color: {self.background_color};
-            color: {self.foreground_color};
-            border: 2px solid {self.secondary_foreground_color};
-            border-radius: 10px;
-            padding: 4px 10px;
-        }}
-        QPushButton:hover {{
-            background-color: {self.secondary_foreground_color};
-            color: {self.background_color};
-        }}
-        QPushButton:pressed {{
-            background-color: {self.secondary_background_color};
-        }}
-        QPushButton:disabled {{
-            background-color: #666666;
-            color: #b0b0b0;
-            border-color: #777777;
-        }}
-        QTextEdit, QPlainTextEdit {{
-            background-color: "#2b2b2b";
-            color: {self.foreground_color};
-            border-radius: 10px;
-            selection-background-color: {self.secondary_foreground_color};
-            selection-color: {self.background_color};
-        }}
-        QTabWidget::pane {{
-            border: 1px solid {self.secondary_background_color};
-        }}
-        QTabBar::tab {{
-            background-color: {self.secondary_background_color};
-            color: {self.foreground_color};
-            padding: 6px 10px;
-            margin: 1px;
-        }}
-        QTabBar::tab:selected {{
-            background-color: {self.secondary_foreground_color};
-            color: {self.background_color};
-        }}
-        """)
+        self.setStyleSheet(
+            build_main_window_stylesheet(
+                self.background_color,
+                self.foreground_color,
+                self.secondary_background_color,
+                self.secondary_foreground_color,
+            )
+        )
         pg.setConfigOption("background", self.background_color)
         pg.setConfigOption("foreground", self.foreground_color)
 
@@ -193,9 +118,7 @@ class MainWindow(QMainWindow):
         self.frame_size = (512, 512)
     
     def load_config(self):
-        with open(self.config_file, "r") as f:
-            self.config = json.load(f)
-        
+        self.config = load_app_config(self.config_file)
         self.logger.debug(f"Loaded config: {self.config}")
 
         # set config values
@@ -357,6 +280,7 @@ class MainWindow(QMainWindow):
         # 连接信号槽
         self.klipper_worker.connection_status.connect(self.update_status)
         self.klipper_worker.gcode_response.connect(self.home_widget.command_widget.display_message)
+        self.klipper_worker.gcode_response.connect(self.handle_gcode_response)
         self.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
         self.home_widget.command_widget.command.connect(self.klipper_worker.send_gcode)
         self.home_widget.sigRestart.connect(self.klipper_worker.restart_firmware)
@@ -382,6 +306,48 @@ class MainWindow(QMainWindow):
             self.logger.warning("Quality check startup G-code requested before klipper_worker is ready")
             return
         await self.klipper_worker.send_gcode(gcode)
+
+    @Slot(str)
+    def handle_gcode_response(self, response: str):
+        """Execute software-side actions embedded in G-code responses."""
+        action = self._extract_software_action(response)
+        if not action:
+            return
+
+        self.logger.info("Executing software action from G-code response: %s", action)
+
+        if action == "START_RECORDING":
+            self._set_recording_enabled_from_gcode(True)
+        elif action == "STOP_RECORDING":
+            self._set_recording_enabled_from_gcode(False)
+        else:
+            self.logger.warning("Unsupported software action from G-code response: %s", action)
+
+    def _extract_software_action(self, response: str) -> str:
+        normalized = response.strip()
+        for prefix in ("//", "echo:", "action:"):
+            if normalized.lower().startswith(prefix.lower()):
+                normalized = normalized[len(prefix):].strip()
+
+        normalized = normalized.replace("\r", " ").replace("\n", " ").strip()
+        if not normalized:
+            return ""
+
+        first_token = normalized.split()[0].strip().upper()
+        supported_actions = {"START_RECORDING", "STOP_RECORDING"}
+        return first_token if first_token in supported_actions else ""
+
+    def _set_recording_enabled_from_gcode(self, enabled: bool):
+        if not hasattr(self, "home_widget") or self.home_widget is None:
+            return
+
+        if enabled == self.is_recording and self.home_widget.play_pause_button.isChecked() == enabled:
+            return
+
+        self.home_widget.command_widget.display_message(
+            f"action: {'START_RECORDING' if enabled else 'STOP_RECORDING'}"
+        )
+        self.home_widget.play_pause_button.setChecked(enabled)
 
     @Slot()
     def initiate_camera(self):
@@ -615,7 +581,7 @@ class MainWindow(QMainWindow):
         if self.ir_worker:
             self.ir_worker.stop()
             self.ir_worker.deleteLater()
-        if self.processing_worker:
+        if hasattr(self, "processing_worker") and self.processing_worker:
             self.processing_worker.stop()
         self.logger.info("正在关闭应用程序...")
         event.accept()
