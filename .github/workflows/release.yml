@@ -39,6 +39,7 @@ jobs:
           python -m PyInstaller `
             --name HEPiC `
             --windowed `
+            --icon "assets\hepic.ico" `
             --onedir `
             --noconfirm `
             --workpath build\pyinstaller `

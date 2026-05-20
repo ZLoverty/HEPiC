@@ -15,6 +15,7 @@ DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 OutputDir=installer_output
 OutputBaseFilename=HEPiC_v{#AppVersion}_Setup
+SetupIconFile=assets\hepic.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
