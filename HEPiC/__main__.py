@@ -23,9 +23,9 @@ from .tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWi
 from .app_config import (
     build_main_window_stylesheet,
     find_app_file,
-    get_package_info,
     load_config as load_app_config,
 )
+from . import __app_name__, __version__
 import asyncio
 from qasync import asyncSlot, QEventLoop
 import numpy as np
@@ -35,7 +35,6 @@ import logging
 import argparse
 
 
-__app_name__, __version__ = get_package_info(__package__ or "unknown")
 
 
 def _show_startup_error(exc):

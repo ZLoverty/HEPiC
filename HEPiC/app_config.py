@@ -3,35 +3,28 @@
 from __future__ import annotations
 
 import sys
-from importlib.metadata import PackageNotFoundError, packages_distributions, version
 from pathlib import Path
-
-
-def get_package_info(import_name: str) -> tuple[str, str]:
-    """Return distribution name and version for a package import name."""
-    dist_names = packages_distributions().get(import_name, [])
-    dist_name = dist_names[0] if dist_names else import_name
-
-    try:
-        dist_version = version(dist_name)
-    except PackageNotFoundError:
-        dist_version = "unknown"
-
-    return dist_name, dist_version
 
 
 def find_app_file(filename: str, package_file: Path, compiled: bool = False) -> Path:
     """Find a bundled application file in source or compiled layouts."""
     candidates = [package_file.resolve().parent / filename]
 
+    # PyInstaller: files land in sys._MEIPASS (_internal/ next to the exe)
+    if hasattr(sys, "_MEIPASS"):
+        meipass = Path(sys._MEIPASS)
+        candidates.extend([
+            meipass / "HEPiC" / filename,
+            meipass / filename,
+        ])
+
+    # Nuitka: files land next to the exe
     if compiled:
         executable_dir = Path(sys.executable).resolve().parent
-        candidates.extend(
-            [
-                executable_dir / filename,
-                executable_dir / "HEPiC" / filename,
-            ]
-        )
+        candidates.extend([
+            executable_dir / "HEPiC" / filename,
+            executable_dir / filename,
+        ])
 
     for candidate in candidates:
         if candidate.exists():

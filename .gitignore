@@ -225,23 +225,25 @@ __marimo__/
 *GenICam*
 *cache*
 
-# Nuitka 编译生成的中间产物文件夹 (包含 C++ 源码和对象文件)
+# Nuitka
 *.build/
-
-# Nuitka Standalone 模式生成的成品文件夹 (包含 exe 和所有依赖 dll)
 *.dist/
-
-# Nuitka Onefile 模式生成的临时缓存
 *.onefile-build/
+*.accelerator.bin
+nuitka-crash-report.xml
 
-# 编译生成的执行文件
+# PyInstaller / Inno Setup
+build/
+dist/
+installer_output/
+*.spec
+
+# Compiled binaries
 *.exe
 *.bin
 
-# 如果你使用了加速插件生成的缓存
-*.accelerator.bin
+# Runtime logs
+startup_error.log
 
-# 常见的 Python 打包遗留 (如果是从 PyInstaller 切换过来的)
-build/
-dist/
-*.spec
+# Claude Code local settings (personal, not shared)
+.claude/settings.local.json
