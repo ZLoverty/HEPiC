@@ -21,6 +21,6 @@ def build_quality_check_gcode(material_properties: dict) -> str:
             "M400",
             "M118 STOP_QUALITY_CHECK",
             "M118 STATUS 质检完毕，请记录数据",
-            "M104 S0",
+            "FIRMWARE_RESTART",
         ]
     )
