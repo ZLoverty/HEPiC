@@ -18,6 +18,7 @@ def build_quality_check_gcode(material_properties: dict) -> str:
             "M118 STATUS 正在挤出",
             "M83",
             f"G1 E{float(extrude_length_mm):.2f} F{feedrate:.2f}",
+            "M400",
             "M118 STOP_QUALITY_CHECK",
             "M118 STATUS 质检完毕，请记录数据",
             "M104 S0",
