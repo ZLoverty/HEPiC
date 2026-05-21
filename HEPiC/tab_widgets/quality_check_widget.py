@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QProgressBar,
     QPushButton,
     QTextEdit,
     QVBoxLayout,
@@ -109,11 +110,18 @@ class QualityCheckWidget(QWidget):
         self.material_properties_initialized = False
         self.material_families = deepcopy(DEFAULT_MATERIAL_FAMILIES)
 
+        self._extrusion_duration_s = 0.0
+        self._progress_elapsed_ms = 0
+
         self.process_markdown = self._load_process_document()
         self.init_ui()
 
         self.data_timer = QTimer(self)
         self.data_timer.timeout.connect(self.on_data_update_timeout)
+
+        self._progress_timer = QTimer(self)
+        self._progress_timer.setInterval(100)
+        self._progress_timer.timeout.connect(self._tick_extrusion_progress)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -208,13 +216,11 @@ class QualityCheckWidget(QWidget):
 
         self.temperature_label = QLabel("温度: -- °C")
         self.speed_label = QLabel("速度: -- mm/s")
-        self.expected_force_label = QLabel("预期挤出力: -- N")
         self.excellent_force_range_label = QLabel("优秀范围: -- N")
         self.force_range_label = QLabel("合格范围: -- N")
         self.stability_threshold_label = QLabel("稳定阈值: -- N")
         material_layout.addWidget(self.temperature_label)
         material_layout.addWidget(self.speed_label)
-        material_layout.addWidget(self.expected_force_label)
         material_layout.addWidget(self.excellent_force_range_label)
         material_layout.addWidget(self.force_range_label)
         material_layout.addWidget(self.stability_threshold_label)
@@ -228,6 +234,17 @@ class QualityCheckWidget(QWidget):
         system_layout.addWidget(self.system_temperature_label)
         system_layout.addWidget(self.system_feedrate_label)
         system_layout.addWidget(self.system_force_label)
+        system_layout.addSpacing(10)
+        self.status_message_label = QLabel("")
+        self.status_message_label.setStyleSheet("color: #2980b9; font-style: italic;")
+        self.status_message_label.setWordWrap(False)
+        system_layout.addWidget(self.status_message_label)
+        self.extrusion_progress_bar = QProgressBar()
+        self.extrusion_progress_bar.setRange(0, 100)
+        self.extrusion_progress_bar.setValue(0)
+        self.extrusion_progress_bar.setFormat("挤出进度: %p%")
+        self.extrusion_progress_bar.setTextVisible(True)
+        system_layout.addWidget(self.extrusion_progress_bar)
         system_layout.addStretch()
         info_row.addWidget(system_block, 2)
 
@@ -342,7 +359,6 @@ class QualityCheckWidget(QWidget):
         props = self.get_current_material_properties()
         self.temperature_label.setText(f"温度: {props.get('temperature', '--')} °C")
         self.speed_label.setText(f"速度: {props.get('speed', '--')} mm/s")
-        self.expected_force_label.setText(f"预期挤出力: {props.get('expected_force', '--')} N")
         excellent_force_min, excellent_force_max = props.get("excellent_force_range", ("--", "--"))
         self.excellent_force_range_label.setText(
             f"优秀范围: {excellent_force_min} - {excellent_force_max} N"
@@ -370,6 +386,7 @@ class QualityCheckWidget(QWidget):
             self.time_cache.clear()
             self.current_time = 0
             self.system_force_label.setText("实时挤出力: -- N")
+            self.status_message_label.setText("")
             self.force_expectation_indicator.update_status("unknown")
             self.status_indicator.update_status("unknown")
             self.update_material_properties_display()
@@ -390,9 +407,34 @@ class QualityCheckWidget(QWidget):
             self.check_button.setText("开始质检")
             self.check_button.setStyleSheet("")
             self.data_timer.stop()
+            self._progress_timer.stop()
+            self.extrusion_progress_bar.setValue(0)
+            self.status_message_label.setText("")
             self.status_indicator.update_status("unknown")
             self.force_expectation_indicator.update_status("unknown")
             self.logger.info("Quality check stopped")
+
+    def set_status_message(self, msg: str):
+        self.status_message_label.setText(msg)
+
+    def start_extrusion_progress(self):
+        """Start the extrusion progress bar based on current material properties."""
+        props = self.get_current_material_properties()
+        speed = float(props.get("speed", 5))
+        extrude_length = float(props.get("quality_check_extrude_length_mm", speed * 60.0))
+        self._extrusion_duration_s = extrude_length / speed if speed > 0 else 60.0
+        self._progress_elapsed_ms = 0
+        self.extrusion_progress_bar.setValue(0)
+        self._progress_timer.start()
+        self.logger.info("Extrusion progress started, expected duration: %.1f s", self._extrusion_duration_s)
+
+    def _tick_extrusion_progress(self):
+        self._progress_elapsed_ms += 100
+        if self._extrusion_duration_s > 0:
+            pct = min(int(self._progress_elapsed_ms / (self._extrusion_duration_s * 1000) * 100), 100)
+            self.extrusion_progress_bar.setValue(pct)
+        if self._progress_elapsed_ms >= self._extrusion_duration_s * 1000:
+            self._progress_timer.stop()
 
     @Slot()
     def on_data_update_timeout(self):

@@ -43,7 +43,7 @@ def evaluate_force_window(force_values: Sequence[float], material_properties: di
     if len(force_values) < 10:
         return None
 
-    recent_values = [float(value) for value in force_values[-20:]]
+    recent_values = [float(value) for value in force_values[-200:]]
     mean = fmean(recent_values)
     std = pstdev(recent_values)
     stability_threshold = get_stability_threshold(material_properties)

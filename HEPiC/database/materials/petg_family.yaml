@@ -1,7 +1,6 @@
 # 1. 定义一个 PLA 的标准模板 (Base Template)
 _petg_base: &petg_default
   name: "PETG"
-  expected_force: 20.0
   excellent_force_range: [13.0, 27.0]
   force_range: [13.0, 27.0]
   temperature: 240
@@ -12,6 +11,5 @@ _petg_base: &petg_default
 G235:
   <<: *petg_default
   PI_Code: "G235"
-  expected_force: 20.0
   excellent_force_range: [13.0, 27.0]
   force_range: [13.0, 27.0]
