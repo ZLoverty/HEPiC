@@ -240,10 +240,6 @@ class MaterialDatabase:
             return float(force_range[0]), float(force_range[1])
         return (0.0, 0.0)
 
-    def get_expected_force(self, name: str) -> float:
-        material = self.get_material(name)
-        return float(material.get("expected_force", 0.0)) if material else 0.0
-
     def get_temperature(self, name: str) -> float:
         material = self.get_material(name)
         return float(material.get("temperature", 0.0)) if material else 0.0

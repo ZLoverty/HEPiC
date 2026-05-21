@@ -1,7 +1,6 @@
 # 1. 定义一个 PLA 的标准模板 (Base Template)
 _pla_base: &pla_default
   name: "PLA"
-  expected_force: 10.0
   excellent_force_range: [9.0, 11.0]
   force_range: [8.0, 12.0]
   temperature: 220
@@ -13,14 +12,12 @@ L1002:
   <<: *pla_default
   PI_Code: "L1002"
   speed: 6.7
-  expected_force: 12.5
   excellent_force_range: [10.0, 15.0]
   force_range: [10.0, 15.0]
 
 L3002:
   <<: *pla_default
   PI_Code: "L3002"
-  expected_force: 13.5
   excellent_force_range: [9.0, 18.0]
   force_range: [9.0, 18.0]
   speed: 5

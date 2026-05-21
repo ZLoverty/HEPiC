@@ -216,13 +216,11 @@ class QualityCheckWidget(QWidget):
 
         self.temperature_label = QLabel("温度: -- °C")
         self.speed_label = QLabel("速度: -- mm/s")
-        self.expected_force_label = QLabel("预期挤出力: -- N")
         self.excellent_force_range_label = QLabel("优秀范围: -- N")
         self.force_range_label = QLabel("合格范围: -- N")
         self.stability_threshold_label = QLabel("稳定阈值: -- N")
         material_layout.addWidget(self.temperature_label)
         material_layout.addWidget(self.speed_label)
-        material_layout.addWidget(self.expected_force_label)
         material_layout.addWidget(self.excellent_force_range_label)
         material_layout.addWidget(self.force_range_label)
         material_layout.addWidget(self.stability_threshold_label)
@@ -361,7 +359,6 @@ class QualityCheckWidget(QWidget):
         props = self.get_current_material_properties()
         self.temperature_label.setText(f"温度: {props.get('temperature', '--')} °C")
         self.speed_label.setText(f"速度: {props.get('speed', '--')} mm/s")
-        self.expected_force_label.setText(f"预期挤出力: {props.get('expected_force', '--')} N")
         excellent_force_min, excellent_force_max = props.get("excellent_force_range", ("--", "--"))
         self.excellent_force_range_label.setText(
             f"优秀范围: {excellent_force_min} - {excellent_force_max} N"
