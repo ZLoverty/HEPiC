@@ -324,6 +324,8 @@ class MainWindow(QMainWindow):
             self._start_quality_check_extrusion_progress()
         elif action == "STOP_QUALITY_CHECK":
             self._stop_quality_check_from_gcode()
+        elif action == "STATUS":
+            self._set_quality_check_status_message(response)
         else:
             self.logger.warning("Unsupported software action from G-code response: %s", action)
 
@@ -338,7 +340,7 @@ class MainWindow(QMainWindow):
             return ""
 
         first_token = normalized.split()[0].strip().upper()
-        supported_actions = {"START_RECORDING", "STOP_RECORDING", "START_QUALITY_CHECK", "STOP_QUALITY_CHECK"}
+        supported_actions = {"START_RECORDING", "STOP_RECORDING", "START_QUALITY_CHECK", "STOP_QUALITY_CHECK", "STATUS"}
         return first_token if first_token in supported_actions else ""
 
     def _set_recording_enabled_from_gcode(self, enabled: bool):
@@ -352,6 +354,18 @@ class MainWindow(QMainWindow):
             f"action: {'START_RECORDING' if enabled else 'STOP_RECORDING'}"
         )
         self.home_widget.play_pause_button.setChecked(enabled)
+
+    def _set_quality_check_status_message(self, response: str):
+        if not hasattr(self, "quality_check_widget") or self.quality_check_widget is None:
+            return
+        normalized = response.strip()
+        for prefix in ("//", "echo:", "action:"):
+            if normalized.lower().startswith(prefix.lower()):
+                normalized = normalized[len(prefix):].strip()
+        normalized = normalized.replace("\r", " ").replace("\n", " ").strip()
+        if normalized.upper().startswith("STATUS "):
+            msg = normalized[7:].strip()
+            self.quality_check_widget.set_status_message(msg)
 
     def _start_quality_check_extrusion_progress(self):
         if not hasattr(self, "quality_check_widget") or self.quality_check_widget is None:

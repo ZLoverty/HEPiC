@@ -236,6 +236,11 @@ class QualityCheckWidget(QWidget):
         system_layout.addWidget(self.system_temperature_label)
         system_layout.addWidget(self.system_feedrate_label)
         system_layout.addWidget(self.system_force_label)
+        system_layout.addSpacing(10)
+        self.status_message_label = QLabel("")
+        self.status_message_label.setStyleSheet("color: #2980b9; font-style: italic;")
+        self.status_message_label.setWordWrap(False)
+        system_layout.addWidget(self.status_message_label)
         self.extrusion_progress_bar = QProgressBar()
         self.extrusion_progress_bar.setRange(0, 100)
         self.extrusion_progress_bar.setValue(0)
@@ -384,6 +389,7 @@ class QualityCheckWidget(QWidget):
             self.time_cache.clear()
             self.current_time = 0
             self.system_force_label.setText("实时挤出力: -- N")
+            self.status_message_label.setText("")
             self.force_expectation_indicator.update_status("unknown")
             self.status_indicator.update_status("unknown")
             self.update_material_properties_display()
@@ -406,9 +412,13 @@ class QualityCheckWidget(QWidget):
             self.data_timer.stop()
             self._progress_timer.stop()
             self.extrusion_progress_bar.setValue(0)
+            self.status_message_label.setText("")
             self.status_indicator.update_status("unknown")
             self.force_expectation_indicator.update_status("unknown")
             self.logger.info("Quality check stopped")
+
+    def set_status_message(self, msg: str):
+        self.status_message_label.setText(msg)
 
     def start_extrusion_progress(self):
         """Start the extrusion progress bar based on current material properties."""
