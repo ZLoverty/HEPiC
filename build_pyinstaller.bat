@@ -13,6 +13,7 @@ echo [2/2] Building HEPiC...
 .venv\Scripts\python.exe -m PyInstaller ^
   --name HEPiC ^
   --windowed ^
+  --icon "assets\hepic.ico" ^
   --onedir ^
   --noconfirm ^
   --workpath build\pyinstaller ^
