@@ -1,13 +1,21 @@
 import asyncio
 import logging
-
-from HEPiC.communications.tcp_client import TCPClient
+import os
 
 from .broadcast import SensorBroadcaster
 from .config import Config
-from .workers.klipper import DeviceKlipperWorker
 
 logger = logging.getLogger(__name__)
+
+
+def _build_workers(config: Config):
+    if os.getenv("HEPIC_MOCK"):
+        from .mock import MockTCPClient, MockKlipperWorker
+        logger.info("HEPIC_MOCK enabled — using mock hardware workers")
+        return MockTCPClient(), MockKlipperWorker()
+    from HEPiC.communications.tcp_client import TCPClient
+    from .workers.klipper import DeviceKlipperWorker
+    return TCPClient(config.hepic_host, config.hepic_tcp_port), DeviceKlipperWorker(config.klipper_host, config.klipper_port)
 
 
 class AppState:
@@ -15,8 +23,7 @@ class AppState:
 
     def __init__(self, config: Config):
         self.config = config
-        self.tcp_client = TCPClient(config.hepic_host, config.hepic_tcp_port)
-        self.klipper = DeviceKlipperWorker(config.klipper_host, config.klipper_port)
+        self.tcp_client, self.klipper = _build_workers(config)
         self.broadcaster = SensorBroadcaster(
             self.tcp_client,
             self.klipper,

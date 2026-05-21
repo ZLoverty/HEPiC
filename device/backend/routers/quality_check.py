@@ -32,10 +32,10 @@ async def start_quality_check(body: QCStartRequest, request: Request):
 
 
 @router.websocket("/stream")
-async def qc_status_stream(websocket: WebSocket, request: Request):
+async def qc_status_stream(websocket: WebSocket):
     """Stream M118 gcode responses (STATUS, START/STOP_QUALITY_CHECK, etc.)."""
     await websocket.accept()
-    klipper = request.app.state.app_state.klipper
+    klipper = websocket.app.state.app_state.klipper
     q = klipper.subscribe_responses()
     try:
         while True:

@@ -1,15 +1,15 @@
 import asyncio
 
-from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 router = APIRouter()
 
 
 @router.websocket("/sensors")
-async def sensor_stream(websocket: WebSocket, request: Request):
+async def sensor_stream(websocket: WebSocket):
     """Stream real-time sensor + Klipper state as JSON at ~10 Hz."""
     await websocket.accept()
-    broadcaster = request.app.state.app_state.broadcaster
+    broadcaster = websocket.app.state.app_state.broadcaster
     q = broadcaster.subscribe()
     try:
         while True:

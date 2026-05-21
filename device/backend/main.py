@@ -37,7 +37,17 @@ app = create_app()
 
 
 def main():
+    import argparse
+    import os
     import uvicorn
+
+    parser = argparse.ArgumentParser(description="HEPiC device backend")
+    parser.add_argument("--mock", action="store_true", help="Use mock hardware workers (no Pi needed)")
+    args = parser.parse_args()
+
+    if args.mock:
+        os.environ["HEPIC_MOCK"] = "1"
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s — %(message)s",
