@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QProgressBar,
     QPushButton,
     QTextEdit,
     QVBoxLayout,
@@ -109,11 +110,18 @@ class QualityCheckWidget(QWidget):
         self.material_properties_initialized = False
         self.material_families = deepcopy(DEFAULT_MATERIAL_FAMILIES)
 
+        self._extrusion_duration_s = 0.0
+        self._progress_elapsed_ms = 0
+
         self.process_markdown = self._load_process_document()
         self.init_ui()
 
         self.data_timer = QTimer(self)
         self.data_timer.timeout.connect(self.on_data_update_timeout)
+
+        self._progress_timer = QTimer(self)
+        self._progress_timer.setInterval(100)
+        self._progress_timer.timeout.connect(self._tick_extrusion_progress)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -228,6 +236,12 @@ class QualityCheckWidget(QWidget):
         system_layout.addWidget(self.system_temperature_label)
         system_layout.addWidget(self.system_feedrate_label)
         system_layout.addWidget(self.system_force_label)
+        self.extrusion_progress_bar = QProgressBar()
+        self.extrusion_progress_bar.setRange(0, 100)
+        self.extrusion_progress_bar.setValue(0)
+        self.extrusion_progress_bar.setFormat("挤出进度: %p%")
+        self.extrusion_progress_bar.setTextVisible(True)
+        system_layout.addWidget(self.extrusion_progress_bar)
         system_layout.addStretch()
         info_row.addWidget(system_block, 2)
 
@@ -390,9 +404,30 @@ class QualityCheckWidget(QWidget):
             self.check_button.setText("开始质检")
             self.check_button.setStyleSheet("")
             self.data_timer.stop()
+            self._progress_timer.stop()
+            self.extrusion_progress_bar.setValue(0)
             self.status_indicator.update_status("unknown")
             self.force_expectation_indicator.update_status("unknown")
             self.logger.info("Quality check stopped")
+
+    def start_extrusion_progress(self):
+        """Start the extrusion progress bar based on current material properties."""
+        props = self.get_current_material_properties()
+        speed = float(props.get("speed", 5))
+        extrude_length = float(props.get("quality_check_extrude_length_mm", speed * 60.0))
+        self._extrusion_duration_s = extrude_length / speed if speed > 0 else 60.0
+        self._progress_elapsed_ms = 0
+        self.extrusion_progress_bar.setValue(0)
+        self._progress_timer.start()
+        self.logger.info("Extrusion progress started, expected duration: %.1f s", self._extrusion_duration_s)
+
+    def _tick_extrusion_progress(self):
+        self._progress_elapsed_ms += 100
+        if self._extrusion_duration_s > 0:
+            pct = min(int(self._progress_elapsed_ms / (self._extrusion_duration_s * 1000) * 100), 100)
+            self.extrusion_progress_bar.setValue(pct)
+        if self._progress_elapsed_ms >= self._extrusion_duration_s * 1000:
+            self._progress_timer.stop()
 
     @Slot()
     def on_data_update_timeout(self):

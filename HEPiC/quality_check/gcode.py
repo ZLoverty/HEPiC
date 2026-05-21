@@ -12,8 +12,8 @@ def build_quality_check_gcode(material_properties: dict) -> str:
     feedrate = max(float(speed_mms) * 60.0, 1.0)
     return "\n".join(
         [
-            "M118 START_QUALITY_CHECK",
             f"M109 S{float(temperature):.0f}",
+            "M118 START_QUALITY_CHECK",
             "M83",
             f"G1 E{float(extrude_length_mm):.2f} F{feedrate:.2f}",
             "M118 STOP_QUALITY_CHECK",

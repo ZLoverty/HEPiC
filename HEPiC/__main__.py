@@ -320,6 +320,8 @@ class MainWindow(QMainWindow):
             self._set_recording_enabled_from_gcode(True)
         elif action == "STOP_RECORDING":
             self._set_recording_enabled_from_gcode(False)
+        elif action == "START_QUALITY_CHECK":
+            self._start_quality_check_extrusion_progress()
         elif action == "STOP_QUALITY_CHECK":
             self._stop_quality_check_from_gcode()
         else:
@@ -336,7 +338,7 @@ class MainWindow(QMainWindow):
             return ""
 
         first_token = normalized.split()[0].strip().upper()
-        supported_actions = {"START_RECORDING", "STOP_RECORDING", "STOP_QUALITY_CHECK"}
+        supported_actions = {"START_RECORDING", "STOP_RECORDING", "START_QUALITY_CHECK", "STOP_QUALITY_CHECK"}
         return first_token if first_token in supported_actions else ""
 
     def _set_recording_enabled_from_gcode(self, enabled: bool):
@@ -350,6 +352,12 @@ class MainWindow(QMainWindow):
             f"action: {'START_RECORDING' if enabled else 'STOP_RECORDING'}"
         )
         self.home_widget.play_pause_button.setChecked(enabled)
+
+    def _start_quality_check_extrusion_progress(self):
+        if not hasattr(self, "quality_check_widget") or self.quality_check_widget is None:
+            return
+        if self.quality_check_widget.is_checking:
+            self.quality_check_widget.start_extrusion_progress()
 
     def _stop_quality_check_from_gcode(self):
         if not hasattr(self, "quality_check_widget") or self.quality_check_widget is None:
