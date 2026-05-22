@@ -1,8 +1,10 @@
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .config import load_config
 from .state import AppState
@@ -30,6 +32,12 @@ def create_app() -> FastAPI:
     app.include_router(materials.router,      prefix="/api/materials", tags=["materials"])
     app.include_router(quality_check.router,  prefix="/api/qc",        tags=["quality_check"])
     app.include_router(sensors.router,        prefix="/ws",            tags=["sensors"])
+
+    # Serve the built frontend. Must come last so API routes take priority.
+    static_dir = Path(__file__).parent / "static"
+    if static_dir.exists():
+        app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+
     return app
 
 
