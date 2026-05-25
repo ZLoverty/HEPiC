@@ -11,7 +11,6 @@ _pla_base: &pla_default
 L1002:
   <<: *pla_default
   PI_Code: "L1002"
-  speed: 6.7
   excellent_force_range: [10.0, 15.0]
   force_range: [10.0, 15.0]
 
