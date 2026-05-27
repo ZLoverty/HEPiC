@@ -164,6 +164,7 @@ class KlipperWorker(QObject):
                     "printer.objects.query",
                     "printer.emergency_stop",
                     "printer.restart",
+                    "printer.firmware_restart",
                 ]: # 发送 G-code
                     await websocket.send(json.dumps(data))
                 elif data["method"] == "notify_gcode_response":
@@ -308,7 +309,12 @@ class KlipperWorker(QObject):
     @asyncSlot()
     async def restart_firmware(self):
         self.logger.info("Restarting firmware ...")
-        await self.send_gcode("FIRMWARE_RESTART")
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "printer.firmware_restart",
+            "id": 7,
+        }
+        await self.message_queue.put(payload)
 
     @asyncSlot()
     async def printer_restart(self):
