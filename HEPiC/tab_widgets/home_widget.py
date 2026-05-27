@@ -6,6 +6,7 @@ from .command_widget import CommandWidget
 from .data_plot_widget import DataPlotWidget
 from .platform_status_widget import PlatformStatusWidget
 from .vision_widget import VisionWidget
+from .klipper_status_widget import KlipperStatusWidget
 import logging
 
 class HomeWidget(QWidget):
@@ -84,6 +85,7 @@ class HomeWidget(QWidget):
         # extrude, retract buttons
         self.extrude_button = QPushButton("挤出 10 mm")
         self.retract_button = QPushButton("回抽 10 mm")
+        self.klipper_status_widget = KlipperStatusWidget()
 
         # 布局
         layout = QHBoxLayout()
@@ -100,6 +102,10 @@ class HomeWidget(QWidget):
         control_button_layout.addWidget(self.restart_button)
         control_layout.addLayout(control_button_layout)
         data_layout = QVBoxLayout()
+        klipper_row = QHBoxLayout()
+        klipper_row.addStretch()
+        klipper_row.addWidget(self.klipper_status_widget)
+        data_layout.addLayout(klipper_row)
         status_and_vision_layout = QHBoxLayout()
         status_and_vision_layout.addWidget(self.status_widget)
         status_and_vision_layout.addWidget(self.dieswell_widget)
