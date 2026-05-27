@@ -21,6 +21,7 @@ class KlipperWorker(QObject):
     hotend_temperature = Signal(float)
     gcode_error = Signal(str)
     gcode_response = Signal(str)
+    sigKlipperState = Signal(str, str)  # (state, message)
 
     def __init__(self, host, port, query_delay=1):
         super().__init__()
@@ -157,7 +158,13 @@ class KlipperWorker(QObject):
             # 3. 我发送的 gcode 请求，包含 "method" 键，方法为 "printer.gcode.script"
             
             if "method" in data: 
-                if data["method"] in ["printer.gcode.script", "printer.objects.subscribe", "printer.objects.query", "printer.emergency_stop"]: # 发送 G-code
+                if data["method"] in [
+                    "printer.gcode.script",
+                    "printer.objects.subscribe",
+                    "printer.objects.query",
+                    "printer.emergency_stop",
+                    "printer.restart",
+                ]: # 发送 G-code
                     await websocket.send(json.dumps(data))
                 elif data["method"] == "notify_gcode_response":
                     response = data.get("params")[0]
@@ -179,6 +186,11 @@ class KlipperWorker(QObject):
                         self.active_feedrate_mms = sub_msg.get("motion_report", {}).get("live_extruder_velocity", 0.0)
                         self.progress = sub_msg.get("virtual_sdcard", {}).get("progress", 0.0)
                         self.file_position = sub_msg.get("virtual_sdcard", {}).get("file_position", 0.0)
+                        webhooks = sub_msg.get("webhooks", {})
+                        state = webhooks.get("state", "")
+                        message = webhooks.get("state_message", "")
+                        if state:
+                            self.sigKlipperState.emit(state, message)
             else:
                 self.logger.debug(data)
 
@@ -233,7 +245,8 @@ class KlipperWorker(QObject):
                 "objects": {
                     "extruder": None,
                     "motion_report": None,
-                    "virtual_sdcard": None
+                    "virtual_sdcard": None,
+                    "webhooks": None,
                 }
             },
             "id": 2
@@ -296,6 +309,16 @@ class KlipperWorker(QObject):
     async def restart_firmware(self):
         self.logger.info("Restarting firmware ...")
         await self.send_gcode("FIRMWARE_RESTART")
+
+    @asyncSlot()
+    async def printer_restart(self):
+        self.logger.info("Restarting Klipper ...")
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "printer.restart",
+            "id": 6,
+        }
+        await self.message_queue.put(payload)
 
     @asyncSlot()
     async def emergency_stop(self):

@@ -12,3 +12,4 @@ from .job_sequence_widget import JobSequenceWidget
 from .calibration_dialog import CalibrationDialog
 from .data_processor_widget import DataProcessorWidget
 from .quality_check_widget import QualityCheckWidget
+from .klipper_status_widget import KlipperStatusWidget

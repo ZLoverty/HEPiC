@@ -1,8 +1,9 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel, QMessageBox, QLabel, 
+    QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel, QMessageBox, QLabel,
 )
 from PySide6.QtCore import Signal, Slot
 from collections import deque
+from .klipper_status_widget import KlipperStatusWidget
 
 class ConnectionWidget(QWidget):
     """The front page of the app, user needs to input the IP address of Raspberry Pi"""
@@ -22,6 +23,7 @@ class ConnectionWidget(QWidget):
         self.self_test = QLabel("...")
         # self.disconnect_button = QPushButton("断开")
         # self.disconnect_button.setEnabled(False)
+        self.klipper_status_widget = KlipperStatusWidget()
 
         # 布局
         layout = QVBoxLayout()
@@ -29,11 +31,13 @@ class ConnectionWidget(QWidget):
         ip_layout.addWidget(self.ip_label)
         ip_layout.addWidget(self.ip_input)
         ip_layout.addWidget(self.connect_button)
-        message_layout = QHBoxLayout()
-        message_layout.addWidget(self.self_test)
+        bottom_layout = QHBoxLayout()
+        bottom_layout.addWidget(self.self_test)
+        bottom_layout.addStretch()
+        bottom_layout.addWidget(self.klipper_status_widget)
         layout.addLayout(ip_layout)
         layout.addStretch(1)
-        layout.addLayout(message_layout)
+        layout.addLayout(bottom_layout)
         self.setLayout(layout)
 
         # 信号槽连接
