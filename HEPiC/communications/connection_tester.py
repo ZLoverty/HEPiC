@@ -57,13 +57,19 @@ class ConnectionTester(QObject):
 
         # --- 新增步骤 4: 检查 Klipper 状态 ---
         self.test_msg.emit(f"[步骤 4/4] 正在查询 Klipper 状态...")
-        klipper_ok, klipper_state = await self._check_klipper_async()
-        if not klipper_ok:
-            self.test_msg.emit(f"❌ Klipper 状态异常: '{klipper_state}'")
+        klipper_reachable, klipper_state = await self._check_klipper_async()
+        if not klipper_reachable:
+            self.test_msg.emit(f"❌ 无法查询 Klipper 状态: '{klipper_state}'")
             self.fail.emit()
             return
 
-        self.test_msg.emit(f"✅ Klipper 状态为 '{klipper_state}'，一切就绪！")
+        if klipper_state == "ready":
+            self.test_msg.emit(f"✅ Klipper 状态为 '{klipper_state}'，一切就绪！")
+        elif klipper_state in ("shutdown", "error"):
+            self.test_msg.emit(f"⚠️ Klipper 处于 '{klipper_state}' 状态，将继续连接以允许固件重启。")
+        else:
+            self.test_msg.emit(f"⚠️ Klipper 状态为 '{klipper_state}'，继续连接...")
+
         self.test_msg.emit("所有检查通过，准备连接...")
         self.success.emit()
         
@@ -119,7 +125,11 @@ class ConnectionTester(QObject):
             return False
 
     async def _check_klipper_async(self):
-        """通过 Moonraker 查询 Klipper 的状态。"""
+        """通过 Moonraker 查询 Klipper 的状态。
+
+        返回 (reachable, state)，reachable 表示是否成功从 Moonraker 取得状态，
+        state 为 Klipper 的实际状态字符串。shutdown/error 等可恢复状态也视为可达。
+        """
         url = f"http://{self.host}:{self.moonraker_port}/printer/objects/query?webhooks"
         try:
             timeout = aiohttp.ClientTimeout(total=3)
@@ -127,12 +137,8 @@ class ConnectionTester(QObject):
                 async with session.get(url) as response:
                     if response.status == 200:
                         data = await response.json()
-                        # 安全地访问嵌套的字典
                         state = data.get("result", {}).get("status", {}).get("webhooks", {}).get("state", "未知")
-                        if state == "ready":
-                            return True, state
-                        else:
-                            return False, state
+                        return True, state
                     else:
                         return False, f"HTTP 错误码: {response.status}"
         except Exception as e:
