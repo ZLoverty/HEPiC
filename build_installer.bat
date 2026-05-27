@@ -43,8 +43,4 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo.
-echo ============================================
-echo  Done! Installer: installer_output\HEPiC_v1.2.0_Setup.exe
-echo ============================================
 pause
