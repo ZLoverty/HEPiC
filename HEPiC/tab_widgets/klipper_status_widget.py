@@ -52,6 +52,7 @@ class KlipperStatusWidget(QWidget):
         self.setLayout(layout)
 
         self._toggle_btn.clicked.connect(self._toggle_detail)
+        self.setVisible(False)
 
     def connect_worker(self, worker):
         worker.sigKlipperState.connect(self.on_state_changed)
@@ -71,6 +72,7 @@ class KlipperStatusWidget(QWidget):
         if not has_message:
             self._detail_label.setVisible(False)
             self._toggle_btn.setText("▼ 详情")
+        self.setVisible(state != "ready")
 
     def _toggle_detail(self):
         visible = not self._detail_label.isVisible()
