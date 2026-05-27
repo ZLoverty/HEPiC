@@ -1,0 +1,81 @@
+<script>
+  export let label     = '';
+  export let value     = null;   // raw number | null
+  export let unit      = '';
+  export let color     = '#5b8dee';
+  export let decimals  = 1;
+  export let secondary = null;   // small sub-line string | null
+
+  $: display = (value !== null && value !== undefined && isFinite(value))
+    ? Number(value).toFixed(decimals)
+    : '---';
+</script>
+
+<div class="card">
+  <span class="label">{label}</span>
+  <div class="row">
+    <span class="num" style="color:{color}; text-shadow:0 0 28px {color}4d">{display}</span>
+    <span class="unit">{unit}</span>
+  </div>
+  {#if secondary}
+    <span class="secondary">{secondary}</span>
+  {/if}
+</div>
+
+<style>
+  .card {
+    flex: 1;
+    padding: 10px 18px 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    border-bottom: 1px solid #2e3352;
+    background: #131623;
+    position: relative;
+    overflow: hidden;
+  }
+  /* subtle scanline texture */
+  .card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 3px,
+      rgba(0,0,0,0.045) 3px, rgba(0,0,0,0.045) 4px
+    );
+    pointer-events: none;
+  }
+  .label {
+    font-size: 10px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: #5a6380;
+    font-family: system-ui, sans-serif;
+  }
+  .row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    line-height: 1;
+  }
+  .num {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 46px;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    transition: color .3s;
+  }
+  .unit {
+    font-size: 13px;
+    color: #5a6380;
+    font-family: system-ui, sans-serif;
+    padding-bottom: 3px;
+  }
+  .secondary {
+    font-size: 11px;
+    color: #5a6380;
+    font-family: 'Courier New', Courier, monospace;
+    margin-top: 2px;
+  }
+</style>

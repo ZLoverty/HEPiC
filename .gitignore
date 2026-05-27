@@ -247,3 +247,8 @@ startup_error.log
 
 # Claude Code local settings (personal, not shared)
 .claude/settings.local.json
+
+# Frontend (device/)
+device/frontend/node_modules/
+device/frontend/.vite/
+device/backend/static/

@@ -115,5 +115,4 @@ class IRWorker(QObject):
 
     def stop(self):
         """Properly shuts down the worker."""
-        self._timer.stop()
-        self.thread().quit() # Stops the exec() loop
+        self.thread().quit()  # stops exec() loop; also stops all timers in that thread

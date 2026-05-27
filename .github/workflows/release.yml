@@ -36,6 +36,24 @@ jobs:
           echo "VERSION=$v" >> $env:GITHUB_ENV
           echo "version=$v" >> $env:GITHUB_OUTPUT
 
+      - name: Extract release notes
+        id: notes
+        run: |
+          $version = $env:VERSION
+          $parts = $version.Split('.')
+          $noteFile = "release_notes/v$($parts[0]).$($parts[1]).x.md"
+          $content = Get-Content $noteFile -Raw -Encoding UTF8
+          $pattern = "(?s)## v$([regex]::Escape($version))\s*\r?\n(.*?)(?=\r?\n## v|\z)"
+          if ($content -match $pattern) {
+            $notes = $Matches[1].Trim()
+          } else {
+            $notes = "_No release notes found for v${version}._"
+          }
+          # Write multiline value to GITHUB_OUTPUT
+          "notes<<NOTES_EOF" >> $env:GITHUB_OUTPUT
+          $notes >> $env:GITHUB_OUTPUT
+          "NOTES_EOF" >> $env:GITHUB_OUTPUT
+
       - name: Build with PyInstaller
         run: |
           python -m PyInstaller `
@@ -74,8 +92,8 @@ jobs:
             ### Installation
             Download `HEPiC_v${{ steps.version.outputs.version }}_Setup.exe` and run it.
 
-            ### Release Notes
-            See [CHANGELOG](https://github.com/${{ github.repository }}/blob/master/release_notes) for details.
+            ### What's New
+            ${{ steps.notes.outputs.notes }}
           files: installer_output/HEPiC_v${{ steps.version.outputs.version }}_Setup.exe
           draft: false
           prerelease: false

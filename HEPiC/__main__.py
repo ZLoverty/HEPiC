@@ -610,7 +610,8 @@ class MainWindow(QMainWindow):
             self.video_thread.wait()
         if self.ir_worker:
             self.ir_worker.stop()
-            self.ir_worker.deleteLater()
+        if self.ir_thread:
+            self.ir_thread.wait()
         if hasattr(self, "processing_worker") and self.processing_worker:
             self.processing_worker.stop()
         self.logger.info("正在关闭应用程序...")
