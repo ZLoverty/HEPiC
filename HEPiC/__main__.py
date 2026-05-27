@@ -290,6 +290,8 @@ class MainWindow(QMainWindow):
         self.job_sequence_widget.gcode_widget.sigActiveGcode.connect(self.klipper_worker.set_active_gcode)
         self.home_widget.sigExtrude.connect(self.klipper_worker.send_gcode)
         self.home_widget.sigRetract.connect(self.klipper_worker.send_gcode)
+        self.connection_widget.klipper_status_widget.connect_worker(self.klipper_worker)
+        self.home_widget.klipper_status_widget.connect_worker(self.klipper_worker)
 
         # Let all workers run
         tcp_task = self.worker.run()
