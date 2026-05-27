@@ -69,9 +69,8 @@ jobs:
             --add-data "HEPiC\database;HEPiC\database" `
             --hidden-import qasync `
             --collect-all pyqtgraph `
-            --collect-all myimagelib `
-            --copy-metadata pytz `
-            --copy-metadata pandas `
+            --collect-all pytz `
+            --collect-all pandas `
             run_hepic.py
 
       - name: Install Inno Setup
