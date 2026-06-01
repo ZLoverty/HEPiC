@@ -391,6 +391,18 @@ class MainWindow(QMainWindow):
             self.worker.zero_sensor(name)
         self.logger.info("All zeroable sensors zeroed via G-code action.")
 
+    def _refresh_displays(self):
+        """Poll shared frame buffers and update all video display widgets."""
+        if self.video_worker:
+            frame = self.video_worker.get_latest_frame()
+            if frame is not None:
+                self.vision_page_widget.vision_widget.update_live_display(frame)
+        if hasattr(self, "processing_worker") and self.processing_worker:
+            proc_frame = self.processing_worker.get_latest_proc_frame()
+            if proc_frame is not None:
+                self.vision_page_widget.roi_vision_widget.update_live_display(proc_frame)
+                self.home_widget.dieswell_widget.update_live_display(proc_frame)
+
     @Slot()
     def initiate_camera(self):
         """Try to initiate the Hikrobot camera. 
@@ -402,8 +414,6 @@ class MainWindow(QMainWindow):
             self.video_thread.setObjectName("VideoThread")
             self.video_worker.moveToThread(self.video_thread)
             self.hikcam_ok = True
-            # when a new frame is read by the video worker, send it over to the UI to display.
-            self.video_worker.new_frame_signal.connect(self.vision_page_widget.vision_widget.update_live_display)
 
             # if ROI has been changed in the UI, send it to the video worker, so that it can crop later images accordingly.
             self.vision_page_widget.vision_widget.sigRoiChanged.connect(self.video_worker.set_roi)
@@ -422,6 +432,9 @@ class MainWindow(QMainWindow):
             self.video_thread.finished.connect(self.video_thread.deleteLater)
 
             self.video_thread.start()
+            self._display_timer = QTimer(self)
+            self._display_timer.timeout.connect(self._refresh_displays)
+            self._display_timer.start(int(1000 / self.video_worker.fps))
             self._register_sensor_items(["die_diameter_px"])
             self.tabs.setTabVisible(self.tabs.indexOf(self.vision_page_widget), True)
             self.logger.info("熔体相机初始化成功！")
@@ -438,12 +451,6 @@ class MainWindow(QMainWindow):
 
             # send cropped images to the processing worker for image analysis.
             self.video_worker.roi_frame_signal.connect(self.processing_worker.add_frame_to_queue)
-
-            # the processed frame shall be sent to the home page of the UI for user to monitor.
-            self.processing_worker.proc_frame_signal.connect(self.vision_page_widget.roi_vision_widget.update_live_display)
-
-            # the result of the image analysis, here specifically the die melt diameter, shall be sent to the home page to display
-            self.processing_worker.proc_frame_signal.connect(self.home_widget.dieswell_widget.update_live_display)
 
             # allow user to invert the black and white to meet the image processing need in specific experiment.
             self.vision_page_widget.invert_button.toggled.connect(self.processing_worker.invert_toggle)
@@ -619,6 +626,8 @@ class MainWindow(QMainWindow):
         if self.klipper_worker:
             self.klipper_worker.stop()
             self.klipper_worker.deleteLater()
+        if hasattr(self, "_display_timer") and self._display_timer:
+            self._display_timer.stop()
         if self.video_thread:
             self.video_thread.quit()
             self.video_thread.wait()
