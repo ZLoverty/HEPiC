@@ -107,7 +107,9 @@ class VideoWorker(QObject):
     def stop(self):
         self.logger.debug("Stopping video worker thread.")
         self.is_running = False
-        self.cap.release()
+        if self.cap:
+            self.cap.release()
+            self.cap = None
 
     @Slot(float)
     def set_exp_time(self, exp_time):
@@ -117,13 +119,14 @@ class VideoWorker(QObject):
         exp_time : float
             exposure time in ms.
         """
-        self.cap.release()
-        while self.cap.is_open:
-            time.sleep(1)
         if self.test_mode:
             self.logger.warning("Test mode: exposure time setting will not have any effect.")
-        else:
-            self.cap = HikVideoCapture(width=512, height=512, exposure_time=exp_time*1000, center_roi=True)
+            return
+        if self.cap:
+            self.cap.release()
+            while getattr(self.cap, "is_open", False):
+                time.sleep(0.1)
+        self.cap = HikVideoCapture(width=512, height=512, exposure_time=exp_time*1000, center_roi=True)
 
 class ProcessingWorker(QObject):
     """Image processing utilities:

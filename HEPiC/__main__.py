@@ -636,13 +636,21 @@ class MainWindow(QMainWindow):
             self.klipper_worker.deleteLater()
         if hasattr(self, "_display_timer") and self._display_timer:
             self._display_timer.stop()
+        if self.video_worker:
+            self.video_worker.stop()
         if self.video_thread:
             self.video_thread.quit()
-            self.video_thread.wait()
+            if not self.video_thread.wait(3000):
+                self.logger.warning("Video thread did not exit cleanly, terminating.")
+                self.video_thread.terminate()
+                self.video_thread.wait(1000)
         if self.ir_worker:
             self.ir_worker.stop()
         if self.ir_thread:
-            self.ir_thread.wait()
+            if not self.ir_thread.wait(3000):
+                self.logger.warning("IR thread did not exit cleanly, terminating.")
+                self.ir_thread.terminate()
+                self.ir_thread.wait(1000)
         if hasattr(self, "processing_worker") and self.processing_worker:
             self.processing_worker.stop()
         self.logger.info("正在关闭应用程序...")
