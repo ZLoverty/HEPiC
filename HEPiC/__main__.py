@@ -167,6 +167,8 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.job_sequence_widget, "G-code")
         self.tabs.addTab(self.data_processor_widget, "数据处理")
         self.tabs.addTab(self.quality_check_widget, "质检模式")
+        self.tabs.setTabVisible(self.tabs.indexOf(self.vision_page_widget), False)
+        self.tabs.setTabVisible(self.tabs.indexOf(self.ir_page_widget), False)
         self.setCentralWidget(self.stacked_widget)
 
         # 设置状态栏
@@ -412,6 +414,7 @@ class MainWindow(QMainWindow):
 
             self.video_thread.start()
             self._register_sensor_items(["die_diameter_px"])
+            self.tabs.setTabVisible(self.tabs.indexOf(self.vision_page_widget), True)
             self.logger.info("熔体相机初始化成功！")
 
         except Exception as e:
@@ -476,6 +479,7 @@ class MainWindow(QMainWindow):
 
             self.ir_thread.start()
             self._register_sensor_items(["die_temperature_C"])
+            self.tabs.setTabVisible(self.tabs.indexOf(self.ir_page_widget), True)
 
         except Exception as e:
             if self.test_mode:
