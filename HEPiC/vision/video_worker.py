@@ -3,7 +3,7 @@ import sys
 current_path = Path(__file__).resolve().parent
 sys.path.append(str(current_path))
 
-from PySide6.QtCore import QObject, Signal, Slot, QTimer, QThread
+from PySide6.QtCore import QObject, Signal, Slot, QTimer, QThread, QMutex, QMutexLocker
 import numpy as np
 import os
 from vision_utils import binarize, filament_diameter, convert_to_grayscale, draw_filament_contour, ImageStreamer
@@ -50,6 +50,9 @@ class VideoWorker(QObject):
         
         self.fps = 10
         self.frame = None
+        self._frame_mutex = QMutex()
+        self._latest_frame = None
+        self._latest_roi_frame = None
         self.logger = logging.getLogger(__name__)
             
     def run(self):
@@ -70,15 +73,21 @@ class VideoWorker(QObject):
             self.frame = frame
 
     def get_frame(self):
-        """Emit current frame and roi at the specified fps."""
+        """Update shared frame buffer and emit roi frame for processing."""
         if self.frame is not None:
-            self.new_frame_signal.emit(self.frame)
-            if self.roi is None:
-                # if ROI is not set, show the whole frame in the ROI panel
-                self.roi_frame_signal.emit(self.frame)
-            else:
-                x, y, w, h = self.roi
-                self.roi_frame_signal.emit(self.frame[y:y+h, x:x+w])
+            roi_frame = self.frame if self.roi is None else self.frame[self.roi[1]:self.roi[1]+self.roi[3], self.roi[0]:self.roi[0]+self.roi[2]]
+            with QMutexLocker(self._frame_mutex):
+                self._latest_frame = self.frame
+                self._latest_roi_frame = roi_frame
+            self.roi_frame_signal.emit(roi_frame)
+
+    def get_latest_frame(self) -> np.ndarray | None:
+        with QMutexLocker(self._frame_mutex):
+            return self._latest_frame
+
+    def get_latest_roi_frame(self) -> np.ndarray | None:
+        with QMutexLocker(self._frame_mutex):
+            return self._latest_roi_frame
 
     @Slot(tuple)
     def set_roi(self, roi):
@@ -98,7 +107,9 @@ class VideoWorker(QObject):
     def stop(self):
         self.logger.debug("Stopping video worker thread.")
         self.is_running = False
-        self.cap.release()
+        if self.cap:
+            self.cap.release()
+            self.cap = None
 
     @Slot(float)
     def set_exp_time(self, exp_time):
@@ -108,13 +119,14 @@ class VideoWorker(QObject):
         exp_time : float
             exposure time in ms.
         """
-        self.cap.release()
-        while self.cap.is_open:
-            time.sleep(1)
         if self.test_mode:
             self.logger.warning("Test mode: exposure time setting will not have any effect.")
-        else:
-            self.cap = HikVideoCapture(width=512, height=512, exposure_time=exp_time*1000, center_roi=True)
+            return
+        if self.cap:
+            self.cap.release()
+            while getattr(self.cap, "is_open", False):
+                time.sleep(0.1)
+        self.cap = HikVideoCapture(width=512, height=512, exposure_time=exp_time*1000, center_roi=True)
 
 class ProcessingWorker(QObject):
     """Image processing utilities:
@@ -135,6 +147,7 @@ class ProcessingWorker(QObject):
         self.is_running = False
         self.image_queue = asyncio.Queue(maxsize=10)
         self.clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4,4))
+        self._latest_proc_frame: np.ndarray | None = None
         
     
     async def run(self):
@@ -192,13 +205,18 @@ class ProcessingWorker(QObject):
             proc_frame = draw_filament_contour(gray, skeleton_refine, diameter_refine)
             t1 = time.time()
             self.logger.debug(f"Visualizing extrudate contour took {t1 - t0:.3f} seconds.")
+            self._latest_proc_frame = proc_frame
             self.proc_frame_signal.emit(proc_frame)
             self.die_diameter = diameter_refine
         except ValueError as e:
             # 已知纯色图片会导致检测失败，在此情况下可以不必报错继续运行，将出口直径记为 np.nan 即可
             self.logger.warning(f"图像无法处理: {e}")
+            self._latest_proc_frame = binary
             self.proc_frame_signal.emit(binary)
     
+    def get_latest_proc_frame(self) -> np.ndarray | None:
+        return self._latest_proc_frame
+
     @Slot(bool)
     def invert_toggle(self, checked):
         """Sometimes the filament is the darker part of the image and background is brighter. In such cases, we may invert the binary image to make the algorithm work correctly. This is a toggle for the user to manually switch on/off whether to invert."""

@@ -167,6 +167,8 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.job_sequence_widget, "G-code")
         self.tabs.addTab(self.data_processor_widget, "数据处理")
         self.tabs.addTab(self.quality_check_widget, "质检模式")
+        self.tabs.setTabVisible(self.tabs.indexOf(self.vision_page_widget), False)
+        self.tabs.setTabVisible(self.tabs.indexOf(self.ir_page_widget), False)
         self.setCentralWidget(self.stacked_widget)
 
         # 设置状态栏
@@ -327,6 +329,8 @@ class MainWindow(QMainWindow):
             self._stop_quality_check_from_gcode()
         elif action == "STATUS":
             self._set_quality_check_status_message(response)
+        elif action == "ZERO_SENSORS":
+            self._zero_all_sensors_from_gcode()
         else:
             self.logger.warning("Unsupported software action from G-code response: %s", action)
 
@@ -341,7 +345,7 @@ class MainWindow(QMainWindow):
             return ""
 
         first_token = normalized.split()[0].strip().upper()
-        supported_actions = {"START_RECORDING", "STOP_RECORDING", "START_QUALITY_CHECK", "STOP_QUALITY_CHECK", "STATUS"}
+        supported_actions = {"START_RECORDING", "STOP_RECORDING", "START_QUALITY_CHECK", "STOP_QUALITY_CHECK", "STATUS", "ZERO_SENSORS"}
         return first_token if first_token in supported_actions else ""
 
     def _set_recording_enabled_from_gcode(self, enabled: bool):
@@ -380,6 +384,35 @@ class MainWindow(QMainWindow):
         if self.quality_check_widget.is_checking:
             self.quality_check_widget.on_quality_check_clicked()
 
+    def _zero_all_sensors_from_gcode(self):
+        if not self.worker:
+            return
+        self.home_widget.command_widget.display_message(
+            f"action: {'ZERO_SENSORS'}"
+        )
+        for name in self.worker.get_zeroable_sensor_names():  
+            self.worker.zero_sensor(name)
+        self.logger.info("All zeroable sensors zeroed via G-code action.")
+
+    def _refresh_displays(self):
+        """Poll shared frame buffers and update all video display widgets."""
+        if self.video_worker:
+            frame = self.video_worker.get_latest_frame()
+            if frame is not None:
+                self.vision_page_widget.vision_widget.update_live_display(frame)
+        if hasattr(self, "processing_worker") and self.processing_worker:
+            proc_frame = self.processing_worker.get_latest_proc_frame()
+            if proc_frame is not None:
+                self.vision_page_widget.roi_vision_widget.update_live_display(proc_frame)
+                self.home_widget.dieswell_widget.update_live_display(proc_frame)
+        if self.ir_worker:
+            ir_frame = self.ir_worker.get_latest_frame()
+            if ir_frame is not None:
+                self.ir_page_widget.image_widget.update_live_display(ir_frame)
+            ir_roi = self.ir_worker.get_latest_roi_frame()
+            if ir_roi is not None:
+                self.home_widget.ir_roi_widget.update_live_display(ir_roi)
+
     @Slot()
     def initiate_camera(self):
         """Try to initiate the Hikrobot camera. 
@@ -391,8 +424,6 @@ class MainWindow(QMainWindow):
             self.video_thread.setObjectName("VideoThread")
             self.video_worker.moveToThread(self.video_thread)
             self.hikcam_ok = True
-            # when a new frame is read by the video worker, send it over to the UI to display.
-            self.video_worker.new_frame_signal.connect(self.vision_page_widget.vision_widget.update_live_display)
 
             # if ROI has been changed in the UI, send it to the video worker, so that it can crop later images accordingly.
             self.vision_page_widget.vision_widget.sigRoiChanged.connect(self.video_worker.set_roi)
@@ -411,7 +442,11 @@ class MainWindow(QMainWindow):
             self.video_thread.finished.connect(self.video_thread.deleteLater)
 
             self.video_thread.start()
+            self._display_timer = QTimer(self)
+            self._display_timer.timeout.connect(self._refresh_displays)
+            self._display_timer.start(int(1000 / self.video_worker.fps))
             self._register_sensor_items(["die_diameter_px"])
+            self.tabs.setTabVisible(self.tabs.indexOf(self.vision_page_widget), True)
             self.logger.info("熔体相机初始化成功！")
 
         except Exception as e:
@@ -426,12 +461,6 @@ class MainWindow(QMainWindow):
 
             # send cropped images to the processing worker for image analysis.
             self.video_worker.roi_frame_signal.connect(self.processing_worker.add_frame_to_queue)
-
-            # the processed frame shall be sent to the home page of the UI for user to monitor.
-            self.processing_worker.proc_frame_signal.connect(self.vision_page_widget.roi_vision_widget.update_live_display)
-
-            # the result of the image analysis, here specifically the die melt diameter, shall be sent to the home page to display
-            self.processing_worker.proc_frame_signal.connect(self.home_widget.dieswell_widget.update_live_display)
 
             # allow user to invert the black and white to meet the image processing need in specific experiment.
             self.vision_page_widget.invert_button.toggled.connect(self.processing_worker.invert_toggle)
@@ -450,14 +479,8 @@ class MainWindow(QMainWindow):
             self.ir_thread.setObjectName("IRThread")
             self.ir_worker.moveToThread(self.ir_thread)
 
-            # when IR worker receives a new frame, send it to the IR page to shown on the canvas
-            self.ir_worker.sigNewFrame.connect(self.ir_page_widget.image_widget.update_live_display)
-
             # if user draw an ROI on the canvas, send the ROI info to the IR worker, so that in the future, the worker can crop the later frames
             self.ir_page_widget.image_widget.sigRoiChanged.connect(self.ir_worker.set_roi)
-
-            # cropped frames inside ROI will be sent to the preview widget in home page
-            self.ir_worker.sigRoiFrame.connect(self.home_widget.ir_roi_widget.update_live_display)
 
             # use a thread to handle the image reading and showing loop
             self.ir_thread.started.connect(self.ir_worker.run)
@@ -476,6 +499,7 @@ class MainWindow(QMainWindow):
 
             self.ir_thread.start()
             self._register_sensor_items(["die_temperature_C"])
+            self.tabs.setTabVisible(self.tabs.indexOf(self.ir_page_widget), True)
 
         except Exception as e:
             if self.test_mode:
@@ -484,6 +508,10 @@ class MainWindow(QMainWindow):
                 self.logger.warning(f"初始化热成像仪失败，热成像仪不可用: {e}")
             self.ir_worker = None
             
+        if not hasattr(self, "_display_timer") or self._display_timer is None:
+            self._display_timer = QTimer(self)
+            self._display_timer.timeout.connect(self._refresh_displays)
+            self._display_timer.start(100)  # 10 fps display refresh
         self.show_UI(1) # show main UI anyway
         self.status_timer.start(int(self.time_delay_status * 1000))
         self._timer.start(int(self.time_delay*1000))
@@ -606,13 +634,23 @@ class MainWindow(QMainWindow):
         if self.klipper_worker:
             self.klipper_worker.stop()
             self.klipper_worker.deleteLater()
+        if hasattr(self, "_display_timer") and self._display_timer:
+            self._display_timer.stop()
+        if self.video_worker:
+            self.video_worker.stop()
         if self.video_thread:
             self.video_thread.quit()
-            self.video_thread.wait()
+            if not self.video_thread.wait(500):
+                self.logger.warning("Video thread did not exit cleanly, terminating.")
+                self.video_thread.terminate()
+                self.video_thread.wait(500)
         if self.ir_worker:
             self.ir_worker.stop()
         if self.ir_thread:
-            self.ir_thread.wait()
+            if not self.ir_thread.wait(500):
+                self.logger.warning("IR thread did not exit cleanly, terminating.")
+                self.ir_thread.terminate()
+                self.ir_thread.wait(500)
         if hasattr(self, "processing_worker") and self.processing_worker:
             self.processing_worker.stop()
         self.logger.info("正在关闭应用程序...")

@@ -58,32 +58,29 @@ class JobSequenceDialog(QDialog):
         """返回用户输入的数据"""
 
         job_sequence_list = [
-            "M118 Set to relative mode",
+            "M118 开启相对运动模式",
             "G91",
-            "M118 Nozzle heating"
+            "M118 正在加热"
         ]
 
         Ts = np.linspace(float(self.tmin_input.text()), float(self.tmax_input.text()), self.tnum_input.value())
         Vs = np.linspace(float(self.vmin_input.text()), float(self.vmax_input.text()), self.vnum_input.value())
         t_each = float(self.tstep_input.text())
-
-        # adjusting temperature to the first temperature of the real test
-        job_sequence_list.extend([
-            "M118 adjusting temperature to real test ...",
-        ])
             
         for num, T in enumerate(Ts):
             job_sequence_list.append(f"M109 S{T:.2f}")
             if num == 0:
                 job_sequence_list.extend([
                     "M400",
-                    "M118 Temperature reached. Programmed test starts in 3 seconds.",
+                    "M118 正在归零传感器 ...",
+                    "G1 E-10 F600",
+                    "M400",
                     "G4 P2000",
-                    "M118 If you'd like to record the test, please start recording now.",
-                    "G4 P1500",
-                    "M118 Make sure to zero extrusion force and meter values.",
-                    "G4 P1500",
-                    "M118 Starting test in 3 seconds ...",
+                    "M118 ZERO_SENSORS",
+                    "G4 P500",
+                    "G1 E10 F100",
+                    "M400",
+                    "M118 测试将在三秒后开始，记录数据将自动启动 ...",
                     "G4 P1000",
                     "M118 3 ...",
                     "M400",
@@ -93,7 +90,7 @@ class JobSequenceDialog(QDialog):
                     "G4 P1000",
                     "M118 1 ...",
                     "M400",
-                    "M118 -- Test starts now! --",
+                    "M118 -- 测试开始! --",
                     "M118 START_RECORDING"
                 ])
             for V in Vs:

@@ -93,7 +93,7 @@ class GcodeWidget(QWidget):
 
     def on_click_run(self):
         self.file_path = Path(__file__).resolve().parent / "tmp.gcode"
-        with open(self.file_path, "w") as f:
+        with open(self.file_path, "w", encoding="utf-8") as f:
             f.write(self.gcode)
 
         if self.file_path:

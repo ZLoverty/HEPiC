@@ -4,7 +4,7 @@ communications.py
 Handles serial port / IP communications.
 """
 from pathlib import Path
-from PySide6.QtCore import QObject, Signal, QTimer, Slot
+from PySide6.QtCore import QObject, Signal, QTimer, Slot, QMutex, QMutexLocker
 import numpy as np
 from vision_utils import ImageStreamer
 import logging
@@ -32,6 +32,9 @@ class IRWorker(QObject):
         self.die_temperature = np.nan
         self._timer = QTimer(self)
         self.cap = None
+        self._frame_mutex = QMutex()
+        self._latest_frame: np.ndarray | None = None
+        self._latest_roi_frame: np.ndarray | None = None
 
         # logging 
         self.logger = logging.getLogger(__name__)
@@ -77,17 +80,26 @@ class IRWorker(QObject):
         ret_img, frame = self.cap.read(timeout=0.1)
         ret_temp, temps = self.cap.read_temp(timeout=0.1)
         if ret_img and ret_temp:
-            self.sigNewFrame.emit(frame)
             if self.roi is None:
-                # if ROI is not set, use the whole frame as ROI
-                self.sigRoiFrame.emit(frame)
+                roi_frame = frame
                 self.die_temperature = temps.max()
             else:
                 x, y, w, h = self.roi
-                self.sigRoiFrame.emit(frame[y:y+h, x:x+w])
+                roi_frame = frame[y:y+h, x:x+w]
                 self.die_temperature = temps[y:y+h, x:x+w].max()
+            with QMutexLocker(self._frame_mutex):
+                self._latest_frame = frame
+                self._latest_roi_frame = roi_frame
         else:
             self.logger.warning("Fail to read frame.")
+
+    def get_latest_frame(self) -> np.ndarray | None:
+        with QMutexLocker(self._frame_mutex):
+            return self._latest_frame
+
+    def get_latest_roi_frame(self) -> np.ndarray | None:
+        with QMutexLocker(self._frame_mutex):
+            return self._latest_roi_frame
 
     @Slot(tuple)
     def set_roi(self, roi):
