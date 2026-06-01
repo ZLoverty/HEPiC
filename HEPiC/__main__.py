@@ -402,6 +402,13 @@ class MainWindow(QMainWindow):
             if proc_frame is not None:
                 self.vision_page_widget.roi_vision_widget.update_live_display(proc_frame)
                 self.home_widget.dieswell_widget.update_live_display(proc_frame)
+        if self.ir_worker:
+            ir_frame = self.ir_worker.get_latest_frame()
+            if ir_frame is not None:
+                self.ir_page_widget.image_widget.update_live_display(ir_frame)
+            ir_roi = self.ir_worker.get_latest_roi_frame()
+            if ir_roi is not None:
+                self.home_widget.ir_roi_widget.update_live_display(ir_roi)
 
     @Slot()
     def initiate_camera(self):
@@ -469,14 +476,8 @@ class MainWindow(QMainWindow):
             self.ir_thread.setObjectName("IRThread")
             self.ir_worker.moveToThread(self.ir_thread)
 
-            # when IR worker receives a new frame, send it to the IR page to shown on the canvas
-            self.ir_worker.sigNewFrame.connect(self.ir_page_widget.image_widget.update_live_display)
-
             # if user draw an ROI on the canvas, send the ROI info to the IR worker, so that in the future, the worker can crop the later frames
             self.ir_page_widget.image_widget.sigRoiChanged.connect(self.ir_worker.set_roi)
-
-            # cropped frames inside ROI will be sent to the preview widget in home page
-            self.ir_worker.sigRoiFrame.connect(self.home_widget.ir_roi_widget.update_live_display)
 
             # use a thread to handle the image reading and showing loop
             self.ir_thread.started.connect(self.ir_worker.run)
@@ -504,6 +505,10 @@ class MainWindow(QMainWindow):
                 self.logger.warning(f"初始化热成像仪失败，热成像仪不可用: {e}")
             self.ir_worker = None
             
+        if not hasattr(self, "_display_timer") or self._display_timer is None:
+            self._display_timer = QTimer(self)
+            self._display_timer.timeout.connect(self._refresh_displays)
+            self._display_timer.start(100)  # 10 fps display refresh
         self.show_UI(1) # show main UI anyway
         self.status_timer.start(int(self.time_delay_status * 1000))
         self._timer.start(int(self.time_delay*1000))
