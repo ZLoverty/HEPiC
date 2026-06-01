@@ -640,17 +640,17 @@ class MainWindow(QMainWindow):
             self.video_worker.stop()
         if self.video_thread:
             self.video_thread.quit()
-            if not self.video_thread.wait(3000):
+            if not self.video_thread.wait(500):
                 self.logger.warning("Video thread did not exit cleanly, terminating.")
                 self.video_thread.terminate()
-                self.video_thread.wait(1000)
+                self.video_thread.wait(500)
         if self.ir_worker:
             self.ir_worker.stop()
         if self.ir_thread:
-            if not self.ir_thread.wait(3000):
+            if not self.ir_thread.wait(500):
                 self.logger.warning("IR thread did not exit cleanly, terminating.")
                 self.ir_thread.terminate()
-                self.ir_thread.wait(1000)
+                self.ir_thread.wait(500)
         if hasattr(self, "processing_worker") and self.processing_worker:
             self.processing_worker.stop()
         self.logger.info("正在关闭应用程序...")
