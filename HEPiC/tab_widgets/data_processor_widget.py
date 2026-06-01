@@ -42,6 +42,9 @@ class DataProcessorWidget(QWidget):
         control_layout.addWidget(self.log_widget)
         layout.addWidget(self.plot_widget)
         self.setLayout(layout)
+
+        # set visibility
+        self.clean_button.setVisible(False)
         
         # connect signals to slots
         self.open_csv_button.clicked.connect(self.open_csv_file)
@@ -83,6 +86,7 @@ class DataProcessorWidget(QWidget):
             self.log_widget.update_log(
                 f"Loaded CSV file: {file_path} (rows={len(self.df)}, columns={len(self.df.columns)})"
             )
+            self.clean_data()
         except Exception as exc:
             self.log_widget.update_log(f"Failed to load CSV file: {file_path}, error: {exc}")
             self.df = None
