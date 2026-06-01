@@ -329,6 +329,8 @@ class MainWindow(QMainWindow):
             self._stop_quality_check_from_gcode()
         elif action == "STATUS":
             self._set_quality_check_status_message(response)
+        elif action == "ZERO_SENSORS":
+            self._zero_all_sensors_from_gcode()
         else:
             self.logger.warning("Unsupported software action from G-code response: %s", action)
 
@@ -343,7 +345,7 @@ class MainWindow(QMainWindow):
             return ""
 
         first_token = normalized.split()[0].strip().upper()
-        supported_actions = {"START_RECORDING", "STOP_RECORDING", "START_QUALITY_CHECK", "STOP_QUALITY_CHECK", "STATUS"}
+        supported_actions = {"START_RECORDING", "STOP_RECORDING", "START_QUALITY_CHECK", "STOP_QUALITY_CHECK", "STATUS", "ZERO_SENSORS"}
         return first_token if first_token in supported_actions else ""
 
     def _set_recording_enabled_from_gcode(self, enabled: bool):
@@ -381,6 +383,13 @@ class MainWindow(QMainWindow):
             return
         if self.quality_check_widget.is_checking:
             self.quality_check_widget.on_quality_check_clicked()
+
+    def _zero_all_sensors_from_gcode(self):
+        if not self.worker:
+            return
+        for name in self.worker.get_zeroable_sensor_names():
+            self.worker.zero_sensor(name)
+        self.logger.info("All zeroable sensors zeroed via G-code action.")
 
     @Slot()
     def initiate_camera(self):
