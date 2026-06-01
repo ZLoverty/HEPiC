@@ -387,10 +387,10 @@ class MainWindow(QMainWindow):
     def _zero_all_sensors_from_gcode(self):
         if not self.worker:
             return
-        for name in self.worker.get_zeroable_sensor_names():
-            self.home_widget.command_widget.display_message(
-                f"action: {'ZERO_SENSORS'}"
-            )
+        self.home_widget.command_widget.display_message(
+            f"action: {'ZERO_SENSORS'}"
+        )
+        for name in self.worker.get_zeroable_sensor_names():  
             self.worker.zero_sensor(name)
         self.logger.info("All zeroable sensors zeroed via G-code action.")
 
