@@ -521,14 +521,14 @@ class MainWindow(QMainWindow):
         if checked: 
             self.home_widget.play_pause_button.setIcon(self.home_widget.pause_icon)
             self.autosave_prefix = datetime.now().strftime("%Y%m%d_%H%M%S")
-            self.autosave_filename = Path(f"{self.autosave_prefix}_autosave.csv").resolve()
+            self.autosave_filename = Path(f"~/Desktop/{self.autosave_prefix}_autosave.csv").expanduser()
             
             self.logger.info("开始记录数据 ...")
             self.statusBar().showMessage(f"文件路径：{self.autosave_filename}")
             self.is_recording = True
             if self.record_timelapse and self.video_worker:
                 # init video recorder
-                self.autosave_video_filename = Path(f"{self.autosave_prefix}_video.mkv").resolve()
+                self.autosave_video_filename = Path(f"~/Desktop/{self.autosave_prefix}_video.mkv").expanduser()
                 self.video_recorder_thread = VideoRecorder(self.autosave_video_filename, *self.frame_size, fps=self.video_worker.get_fps())
                 self.processing_worker.proc_frame_signal.connect(self.video_recorder_thread.add_frame)
                 self.video_recorder_thread.start()
