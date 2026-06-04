@@ -66,6 +66,9 @@ class VisionWidget(pg.GraphicsLayoutWidget):
          
     def mousePressEvent(self, event):
         # pyqtgraph 内部会处理好 PyQt/PySide 的差异，所以这部分逻辑不变
+        if self.mode == "view":
+            super().mousePressEvent(event)
+            return
         
         if event.button() == pg.QtCore.Qt.MouseButton.LeftButton:
             pos = event.position()
