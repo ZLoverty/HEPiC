@@ -27,6 +27,7 @@ from .app_config import (
 )
 from . import __app_name__, __version__
 import asyncio
+import time
 from qasync import asyncSlot, QEventLoop
 import numpy as np
 import pandas as pd
@@ -104,7 +105,6 @@ class MainWindow(QMainWindow):
         self.time_delay_status = 1 / self.status_frequency
         self.hikcam_ok = False
         self.init_data()
-        self.current_time = 0
         
         self.first_row = True
         self.worker = None
@@ -193,6 +193,7 @@ class MainWindow(QMainWindow):
         
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
+        self._session_start = time.monotonic()
         existing_sensor_items = list(getattr(self, "sensor_data_items", []))
         self.base_data_items = [
             "time_s",
@@ -254,7 +255,7 @@ class MainWindow(QMainWindow):
         # 数据端口暂定 10001
 
         # 1. 创建异步 Worker 实例
-        self.connection_tester = ConnectionTester(self.host, self.port)
+        self.connection_tester = ConnectionTester(self.host, self.port, test_mode=self.test_mode)
 
         # 2. 连接信号和槽
         self.connection_tester.test_msg.connect(self.connection_widget.update_self_test)
@@ -282,7 +283,7 @@ class MainWindow(QMainWindow):
         
         # 创建 klipper worker（用于查询平台状态和发送动作指令）
         klipper_port = 7125
-        self.klipper_worker = KlipperWorker(self.host, klipper_port, query_delay=self.klipper_query_delay)
+        self.klipper_worker = KlipperWorker(self.host, klipper_port, query_delay=self.klipper_query_delay, test_mode=self.test_mode)
         # 连接信号槽
         self.klipper_worker.connection_status.connect(self.update_status)
         self.klipper_worker.gcode_response.connect(self.home_widget.command_widget.display_message)
@@ -567,8 +568,6 @@ class MainWindow(QMainWindow):
         for item in self.data_tmp:
             self.data_tmp[item].append(self.data_status[item])
             self.data[item].append(self.data_status[item])
-
-        self.current_time += self.time_delay # current time step forward
         
         # save additional data to file
         if len(self.data_tmp["time_s"]) >= self.tmp_data_maxlen and self.is_recording:
@@ -613,7 +612,7 @@ class MainWindow(QMainWindow):
             elif item == "measured_feedrate_mms":
                 self.data_status[item] = latest_sensor.get("measured_feedrate_mms", np.nan)
             elif item == "time_s":
-                self.data_status[item] = self.current_time
+                self.data_status[item] = time.monotonic() - self._session_start
             elif item == "gcode":
                 if self.klipper_worker:
                     self.data_status[item] = self.klipper_worker.active_gcode

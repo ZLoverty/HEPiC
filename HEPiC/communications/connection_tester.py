@@ -11,11 +11,12 @@ class ConnectionTester(QObject):
     success = Signal() 
     fail = Signal()
 
-    def __init__(self, host, port):
+    def __init__(self, host, port, test_mode=False):
         super().__init__()
         self.host = host
         self.port = port
         self.moonraker_port = 7125
+        self.test_mode = test_mode
     
     # 1. 将 run 方法改为 @asyncSlot
     @asyncSlot()
@@ -45,6 +46,11 @@ class ConnectionTester(QObject):
             self.fail.emit()
             return
 
+        if self.test_mode:
+            self.test_msg.emit("🧪 测试模式：跳过 Moonraker 和 Klipper 检查。")
+            self.test_msg.emit("所有检查通过，准备连接...")
+            self.success.emit()
+            return
 
         # --- 新增步骤 3: 检查 Moonraker API ---
         self.test_msg.emit(f"[步骤 3/4] 正在检查 Moonraker 服务...")

@@ -13,7 +13,7 @@
     "foreground_color": "#FFF8D4",
     "secondary_background": "#435663",
     "secondary_foreground_color": "#A3B087",
-    "data_frequency": 500,
+    "data_frequency": 50,
     "status_frequency": 5,
     "klipper_query_delay": 0.1,
     "plot_time_window_s": 30
