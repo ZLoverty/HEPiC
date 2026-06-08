@@ -27,10 +27,10 @@ from .app_config import (
 )
 from . import __app_name__, __version__
 import asyncio
+import csv
 import time
 from qasync import asyncSlot, QEventLoop
 import numpy as np
-import pandas as pd
 from datetime import datetime
 import logging
 import argparse
@@ -106,7 +106,8 @@ class MainWindow(QMainWindow):
         self.hikcam_ok = False
         self.init_data()
         
-        self.first_row = True
+        self._csv_file = None
+        self._csv_writer = None
         self.worker = None
         self.klipper_worker = None
         self.video_worker = None
@@ -204,14 +205,11 @@ class MainWindow(QMainWindow):
         ]
         self.sensor_data_items = existing_sensor_items
         items = list(self.base_data_items) + list(self.sensor_data_items)
-        # should define functions that can fetch the quantities from workers
         self.data = {}
-        self.data_tmp = {} # temporary buffer to slow down writing frequency
         self.data_status = {} # only stores current status of the platform
 
         for item in items:
             self.data[item] = deque(maxlen=self.config.get("final_data_maxlen", 1000000))
-            self.data_tmp[item] = deque(maxlen=self.config.get("tmp_data_maxlen", 100))
             self.data_status[item] = np.nan
         if hasattr(self, "home_widget"):
             self.home_widget.data_widget.set_sensor_items(self.sensor_data_items)
@@ -220,8 +218,6 @@ class MainWindow(QMainWindow):
         for item in items:
             if item not in self.data:
                 self.data[item] = deque(maxlen=self.final_data_maxlen)
-            if item not in self.data_tmp:
-                self.data_tmp[item] = deque(maxlen=self.tmp_data_maxlen)
             if item not in self.data_status:
                 self.data_status[item] = np.nan
 
@@ -531,6 +527,10 @@ class MainWindow(QMainWindow):
             
             self.logger.info("开始记录数据 ...")
             self.statusBar().showMessage(f"文件路径：{self.autosave_filename}")
+            self._csv_columns = list(self.data_status.keys())
+            self._csv_file = open(self.autosave_filename, "w", newline="", encoding="utf-8")
+            self._csv_writer = csv.writer(self._csv_file)
+            self._csv_writer.writerow(self._csv_columns)
             self.is_recording = True
             if self.record_timelapse and self.video_worker:
                 # init video recorder
@@ -545,8 +545,11 @@ class MainWindow(QMainWindow):
             self.home_widget.play_pause_button.setIcon(self.home_widget.play_icon)
             self.logger.info("停止记录数据 ...")
             self.autosave_filename = None
-            self.first_row = True
             self.is_recording = False
+            if self._csv_file:
+                self._csv_file.close()
+                self._csv_file = None
+                self._csv_writer = None
             if self.record_timelapse and self.video_worker:
                 self.processing_worker.proc_frame_signal.disconnect(self.video_recorder_thread.add_frame)
                 self.video_recorder_thread.close()
@@ -562,24 +565,12 @@ class MainWindow(QMainWindow):
     
     @Slot()
     def on_timer_tick(self):
-        """Update homepage graphs on each timer tick by recording data into tmp queue."""
-        # set variable to show on the homepage
         self.grab_status()
-        for item in self.data_tmp:
-            self.data_tmp[item].append(self.data_status[item])
+        for item in self.data:
             self.data[item].append(self.data_status[item])
-        
-        # save additional data to file
-        if len(self.data_tmp["time_s"]) >= self.tmp_data_maxlen and self.is_recording:
-            # construct pd.DataFrame
-            df = pd.DataFrame(self.data_tmp)
-            if self.first_row:
-                df.to_csv(self.autosave_filename, index=False)
-                self.first_row = False
-            else:
-                df.to_csv(self.autosave_filename, index=False, header=False, mode="a")
-            for item in self.data_tmp:
-                self.data_tmp[item].clear()
+
+        if self.is_recording and self._csv_writer:
+            self._csv_writer.writerow([self.data_status[col] for col in self._csv_columns])
 
     @Slot()
     def _emit_display_data(self):
@@ -662,6 +653,9 @@ class MainWindow(QMainWindow):
                 self.ir_thread.wait(500)
         if hasattr(self, "processing_worker") and self.processing_worker:
             self.processing_worker.stop()
+        if self._csv_file:
+            self._csv_file.close()
+            self._csv_file = None
         self.logger.info("正在关闭应用程序...")
         event.accept()
 
