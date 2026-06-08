@@ -134,6 +134,7 @@ class MainWindow(QMainWindow):
         self.tmp_data_maxlen = self.config.get("tmp_data_maxlen", 100)
         self.final_data_maxlen = self.config.get("final_data_maxlen", 1000000)
         self.klipper_query_delay = self.config.get("klipper_query_delay", 0.1)
+        self.plot_time_window_s = self.config.get("plot_time_window_s", 60)
 
         # color scheme
         self.background_color = self.config.get("background_color", "black")
@@ -152,7 +153,7 @@ class MainWindow(QMainWindow):
         self.tabs.setMovable(True) # 让标签页可以拖动排序
         # 标签页们
         self.connection_widget = ConnectionWidget(host=self.host)  
-        self.home_widget = HomeWidget()
+        self.home_widget = HomeWidget(time_window_s=self.plot_time_window_s)
         self.vision_page_widget = VisionPageWidget()
         self.status_widget = self.home_widget.status_widget
         self.ir_page_widget = IRPageWidget()
