@@ -1,4 +1,5 @@
 import logging
+from itertools import islice
 
 from PySide6.QtCore import Slot
 from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QVBoxLayout, QWidget
@@ -88,17 +89,26 @@ class DataPlotWidget(QWidget):
             self.plot_layout.removeWidget(plot)
             plot.deleteLater()
 
+    @staticmethod
+    def _tail(seq, n: int) -> list:
+        """Return the last n items of seq in O(n) without copying the full sequence."""
+        return list(islice(reversed(seq), n))[::-1]
+
     @Slot(dict)
     def update_display(self, data: dict):
         try:
-            x_data = list(data.get("time_s", []))[-self.max_len:]
+            time_deque = data.get("time_s")
+            if not time_deque:
+                return
+            x_data = self._tail(time_deque, self.max_len)
             if not x_data:
                 return
 
             for sensor_name, curve in self.curves.items():
-                y_data = list(data.get(sensor_name, []))[-self.max_len:]
-                if not y_data:
+                y_deque = data.get(sensor_name)
+                if not y_deque:
                     continue
+                y_data = self._tail(y_deque, self.max_len)
                 n = min(len(x_data), len(y_data))
                 if n <= 0:
                     continue

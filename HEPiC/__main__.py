@@ -95,9 +95,12 @@ class MainWindow(QMainWindow):
         self._timer.timeout.connect(self.on_timer_tick)
         self.status_timer = QTimer(self) # set status panel update frequency
         self.status_timer.timeout.connect(self.on_status_timer_tick)
-        
+        self._display_data_timer = QTimer(self) # UI plot refresh, decoupled from data rate
+        self._display_data_timer.timeout.connect(self._emit_display_data)
+
         self.time_delay = 1 / self.data_frequency
-        
+        self.display_frequency = min(self.data_frequency, 15)
+
         self.time_delay_status = 1 / self.status_frequency
         self.hikcam_ok = False
         self.init_data()
@@ -514,7 +517,8 @@ class MainWindow(QMainWindow):
             self._display_timer.start(100)  # 10 fps display refresh
         self.show_UI(1) # show main UI anyway
         self.status_timer.start(int(self.time_delay_status * 1000))
-        self._timer.start(int(self.time_delay*1000))
+        self._timer.start(int(self.time_delay * 1000))
+        self._display_data_timer.start(int(1000 / self.display_frequency))
 
     @Slot(bool)
     def on_toggle_play_pause(self, checked):
@@ -563,7 +567,6 @@ class MainWindow(QMainWindow):
             self.data_tmp[item].append(self.data_status[item])
             self.data[item].append(self.data_status[item])
 
-        self.sigNewData.emit(self.data) # update all the displays
         self.current_time += self.time_delay # current time step forward
         
         # save additional data to file
@@ -577,6 +580,10 @@ class MainWindow(QMainWindow):
                 df.to_csv(self.autosave_filename, index=False, header=False, mode="a")
             for item in self.data_tmp:
                 self.data_tmp[item].clear()
+
+    @Slot()
+    def _emit_display_data(self):
+        self.sigNewData.emit(self.data)
 
     def on_status_timer_tick(self):
         """Update the status panel."""
@@ -636,6 +643,8 @@ class MainWindow(QMainWindow):
             self.klipper_worker.deleteLater()
         if hasattr(self, "_display_timer") and self._display_timer:
             self._display_timer.stop()
+        if hasattr(self, "_display_data_timer") and self._display_data_timer:
+            self._display_data_timer.stop()
         if self.video_worker:
             self.video_worker.stop()
         if self.video_thread:
