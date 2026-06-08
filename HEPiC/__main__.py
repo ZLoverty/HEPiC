@@ -28,6 +28,7 @@ from .app_config import (
 from . import __app_name__, __version__
 import asyncio
 import csv
+import threading
 import time
 from qasync import asyncSlot, QEventLoop
 import numpy as np
@@ -56,6 +57,30 @@ def _show_startup_error(exc):
         )
     except Exception:
         print(message, file=sys.stderr)
+
+
+class _DataCollectorThread(threading.Thread):
+    """Collects sensor data at a fixed interval independently of the Qt event loop."""
+
+    def __init__(self, interval_s: float, collect_fn):
+        super().__init__(daemon=True, name="DataCollectorThread")
+        self._interval = interval_s
+        self._collect = collect_fn
+        self._stop_event = threading.Event()
+
+    def run(self):
+        next_t = time.perf_counter()
+        while not self._stop_event.is_set():
+            self._collect()
+            next_t += self._interval
+            remaining = next_t - time.perf_counter()
+            if remaining > 0:
+                time.sleep(remaining)
+            else:
+                next_t = time.perf_counter()  # fell behind — reset instead of catching up
+
+    def stop(self):
+        self._stop_event.set()
 
 
 # ====================================================================
@@ -92,8 +117,8 @@ class MainWindow(QMainWindow):
         self.setObjectName("MyMainWindow") 
 
         self.initUI()
-        self._timer = QTimer(self) # set data appending frequency
-        self._timer.timeout.connect(self.on_timer_tick)
+        self._data_thread: _DataCollectorThread | None = None
+        self._csv_lock = threading.Lock()
         self.status_timer = QTimer(self) # set status panel update frequency
         self.status_timer.timeout.connect(self.on_status_timer_tick)
         self._display_data_timer = QTimer(self) # UI plot refresh, decoupled from data rate
@@ -515,8 +540,9 @@ class MainWindow(QMainWindow):
             self._display_timer.start(100)  # 10 fps display refresh
         self.show_UI(1) # show main UI anyway
         self.status_timer.start(int(self.time_delay_status * 1000))
-        self._timer.start(int(self.time_delay * 1000))
         self._display_data_timer.start(int(1000 / self.display_frequency))
+        self._data_thread = _DataCollectorThread(self.time_delay, self._collect_data)
+        self._data_thread.start()
 
     @Slot(bool)
     def on_toggle_play_pause(self, checked):
@@ -527,10 +553,11 @@ class MainWindow(QMainWindow):
             
             self.logger.info("开始记录数据 ...")
             self.statusBar().showMessage(f"文件路径：{self.autosave_filename}")
-            self._csv_columns = list(self.data_status.keys())
-            self._csv_file = open(self.autosave_filename, "w", newline="", encoding="utf-8")
-            self._csv_writer = csv.writer(self._csv_file)
-            self._csv_writer.writerow(self._csv_columns)
+            with self._csv_lock:
+                self._csv_columns = list(self.data_status.keys())
+                self._csv_file = open(self.autosave_filename, "w", newline="", encoding="utf-8")
+                self._csv_writer = csv.writer(self._csv_file)
+                self._csv_writer.writerow(self._csv_columns)
             self.is_recording = True
             if self.record_timelapse and self.video_worker:
                 # init video recorder
@@ -546,10 +573,11 @@ class MainWindow(QMainWindow):
             self.logger.info("停止记录数据 ...")
             self.autosave_filename = None
             self.is_recording = False
-            if self._csv_file:
-                self._csv_file.close()
-                self._csv_file = None
-                self._csv_writer = None
+            with self._csv_lock:
+                if self._csv_file:
+                    self._csv_file.close()
+                    self._csv_file = None
+                    self._csv_writer = None
             if self.record_timelapse and self.video_worker:
                 self.processing_worker.proc_frame_signal.disconnect(self.video_recorder_thread.add_frame)
                 self.video_recorder_thread.close()
@@ -563,14 +591,16 @@ class MainWindow(QMainWindow):
         """更新状态栏信息"""
         self.statusBar().showMessage(status)
     
-    @Slot()
-    def on_timer_tick(self):
+    def _collect_data(self):
+        """Called from _DataCollectorThread at the configured data_frequency."""
         self.grab_status()
         for item in self.data:
             self.data[item].append(self.data_status[item])
 
-        if self.is_recording and self._csv_writer:
-            self._csv_writer.writerow([self.data_status[col] for col in self._csv_columns])
+        if self.is_recording:
+            with self._csv_lock:
+                if self._csv_writer is not None:
+                    self._csv_writer.writerow([self.data_status[col] for col in self._csv_columns])
 
     @Slot()
     def _emit_display_data(self):
@@ -578,7 +608,6 @@ class MainWindow(QMainWindow):
 
     def on_status_timer_tick(self):
         """Update the status panel."""
-        self.grab_status()
         self.sigNewStatus.emit(self.data_status)
         self.sigProgress.emit(self.klipper_worker.progress)
         self.sigFilePosition.emit(self.klipper_worker.file_position)
@@ -632,6 +661,9 @@ class MainWindow(QMainWindow):
         if self.klipper_worker:
             self.klipper_worker.stop()
             self.klipper_worker.deleteLater()
+        if self._data_thread is not None:
+            self._data_thread.stop()
+            self._data_thread.join(timeout=1.0)
         if hasattr(self, "_display_timer") and self._display_timer:
             self._display_timer.stop()
         if hasattr(self, "_display_data_timer") and self._display_data_timer:
@@ -678,7 +710,12 @@ def start_app():
     # logging.getLogger("HEPiC.communications.tcp_client").setLevel(logging.DEBUG)
     # logging.getLogger("HEPiC.tab_widgets.home_widget").setLevel(logging.DEBUG)
     ############################
-    
+
+    # Request 1ms timer resolution on Windows so QTimer fires accurately at high frequencies.
+    import ctypes
+    winmm = ctypes.windll.winmm
+    winmm.timeBeginPeriod(1)
+
     app = QApplication(sys.argv)
     window = MainWindow(test_mode=args.test)
     window.show()
@@ -688,7 +725,9 @@ def start_app():
         with loop:
             loop.run_forever()
     except KeyboardInterrupt:
-        return
+        pass
+    finally:
+        winmm.timeEndPeriod(1)
 
 # ====================================================================
 # 3. 应用程序入口
