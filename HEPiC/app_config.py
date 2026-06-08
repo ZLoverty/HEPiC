@@ -7,29 +7,39 @@ from pathlib import Path
 
 
 def find_app_file(filename: str, package_file: Path, compiled: bool = False) -> Path:
-    """Find a bundled application file in source or compiled layouts."""
-    candidates = [package_file.resolve().parent / filename]
+    """Find a bundled application file in source or compiled layouts.
 
-    # PyInstaller: files land in sys._MEIPASS (_internal/ next to the exe)
+    When running as an installed binary (PyInstaller or Nuitka), the file is
+    stored under ~/.HEPiC/ so the user can edit it without admin rights.  On
+    the very first launch the bundled default is copied there automatically.
+    In development (plain source run) the source-tree file is used directly.
+    """
+    is_installed = compiled or hasattr(sys, "_MEIPASS")
+
+    if is_installed:
+        user_path = Path.home() / ".HEPiC" / filename
+        if user_path.exists():
+            return user_path
+
+    # Locate the bundled default.
+    candidates = [package_file.resolve().parent / filename]
     if hasattr(sys, "_MEIPASS"):
         meipass = Path(sys._MEIPASS)
-        candidates.extend([
-            meipass / "HEPiC" / filename,
-            meipass / filename,
-        ])
-
-    # Nuitka: files land next to the exe
+        candidates.extend([meipass / "HEPiC" / filename, meipass / filename])
     if compiled:
-        executable_dir = Path(sys.executable).resolve().parent
-        candidates.extend([
-            executable_dir / "HEPiC" / filename,
-            executable_dir / filename,
-        ])
+        exe_dir = Path(sys.executable).resolve().parent
+        candidates.extend([exe_dir / "HEPiC" / filename, exe_dir / filename])
 
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return candidates[0]
+    bundled = next((c for c in candidates if c.exists()), candidates[0])
+
+    if is_installed:
+        # First run: seed the user config from the bundled default.
+        import shutil
+        user_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(bundled, user_path)
+        return user_path
+
+    return bundled
 
 
 def load_config(config_file: Path) -> dict:
