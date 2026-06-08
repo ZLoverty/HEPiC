@@ -27,9 +27,11 @@ from .app_config import (
 )
 from . import __app_name__, __version__
 import asyncio
+import csv
+import threading
+import time
 from qasync import asyncSlot, QEventLoop
 import numpy as np
-import pandas as pd
 from datetime import datetime
 import logging
 import argparse
@@ -55,6 +57,30 @@ def _show_startup_error(exc):
         )
     except Exception:
         print(message, file=sys.stderr)
+
+
+class _DataCollectorThread(threading.Thread):
+    """Collects sensor data at a fixed interval independently of the Qt event loop."""
+
+    def __init__(self, interval_s: float, collect_fn):
+        super().__init__(daemon=True, name="DataCollectorThread")
+        self._interval = interval_s
+        self._collect = collect_fn
+        self._stop_event = threading.Event()
+
+    def run(self):
+        next_t = time.perf_counter()
+        while not self._stop_event.is_set():
+            self._collect()
+            next_t += self._interval
+            remaining = next_t - time.perf_counter()
+            if remaining > 0:
+                time.sleep(remaining)
+            else:
+                next_t = time.perf_counter()  # fell behind — reset instead of catching up
+
+    def stop(self):
+        self._stop_event.set()
 
 
 # ====================================================================
@@ -91,19 +117,22 @@ class MainWindow(QMainWindow):
         self.setObjectName("MyMainWindow") 
 
         self.initUI()
-        self._timer = QTimer(self) # set data appending frequency
-        self._timer.timeout.connect(self.on_timer_tick)
+        self._data_thread: _DataCollectorThread | None = None
+        self._csv_lock = threading.Lock()
         self.status_timer = QTimer(self) # set status panel update frequency
         self.status_timer.timeout.connect(self.on_status_timer_tick)
-        
+        self._display_data_timer = QTimer(self) # UI plot refresh, decoupled from data rate
+        self._display_data_timer.timeout.connect(self._emit_display_data)
+
         self.time_delay = 1 / self.data_frequency
-        
+        self.display_frequency = min(self.data_frequency, 15)
+
         self.time_delay_status = 1 / self.status_frequency
         self.hikcam_ok = False
         self.init_data()
-        self.current_time = 0
         
-        self.first_row = True
+        self._csv_file = None
+        self._csv_writer = None
         self.worker = None
         self.klipper_worker = None
         self.video_worker = None
@@ -131,6 +160,7 @@ class MainWindow(QMainWindow):
         self.tmp_data_maxlen = self.config.get("tmp_data_maxlen", 100)
         self.final_data_maxlen = self.config.get("final_data_maxlen", 1000000)
         self.klipper_query_delay = self.config.get("klipper_query_delay", 0.1)
+        self.plot_time_window_s = self.config.get("plot_time_window_s", 60)
 
         # color scheme
         self.background_color = self.config.get("background_color", "black")
@@ -149,7 +179,7 @@ class MainWindow(QMainWindow):
         self.tabs.setMovable(True) # 让标签页可以拖动排序
         # 标签页们
         self.connection_widget = ConnectionWidget(host=self.host)  
-        self.home_widget = HomeWidget()
+        self.home_widget = HomeWidget(time_window_s=self.plot_time_window_s)
         self.vision_page_widget = VisionPageWidget()
         self.status_widget = self.home_widget.status_widget
         self.ir_page_widget = IRPageWidget()
@@ -189,6 +219,7 @@ class MainWindow(QMainWindow):
         
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
+        self._session_start = time.monotonic()
         existing_sensor_items = list(getattr(self, "sensor_data_items", []))
         self.base_data_items = [
             "time_s",
@@ -199,14 +230,11 @@ class MainWindow(QMainWindow):
         ]
         self.sensor_data_items = existing_sensor_items
         items = list(self.base_data_items) + list(self.sensor_data_items)
-        # should define functions that can fetch the quantities from workers
         self.data = {}
-        self.data_tmp = {} # temporary buffer to slow down writing frequency
         self.data_status = {} # only stores current status of the platform
 
         for item in items:
             self.data[item] = deque(maxlen=self.config.get("final_data_maxlen", 1000000))
-            self.data_tmp[item] = deque(maxlen=self.config.get("tmp_data_maxlen", 100))
             self.data_status[item] = np.nan
         if hasattr(self, "home_widget"):
             self.home_widget.data_widget.set_sensor_items(self.sensor_data_items)
@@ -215,8 +243,6 @@ class MainWindow(QMainWindow):
         for item in items:
             if item not in self.data:
                 self.data[item] = deque(maxlen=self.final_data_maxlen)
-            if item not in self.data_tmp:
-                self.data_tmp[item] = deque(maxlen=self.tmp_data_maxlen)
             if item not in self.data_status:
                 self.data_status[item] = np.nan
 
@@ -250,7 +276,7 @@ class MainWindow(QMainWindow):
         # 数据端口暂定 10001
 
         # 1. 创建异步 Worker 实例
-        self.connection_tester = ConnectionTester(self.host, self.port)
+        self.connection_tester = ConnectionTester(self.host, self.port, test_mode=self.test_mode)
 
         # 2. 连接信号和槽
         self.connection_tester.test_msg.connect(self.connection_widget.update_self_test)
@@ -278,7 +304,7 @@ class MainWindow(QMainWindow):
         
         # 创建 klipper worker（用于查询平台状态和发送动作指令）
         klipper_port = 7125
-        self.klipper_worker = KlipperWorker(self.host, klipper_port, query_delay=self.klipper_query_delay)
+        self.klipper_worker = KlipperWorker(self.host, klipper_port, query_delay=self.klipper_query_delay, test_mode=self.test_mode)
         # 连接信号槽
         self.klipper_worker.connection_status.connect(self.update_status)
         self.klipper_worker.gcode_response.connect(self.home_widget.command_widget.display_message)
@@ -514,73 +540,74 @@ class MainWindow(QMainWindow):
             self._display_timer.start(100)  # 10 fps display refresh
         self.show_UI(1) # show main UI anyway
         self.status_timer.start(int(self.time_delay_status * 1000))
-        self._timer.start(int(self.time_delay*1000))
+        self._display_data_timer.start(int(1000 / self.display_frequency))
+        self._data_thread = _DataCollectorThread(self.time_delay, self._collect_data)
+        self._data_thread.start()
 
     @Slot(bool)
     def on_toggle_play_pause(self, checked):
         if checked: 
             self.home_widget.play_pause_button.setIcon(self.home_widget.pause_icon)
             self.autosave_prefix = datetime.now().strftime("%Y%m%d_%H%M%S")
-            self.autosave_filename = Path(f"{self.autosave_prefix}_autosave.csv").resolve()
+            self.autosave_filename = Path(f"~/Desktop/{self.autosave_prefix}_autosave.csv").expanduser()
             
             self.logger.info("开始记录数据 ...")
             self.statusBar().showMessage(f"文件路径：{self.autosave_filename}")
+            with self._csv_lock:
+                self._csv_columns = list(self.data_status.keys())
+                self._csv_file = open(self.autosave_filename, "w", newline="", encoding="utf-8")
+                self._csv_writer = csv.writer(self._csv_file)
+                self._csv_writer.writerow(self._csv_columns)
             self.is_recording = True
             if self.record_timelapse and self.video_worker:
                 # init video recorder
-                self.autosave_video_filename = Path(f"{self.autosave_prefix}_video.mkv").resolve()
+                self.autosave_video_filename = Path(f"~/Desktop/{self.autosave_prefix}_video.mkv").expanduser()
                 self.video_recorder_thread = VideoRecorder(self.autosave_video_filename, *self.frame_size, fps=self.video_worker.get_fps())
                 self.processing_worker.proc_frame_signal.connect(self.video_recorder_thread.add_frame)
                 self.video_recorder_thread.start()
                 # disable mouse in vision page
-                self.vision_page_widget.vision_widget.disable_mouse()
+                self.vision_page_widget.vision_widget.set_mode("view")
                 
         else:
             self.home_widget.play_pause_button.setIcon(self.home_widget.play_icon)
             self.logger.info("停止记录数据 ...")
             self.autosave_filename = None
-            self.first_row = True
             self.is_recording = False
+            with self._csv_lock:
+                if self._csv_file:
+                    self._csv_file.close()
+                    self._csv_file = None
+                    self._csv_writer = None
             if self.record_timelapse and self.video_worker:
                 self.processing_worker.proc_frame_signal.disconnect(self.video_recorder_thread.add_frame)
                 self.video_recorder_thread.close()
                 self.video_recorder_thread.sigClose.emit()
                 # self.video_recorder_thread.deleteLater()
                 # enable mouse after recording
-                self.vision_page_widget.vision_widget.enable_mouse()
+                self.vision_page_widget.vision_widget.set_mode("roi")
 
     @Slot(str)
     def update_status(self, status):
         """更新状态栏信息"""
         self.statusBar().showMessage(status)
     
-    @Slot()
-    def on_timer_tick(self):
-        """Update homepage graphs on each timer tick by recording data into tmp queue."""
-        # set variable to show on the homepage
+    def _collect_data(self):
+        """Called from _DataCollectorThread at the configured data_frequency."""
         self.grab_status()
-        for item in self.data_tmp:
-            self.data_tmp[item].append(self.data_status[item])
+        for item in self.data:
             self.data[item].append(self.data_status[item])
 
-        self.sigNewData.emit(self.data) # update all the displays
-        self.current_time += self.time_delay # current time step forward
-        
-        # save additional data to file
-        if len(self.data_tmp["time_s"]) >= self.tmp_data_maxlen and self.is_recording:
-            # construct pd.DataFrame
-            df = pd.DataFrame(self.data_tmp)
-            if self.first_row:
-                df.to_csv(self.autosave_filename, index=False)
-                self.first_row = False
-            else:
-                df.to_csv(self.autosave_filename, index=False, header=False, mode="a")
-            for item in self.data_tmp:
-                self.data_tmp[item].clear()
+        if self.is_recording:
+            with self._csv_lock:
+                if self._csv_writer is not None:
+                    self._csv_writer.writerow([self.data_status[col] for col in self._csv_columns])
+
+    @Slot()
+    def _emit_display_data(self):
+        self.sigNewData.emit(self.data)
 
     def on_status_timer_tick(self):
         """Update the status panel."""
-        self.grab_status()
         self.sigNewStatus.emit(self.data_status)
         self.sigProgress.emit(self.klipper_worker.progress)
         self.sigFilePosition.emit(self.klipper_worker.file_position)
@@ -605,7 +632,7 @@ class MainWindow(QMainWindow):
             elif item == "measured_feedrate_mms":
                 self.data_status[item] = latest_sensor.get("measured_feedrate_mms", np.nan)
             elif item == "time_s":
-                self.data_status[item] = self.current_time
+                self.data_status[item] = time.monotonic() - self._session_start
             elif item == "gcode":
                 if self.klipper_worker:
                     self.data_status[item] = self.klipper_worker.active_gcode
@@ -634,8 +661,13 @@ class MainWindow(QMainWindow):
         if self.klipper_worker:
             self.klipper_worker.stop()
             self.klipper_worker.deleteLater()
+        if self._data_thread is not None:
+            self._data_thread.stop()
+            self._data_thread.join(timeout=1.0)
         if hasattr(self, "_display_timer") and self._display_timer:
             self._display_timer.stop()
+        if hasattr(self, "_display_data_timer") and self._display_data_timer:
+            self._display_data_timer.stop()
         if self.video_worker:
             self.video_worker.stop()
         if self.video_thread:
@@ -653,6 +685,9 @@ class MainWindow(QMainWindow):
                 self.ir_thread.wait(500)
         if hasattr(self, "processing_worker") and self.processing_worker:
             self.processing_worker.stop()
+        if self._csv_file:
+            self._csv_file.close()
+            self._csv_file = None
         self.logger.info("正在关闭应用程序...")
         event.accept()
 
@@ -675,7 +710,12 @@ def start_app():
     # logging.getLogger("HEPiC.communications.tcp_client").setLevel(logging.DEBUG)
     # logging.getLogger("HEPiC.tab_widgets.home_widget").setLevel(logging.DEBUG)
     ############################
-    
+
+    # Request 1ms timer resolution on Windows so QTimer fires accurately at high frequencies.
+    import ctypes
+    winmm = ctypes.windll.winmm
+    winmm.timeBeginPeriod(1)
+
     app = QApplication(sys.argv)
     window = MainWindow(test_mode=args.test)
     window.show()
@@ -685,7 +725,9 @@ def start_app():
         with loop:
             loop.run_forever()
     except KeyboardInterrupt:
-        return
+        pass
+    finally:
+        winmm.timeEndPeriod(1)
 
 # ====================================================================
 # 3. 应用程序入口

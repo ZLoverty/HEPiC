@@ -16,13 +16,13 @@ class HomeWidget(QWidget):
     sigExtrude = Signal(str)
     sigRetract = Signal(str)
 
-    def __init__(self):
+    def __init__(self, time_window_s=60):
         super().__init__()
 
         self.logger = logging.getLogger(__name__)
         self.command_widget = CommandWidget()
         self.command_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.data_widget = DataPlotWidget()
+        self.data_widget = DataPlotWidget(time_window_s=time_window_s)
         self.status_widget = PlatformStatusWidget()
         self.dieswell_widget = VisionWidget() # hik cam roi
         self.ir_roi_widget = VisionWidget()

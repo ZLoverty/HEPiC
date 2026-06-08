@@ -1,4 +1,5 @@
 import logging
+from itertools import islice
 
 from PySide6.QtCore import Slot
 from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QVBoxLayout, QWidget
@@ -6,10 +7,10 @@ import pyqtgraph as pg
 
 
 class DataPlotWidget(QWidget):
-    def __init__(self, logger=None, line_width=2, max_len=300):
+    def __init__(self, logger=None, line_width=2, time_window_s=60):
         super().__init__()
         self.logger = logger or logging.getLogger(__name__)
-        self.max_len = max_len
+        self.time_window_s = time_window_s
         self.line_width = line_width
 
         self.sensor_items: list[str] = []
@@ -88,20 +89,40 @@ class DataPlotWidget(QWidget):
             self.plot_layout.removeWidget(plot)
             plot.deleteLater()
 
+    @staticmethod
+    def _tail(seq, n: int) -> list:
+        """Return the last n items of seq in O(n) without copying the full sequence."""
+        return list(islice(reversed(seq), n))[::-1]
+
     @Slot(dict)
     def update_display(self, data: dict):
         try:
-            x_data = list(data.get("time_s", []))[-self.max_len:]
-            if not x_data:
+            time_deque = data.get("time_s")
+            if not time_deque:
                 return
 
+            latest_time = time_deque[-1]
+            cutoff = latest_time - self.time_window_s
+
+            # Count points within the time window by walking backwards (O(n_shown))
+            n = 0
+            for t in reversed(time_deque):
+                if t < cutoff:
+                    break
+                n += 1
+            if n == 0:
+                return
+
+            x_data = self._tail(time_deque, n)
+
             for sensor_name, curve in self.curves.items():
-                y_data = list(data.get(sensor_name, []))[-self.max_len:]
-                if not y_data:
+                y_deque = data.get(sensor_name)
+                if not y_deque:
                     continue
-                n = min(len(x_data), len(y_data))
-                if n <= 0:
+                y_data = self._tail(y_deque, n)
+                n_pts = min(len(x_data), len(y_data))
+                if n_pts <= 0:
                     continue
-                curve.setData(x_data[-n:], y_data[-n:])
+                curve.setData(x_data[:n_pts], y_data[:n_pts])
         except Exception as e:
             self.logger.error(f"data_plot_widget update error: {e}")

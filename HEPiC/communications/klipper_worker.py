@@ -23,7 +23,7 @@ class KlipperWorker(QObject):
     gcode_response = Signal(str)
     sigKlipperState = Signal(str, str)  # (state, message)
 
-    def __init__(self, host, port, query_delay=1):
+    def __init__(self, host, port, query_delay=1, test_mode=False):
         super().__init__()
 
         # connection / args
@@ -31,6 +31,7 @@ class KlipperWorker(QObject):
         self.port = port
         self.uri = f"ws://{self.host}:{self.port}/websocket"
         self.query_delay = query_delay
+        self.test_mode = test_mode
         self.logger = logging.getLogger(__name__)
 
         # status / data
@@ -57,6 +58,13 @@ class KlipperWorker(QObject):
     @asyncSlot()
     async def run(self):
         """Asyncio 事件循环，处理 WebSocket 连接和通信"""
+        if self.test_mode:
+            self.logger.info("测试模式：跳过 Klipper WebSocket 连接。")
+            self.connection_status.emit("🧪 测试模式：Klipper 连接已跳过。")
+            while self.is_running:
+                await asyncio.sleep(1)
+            return
+
         while self.is_running:
             try:
                 self.logger.info(f"正在连接 Klipper {self.uri} ...")
