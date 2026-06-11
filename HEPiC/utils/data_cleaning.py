@@ -1,31 +1,37 @@
 import numpy as np
 import pandas as pd
 
-def extrusion_statistics(steps: list[pd.DataFrame], 
-                         clip: int = 0):
+def extrusion_statistics(steps: list[pd.DataFrame],
+                         clip: float = 0.0):
     """
-    Compute statistics for each extrusion step after clipping the initial data points.
+    Compute statistics for each extrusion step after clipping the initial seconds of data.
     The statistics include mean feedrate, mean temperature, mean extrusion force, and standard deviation of extrusion force.
 
     Parameters
     ----------
     steps : list[pd.DataFrame]
-        A list of DataFrames, each representing an extrusion step with columns "feedrate_mms", "temperature_C", and "extrusion_force_N".
-    clip : int, optional
-        The number of initial data points to clip from each step before computing statistics, by default 0.
-    
+        A list of DataFrames, each representing an extrusion step with columns "feedrate_mms", "temperature_C", "extrusion_force_N", and "time_s".
+    clip : float, optional
+        The number of seconds to clip from the start of each step before computing statistics, by default 0.
+        Automatically adapts to the sampling rate of each step.
+
     Returns
     -------
     pd.DataFrame
         A DataFrame containing the computed statistics for each step, with columns "feedrate_mms", "temperature_C", "extrusion_force_N_mean", and "extrusion_force_N_std".
-    
+
     Example
     -------
-    >>> stats = extrusion_statistics(cleaned_steps, clip=10)
+    >>> stats = extrusion_statistics(cleaned_steps, clip=2.0)
     """
     stats = []
     for step in steps:
-        clipped = step[clip:]
+        if clip > 0:
+            dt = step["time_s"].diff().mean()
+            n_clip = int(clip / dt)
+        else:
+            n_clip = 0
+        clipped = step.iloc[n_clip:]
         stat = {
             "feedrate_mms": clipped["feedrate_mms"].mean(),
             "temperature_C": clipped["temperature_C"].mean(),

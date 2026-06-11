@@ -21,9 +21,9 @@ class DataProcessorWidget(QWidget):
         self.open_csv_button = QPushButton("打开文件（.csv）")
         self.clean_button = QPushButton("清洗数据")
         self.export_button = QPushButton("导出结果")
-        self.int_slider_label = QLabel("裁剪点数: 0")
+        self.int_slider_label = QLabel("裁剪秒数: 0.0 s")
         self.int_slider = QSlider(Qt.Orientation.Horizontal)
-        self.int_slider.setRange(0, 100)
+        self.int_slider.setRange(0, 200)   # 0–20 s, step 0.1 s
         self.int_slider.setSingleStep(1)
         self.int_slider.setValue(0)
         self.log_widget = LogWidget()
@@ -59,12 +59,12 @@ class DataProcessorWidget(QWidget):
         self.df = None
         self.csv_file_path = None
         self.cleaned_steps = None
-        self.selected_integer = self.int_slider.value()
+        self.clip_seconds = 0.0
         self.stats_df = None
         
     def on_slider_value_changed(self, value: int):
-        self.selected_integer = int(value)
-        self.int_slider_label.setText(f"裁剪点数: {self.selected_integer}")
+        self.clip_seconds = value * 0.1
+        self.int_slider_label.setText(f"裁剪秒数: {self.clip_seconds:.1f} s")
         self.plot_widget.clear()
         self.plot()
 
@@ -111,7 +111,7 @@ class DataProcessorWidget(QWidget):
             self.log_widget.update_log("No cleaned data to plot. Please clean the data first.")
             return
         
-        stats = data_cleaning.extrusion_statistics(self.cleaned_steps, clip=self.selected_integer)
+        stats = data_cleaning.extrusion_statistics(self.cleaned_steps, clip=self.clip_seconds)
         if stats.empty:
             self.log_widget.update_log("No statistics to plot after clipping.")
             self.stats_df = None
@@ -160,7 +160,7 @@ class DataProcessorWidget(QWidget):
         default_name = "cleaned_stats.csv"
         if self.csv_file_path:
             source_path = Path(self.csv_file_path)
-            default_name = f"{source_path.stem}_stats_clip{self.selected_integer}.csv"
+            default_name = f"{source_path.stem}_stats_clip{self.clip_seconds:.1f}s.csv"
 
         save_path, _ = QFileDialog.getSaveFileName(
             self,
