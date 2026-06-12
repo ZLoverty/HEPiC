@@ -7,7 +7,6 @@ Implement die swell detection and other vision related needs.
 import cv2
 import numpy as np
 from skimage.morphology import skeletonize
-from skan import Skeleton, summarize
 
 def to8bit(img):
     """Auto-contrast and convert to uint8 using 5-sigma clipping."""
@@ -166,36 +165,6 @@ def draw_filament_contour(img, skeleton, diameter, skeleton_max_points=50):
     labeled_image = cv2.drawContours(img_rgb.copy(), contours, -1, (255, 0, 0), 2)
     
     return labeled_image
-
-def find_longest_branch(skeleton):
-    """Find the longest branch in a skeleton image (binary).
-    If no skeleton is present, return the original image.
-    
-    Parameters
-    ----------
-    skeleton : nd.array
-        skeleton image
-    
-    Returns
-    -------
-    nd.array
-        the longest branch label image
-    """
-    try:
-        skel_obj = Skeleton(skeleton)
-    except ValueError as e:
-        print(f"ValueError: {e}")
-        return None
-    
-    branch_data = summarize(skel_obj, separator="_") # analyze the branches in the skeleton
-
-    long_branch_id = branch_data["branch_distance"].argmax() + 1 # find the id of the longest branch (it's the data index + 1)
-
-    branch_labels = skel_obj.path_label_image() # get path label image where locations of skeleton are labeled
-
-    longest_branch = (branch_labels == long_branch_id) # find where label == the id
-
-    return longest_branch
 
 class ImageStreamer:
     """
