@@ -10,11 +10,24 @@ on:
         description: "Version tag to release (e.g. v1.2.0)"
         required: true
 
+# Don't let two runs race on the same tag.
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+# pwsh (PowerShell 7) writes UTF-8 without BOM to $GITHUB_ENV/$GITHUB_OUTPUT.
+# Windows PowerShell Desktop ('powershell') can write UTF-16 and corrupt them.
+defaults:
+  run:
+    shell: pwsh
+
 jobs:
   build-and-release:
     runs-on: windows-latest
-    permissions:
-      contents: write
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -29,12 +42,41 @@ jobs:
       - name: Install dependencies
         run: pip install -e . pyinstaller pyinstaller-hooks-contrib
 
-      - name: Read version from package
+      # The git tag is the single source of truth for a release.
+      # We derive the version from it and fail fast if the packaged
+      # __version__ disagrees, so binaries never ship mis-versioned.
+      - name: Resolve & verify version
         id: version
         run: |
-          $v = python -c "from HEPiC import __version__; print(__version__)"
-          echo "VERSION=$v" >> $env:GITHUB_ENV
-          echo "version=$v" >> $env:GITHUB_OUTPUT
+          $tag = "${{ inputs.tag || github.ref_name }}"
+          $version = $tag -replace '^v', ''
+          if ($version -notmatch '^\d+\.\d+\.\d+') {
+            Write-Error "Tag '$tag' is not a valid version (expected vMAJOR.MINOR.PATCH)."
+            exit 1
+          }
+          "VERSION=$version"  >> $env:GITHUB_ENV
+          "TAG=$tag"          >> $env:GITHUB_ENV
+          "version=$version"  >> $env:GITHUB_OUTPUT
+          "tag=$tag"          >> $env:GITHUB_OUTPUT
+
+          # Best-effort cross-check: reads .dist-info metadata only,
+          # does NOT import the heavy HEPiC package (pandas/Qt/etc).
+          # Change 'HEPiC' below if your [project] name differs.
+          $pkg = python -c "import importlib.metadata as m; print(m.version('HEPiC'))" 2>$null
+          if ($LASTEXITCODE -eq 0 -and $pkg) {
+            $pkg = $pkg.Trim()
+            if ($pkg -ne $version) {
+              Write-Error "Tag version ($version) != package version ($pkg). Bump __version__ before tagging."
+              exit 1
+            }
+            Write-Host "Version check OK: $version"
+          } else {
+            Write-Warning "Could not read package version for cross-check; proceeding with tag version $version."
+          }
+
+      # Catch a broken build environment before spending minutes on PyInstaller.
+      - name: Sanity check key deps
+        run: python -c "import pytz, pandas, tzdata; print('pytz', pytz.__version__, '| pandas', pandas.__version__)"
 
       - name: Extract release notes
         id: notes
@@ -42,17 +84,21 @@ jobs:
           $version = $env:VERSION
           $parts = $version.Split('.')
           $noteFile = "release_notes/v$($parts[0]).$($parts[1]).x.md"
-          $content = Get-Content $noteFile -Raw -Encoding UTF8
-          $pattern = "(?s)## v$([regex]::Escape($version))\s*\r?\n(.*?)(?=\r?\n## v|\z)"
-          if ($content -match $pattern) {
-            $notes = $Matches[1].Trim()
+          if (Test-Path $noteFile) {
+            $content = Get-Content $noteFile -Raw -Encoding UTF8
+            $pattern = "(?s)## v$([regex]::Escape($version))\s*\r?\n(.*?)(?=\r?\n## v|\z)"
+            if ($content -match $pattern) {
+              $notes = $Matches[1].Trim()
+            } else {
+              $notes = "_No release notes found for v$version._"
+            }
           } else {
-            $notes = "_No release notes found for v${version}._"
+            $notes = "_No release notes file found ($noteFile)._"
           }
-          # Write multiline value to GITHUB_OUTPUT
+          # Multiline value -> GITHUB_OUTPUT
           "notes<<NOTES_EOF" >> $env:GITHUB_OUTPUT
-          $notes >> $env:GITHUB_OUTPUT
-          "NOTES_EOF" >> $env:GITHUB_OUTPUT
+          $notes             >> $env:GITHUB_OUTPUT
+          "NOTES_EOF"        >> $env:GITHUB_OUTPUT
 
       - name: Build with PyInstaller
         run: |
@@ -62,6 +108,7 @@ jobs:
             --icon "assets\hepic.ico" `
             --onedir `
             --noconfirm `
+            --clean `
             --workpath build\pyinstaller `
             --distpath dist `
             --add-data "HEPiC\config.json;HEPiC" `
@@ -70,8 +117,18 @@ jobs:
             --hidden-import qasync `
             --collect-all pyqtgraph `
             --collect-all pytz `
+            --collect-all tzdata `
             --collect-all pandas `
             run_hepic.py
+
+      - name: Verify build output
+        run: |
+          if (-not (Test-Path "dist\HEPiC\HEPiC.exe")) {
+            Write-Error "PyInstaller did not produce dist\HEPiC\HEPiC.exe"
+            exit 1
+          }
+          Write-Host "Build OK:"
+          Get-ChildItem "dist\HEPiC" | Select-Object Name, Length -First 10
 
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
@@ -80,11 +137,25 @@ jobs:
         run: |
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           & $iscc /DAppVersion=$env:VERSION installer.iss
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "ISCC failed with exit code $LASTEXITCODE"
+            exit 1
+          }
+
+      - name: Verify installer output
+        run: |
+          $expected = "installer_output\HEPiC_v$($env:VERSION)_Setup.exe"
+          if (-not (Test-Path $expected)) {
+            Write-Error "Installer not found at $expected. Check OutputDir / OutputBaseFilename in installer.iss."
+            Get-ChildItem -Recurse installer_output -ErrorAction SilentlyContinue
+            exit 1
+          }
+          Write-Host "Installer OK: $expected"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name || inputs.tag }}
+          tag_name: ${{ steps.version.outputs.tag }}
           name: "HEPiC v${{ steps.version.outputs.version }}"
           body: |
             ## HEPiC v${{ steps.version.outputs.version }}
@@ -96,4 +167,4 @@ jobs:
             ${{ steps.notes.outputs.notes }}
           files: installer_output/HEPiC_v${{ steps.version.outputs.version }}_Setup.exe
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(steps.version.outputs.tag, '-') }}
