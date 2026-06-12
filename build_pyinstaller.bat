@@ -23,7 +23,8 @@ echo [2/2] Building HEPiC...
   --add-data "HEPiC\database;HEPiC\database" ^
   --hidden-import qasync ^
   --collect-all pyqtgraph ^
-  --exclude-module matplotlib ^
+  --exclude-module numba ^
+  --exclude-module llvmlite ^
   run_hepic.py
 
 echo.

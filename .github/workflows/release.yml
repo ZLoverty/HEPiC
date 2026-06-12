@@ -119,6 +119,8 @@ jobs:
             --collect-all pytz `
             --collect-all tzdata `
             --collect-all pandas `
+            --exclude-module numba `
+            --exclude-module llvmlite `
             run_hepic.py
 
       - name: Verify build output
