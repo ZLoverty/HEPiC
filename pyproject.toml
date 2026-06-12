@@ -19,7 +19,7 @@ keywords = ["tools", "automation", "sdk"]
 # 核心依赖配置
 # ========================================================
 dependencies = [
-    "pandas",             # 不指定版本，默认最新
+    "pandas>=2.2,<3.0",
     "pyside6", 
     "pyqtgraph",
     "PyYAML",
@@ -29,7 +29,6 @@ dependencies = [
     "websockets",
     "aiohttp", 
     "scikit-image", 
-    "myimagelib", 
     "skan",
     "requests"
 ]
