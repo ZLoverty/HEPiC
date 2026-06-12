@@ -23,7 +23,6 @@ echo [2/2] Building HEPiC...
   --add-data "HEPiC\database;HEPiC\database" ^
   --hidden-import qasync ^
   --collect-all pyqtgraph ^
-  --collect-all myimagelib ^
   run_hepic.py
 
 echo.

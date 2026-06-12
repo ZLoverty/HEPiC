@@ -7,8 +7,19 @@ Implement die swell detection and other vision related needs.
 import cv2
 import numpy as np
 from skimage.morphology import skeletonize
-from myimagelib import to8bit
 from skan import Skeleton, summarize
+
+def to8bit(img):
+    """Auto-contrast and convert to uint8 using 5-sigma clipping."""
+    img = img.astype('float32')
+    mean = np.nanmean(img)
+    std = np.nanstd(img)
+    maxx = min(mean + 5 * std, np.nanmax(img))
+    minn = np.nanmin(img)
+    img.clip(minn, maxx, out=img)
+    eps = np.finfo(np.float32).tiny
+    img8 = (img - minn + eps) / (maxx - minn + eps) * 255
+    return img8.astype('uint8')
 import os
 import glob
 import random

@@ -6,13 +6,12 @@ sys.path.append(str(current_path))
 from PySide6.QtCore import QObject, Signal, Slot, QTimer, QThread, QMutex, QMutexLocker
 import numpy as np
 import os
-from vision_utils import binarize, filament_diameter, convert_to_grayscale, draw_filament_contour, ImageStreamer
+from vision_utils import binarize, filament_diameter, convert_to_grayscale, draw_filament_contour, ImageStreamer, to8bit
 import time
 import cv2
 import logging
 import asyncio
 from qasync import asyncSlot
-from myimagelib import to8bit
 
 if os.name == "nt":
     # if on windows OS, import the windows camera library
