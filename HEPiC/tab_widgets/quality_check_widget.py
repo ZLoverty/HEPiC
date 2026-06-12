@@ -1,7 +1,7 @@
 import logging
 from collections import deque
 from copy import deepcopy
-from pathlib import Path
+from datetime import datetime
 
 import numpy as np
 import pyqtgraph as pg
@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from PySide6.QtGui import QColor, QTextCharFormat, QTextCursor
 
 class StatusIndicator(QFrame):
     """Circular status indicator."""
@@ -113,7 +114,9 @@ class QualityCheckWidget(QWidget):
         self._extrusion_duration_s = 0.0
         self._progress_elapsed_ms = 0
 
-        self.process_markdown = self._load_process_document()
+        self._last_evaluation = None
+        self._quality_check_history: list[tuple[str, str]] = []
+
         self.init_ui()
 
         self.data_timer = QTimer(self)
@@ -140,27 +143,6 @@ class QualityCheckWidget(QWidget):
         except Exception as exc:
             self.logger.error(f"Failed to initialize material properties: {exc}")
 
-    def _load_process_document(self) -> str:
-        doc_path = Path(__file__).parent.parent / "database" / "quality_check_process.md"
-        try:
-            if doc_path.exists():
-                with open(doc_path, "r", encoding="utf-8") as f:
-                    return f.read()
-        except Exception as exc:
-            self.logger.error(f"Failed to load quality check process document: {exc}")
-        return self._get_default_process_content()
-
-    def _get_default_process_content(self) -> str:
-        return """
-# 质检流程
-
-1. 选择材料 family
-2. 选择 PI_Code
-3. 点击开始质检
-4. 观察系统状态、稳定性和实时挤出力曲线
-5. 停止质检
-"""
-
     def init_ui(self):
         main_layout = QHBoxLayout()
         main_layout.addWidget(self.create_left_panel())
@@ -172,14 +154,44 @@ class QualityCheckWidget(QWidget):
         panel = QWidget()
         layout = QVBoxLayout()
 
-        self.instruction_text = QTextEdit()
-        self.instruction_text.setReadOnly(True)
-        self.instruction_text.setMarkdown(self.process_markdown)
-        layout.addWidget(self.instruction_text)
+        history_title = QLabel("质检历史")
+        history_title.setStyleSheet("font-weight: bold;")
+        layout.addWidget(history_title)
+
+        self.history_text = QTextEdit()
+        self.history_text.setReadOnly(True)
+        self.history_text.setPlaceholderText("暂无质检历史")
+        layout.addWidget(self.history_text)
 
         panel.setLayout(layout)
         panel.setMaximumWidth(350)
         return panel
+
+    def _record_quality_check_result(self):
+        """Append one row to the quality-check history (newest first)."""
+        timestamp = datetime.now().strftime("%H:%M")
+        pi_code = self.get_current_pi_code()
+
+        if self._last_evaluation is not None:
+            ev = self._last_evaluation
+            body = f"{ev.mean:.2f} ± {ev.std:.2f} N ({pi_code})"
+        else:
+            body = f"数据不足 ({pi_code})"
+        self._quality_check_history.insert(0, (timestamp, body))
+        self._render_history()
+
+    def _render_history(self):
+        """Render the history with grey timestamps, matching CommandWidget."""
+        timestamp_tf = QTextCharFormat()
+        timestamp_tf.setForeground(QColor("#999999"))
+        body_tf = QTextCharFormat()
+
+        self.history_text.clear()
+        cursor = self.history_text.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        for timestamp, body in self._quality_check_history:
+            cursor.insertText(f"{timestamp}  ", timestamp_tf)
+            cursor.insertText(f"{body}\n", body_tf)
 
     def _make_info_block(self, title: str) -> tuple[QFrame, QVBoxLayout]:
         block = QFrame()
@@ -385,6 +397,7 @@ class QualityCheckWidget(QWidget):
             self.extrusion_force_cache.clear()
             self.time_cache.clear()
             self.current_time = 0
+            self._last_evaluation = None
             self.system_force_label.setText("实时挤出力: -- N")
             self.status_message_label.setText("")
             self.force_expectation_indicator.update_status("unknown")
@@ -412,6 +425,7 @@ class QualityCheckWidget(QWidget):
             self.status_message_label.setText("")
             self.status_indicator.update_status("unknown")
             self.force_expectation_indicator.update_status("unknown")
+            self._record_quality_check_result()
             self.logger.info("Quality check stopped")
 
     def set_status_message(self, msg: str):
@@ -493,6 +507,7 @@ class QualityCheckWidget(QWidget):
             self.force_expectation_indicator.update_status("unknown")
             return
 
+        self._last_evaluation = evaluation
         self.system_force_label.setText(
             f"实时挤出力: {evaluation.mean:.2f} ± {evaluation.std:.2f} N"
         )

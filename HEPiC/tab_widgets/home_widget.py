@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
      QWidget, QVBoxLayout, QHBoxLayout, QSizePolicy, QPushButton, QStyle
 )
-from PySide6.QtCore import QSize, Signal, Slot
+from PySide6.QtCore import QSize, Signal, Slot, QTimer
 from .command_widget import CommandWidget
 from .data_plot_widget import DataPlotWidget
 from .platform_status_widget import PlatformStatusWidget
@@ -82,10 +82,25 @@ class HomeWidget(QWidget):
         self.restart_button.setIconSize(QSize(button_size // 2, button_size // 2))
         self.restart_button.setStyleSheet(qss_style)
 
-        # extrude, retract buttons
-        self.extrude_button = QPushButton("挤出 10 mm")
-        self.retract_button = QPushButton("回抽 10 mm")
+        # extrude, retract buttons (按住连续挤出/回抽，松开立即停止)
+        self.extrude_button = QPushButton("挤出（长按）")
+        self.retract_button = QPushButton("回抽（长按）")
         self.klipper_status_widget = KlipperStatusWidget()
+
+        # 长按连续挤出参数
+        self.extrude_feedrate = 200  # mm/min
+        self.jog_interval_ms = 1000   # 每隔多少毫秒发送一次小段挤出
+        # 每段的长度使其运动时间约等于发送间隔，避免运动队列堆积，
+        # 这样松开按钮后最多再挤出一小段即停止。
+        self.jog_step_mm = self.extrude_feedrate / 60 * (self.jog_interval_ms / 1000)
+
+        self._extrude_timer = QTimer(self)
+        self._extrude_timer.setInterval(self.jog_interval_ms)
+        self._extrude_timer.timeout.connect(self.on_extrude_tick)
+
+        self._retract_timer = QTimer(self)
+        self._retract_timer.setInterval(self.jog_interval_ms)
+        self._retract_timer.timeout.connect(self.on_retract_tick)
 
         # 布局
         layout = QHBoxLayout()
@@ -118,17 +133,35 @@ class HomeWidget(QWidget):
 
         # Signal and slot
         self.restart_button.clicked.connect(self.on_restart_clicked)
-        self.extrude_button.clicked.connect(self.on_extrude_clicked)
-        self.retract_button.clicked.connect(self.on_retract_clicked)
+        self.extrude_button.pressed.connect(self.on_extrude_pressed)
+        self.extrude_button.released.connect(self.on_extrude_released)
+        self.retract_button.pressed.connect(self.on_retract_pressed)
+        self.retract_button.released.connect(self.on_retract_released)
 
     @Slot()
     def on_restart_clicked(self):
         self.sigRestart.emit()
     
-    def on_extrude_clicked(self):
-        self.logger.debug("Extrude button clicked")
-        self.sigExtrude.emit("G91\nG1 E10 F300\n")
-    
-    def on_retract_clicked(self):
-        self.logger.debug("Retract button clicked")
-        self.sigRetract.emit("G91\nG1 E-10 F300\n")
+    def on_extrude_pressed(self):
+        self.logger.debug("Extrude button pressed")
+        self.on_extrude_tick()      # 立即挤出一段，提升按下的响应感
+        self._extrude_timer.start()
+
+    def on_extrude_released(self):
+        self.logger.debug("Extrude button released")
+        self._extrude_timer.stop()
+
+    def on_extrude_tick(self):
+        self.sigExtrude.emit(f"G91\nG1 E{self.jog_step_mm:.3f} F{self.extrude_feedrate}\n")
+
+    def on_retract_pressed(self):
+        self.logger.debug("Retract button pressed")
+        self.on_retract_tick()      # 立即回抽一段，提升按下的响应感
+        self._retract_timer.start()
+
+    def on_retract_released(self):
+        self.logger.debug("Retract button released")
+        self._retract_timer.stop()
+
+    def on_retract_tick(self):
+        self.sigRetract.emit(f"G91\nG1 E-{self.jog_step_mm:.3f} F{self.extrude_feedrate}\n")
