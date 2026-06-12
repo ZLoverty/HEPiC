@@ -1,6 +1,5 @@
 import re
 import numpy as np
-import matplotlib.pyplot as plt
 
 def parse_gcode_time_series(gcode):
     # 初始化状态
@@ -143,40 +142,3 @@ def parse_gcode_time_series(gcode):
 # 请将 'test.gcode' 替换为你的实际文件路径
 # gcode_file = 'test.gcode' 
 # t, ve, temp = parse_gcode_time_series(gcode_file)
-
-# 绘图演示 (仅用于本地测试)
-if __name__ == "__main__":
-    # 创建一个伪造的 Gcode 内容进行测试
-    test_gcode_content = """
-    G91
-    M104 S200 ; Set Temp
-    G1 F100 ; Set speed 20mm/s
-    G1 E1 ; Move and Extrude
-    G1 F200
-    G1 E2 ; Move and Extrude
-    G1 F300
-    G1 E3 ; Retract (E goes from 2 to 1)
-    M104 S210 ; Change Temp
-    G1 X30 E3 ; Move and Extrude
-    """
-
-    t, ve, temp = parse_gcode_time_series(test_gcode_content)
-
-    fig, ax1 = plt.subplots()
-
-    # 绘制挤出速度
-    color = 'tab:red'
-    ax1.set_xlabel('Time (s)')
-    ax1.set_ylabel('Extrusion Velocity (mm/s)', color=color)
-    ax1.plot(t, ve, color=color, label='Extrusion Vel')
-    ax1.tick_params(axis='y', labelcolor=color)
-
-    # 绘制温度 (双Y轴)
-    ax2 = ax1.twinx() 
-    color = 'tab:blue'
-    ax2.set_ylabel('Temperature (°C)', color=color)
-    ax2.plot(t, temp, color=color, linestyle='--', label='Temperature')
-    ax2.tick_params(axis='y', labelcolor=color)
-
-    plt.title("G-code Time Series Analysis")
-    plt.show()
