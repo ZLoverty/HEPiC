@@ -480,6 +480,8 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.logger.error(f"初始化熔体状态相机失败: {e}")
             self.video_worker = None
+
+        self.status_widget.set_die_diameter_visible(self.video_worker is not None)
         
         # 创建 image processing worker 用于处理图像，探测熔体直径
         self.processing_worker = ProcessingWorker()
@@ -535,6 +537,8 @@ class MainWindow(QMainWindow):
             else:
                 self.logger.warning(f"初始化热成像仪失败，热成像仪不可用: {e}")
             self.ir_worker = None
+
+        self.status_widget.set_die_temperature_visible(self.ir_worker is not None)
             
         if not hasattr(self, "_display_timer") or self._display_timer is None:
             self._display_timer = QTimer(self)

@@ -40,8 +40,12 @@ class PlatformStatusWidget(QWidget):
 
         self.die_temperature_label = QLabel("出口熔体温度:")
         self.die_temperature_value = QLabel(f"{placeholder}")
+        self.die_temperature_label.setVisible(False)
+        self.die_temperature_value.setVisible(False)
         self.die_diameter_label = QLabel("出口熔体直径:")
         self.die_diameter_value = QLabel(f"{placeholder}")
+        self.die_diameter_label.setVisible(False)
+        self.die_diameter_value.setVisible(False)
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
@@ -87,6 +91,14 @@ class PlatformStatusWidget(QWidget):
         self.setFixedWidth(290)
         self.setLayout(layout)
         self.hotend_temperature_input.returnPressed.connect(self.on_temp_enter_pressed)
+
+    def set_die_diameter_visible(self, visible: bool):
+        self.die_diameter_label.setVisible(visible)
+        self.die_diameter_value.setVisible(visible)
+
+    def set_die_temperature_visible(self, visible: bool):
+        self.die_temperature_label.setVisible(visible)
+        self.die_temperature_value.setVisible(visible)
 
     def configure_tcp_sensors(self, sensor_names: list[str], zeroable_sensor_names: list[str]):
         for name in list(self.tcp_sensor_widgets.keys()):
