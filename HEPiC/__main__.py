@@ -712,9 +712,6 @@ def start_app():
     ############################
 
     # Request 1ms timer resolution on Windows so QTimer fires accurately at high frequencies.
-    import ctypes
-    winmm = ctypes.windll.winmm
-    winmm.timeBeginPeriod(1)
 
     app = QApplication(sys.argv)
     window = MainWindow(test_mode=args.test)
@@ -726,8 +723,6 @@ def start_app():
             loop.run_forever()
     except KeyboardInterrupt:
         pass
-    finally:
-        winmm.timeEndPeriod(1)
 
 # ====================================================================
 # 3. 应用程序入口
