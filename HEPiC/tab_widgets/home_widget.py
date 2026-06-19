@@ -110,17 +110,18 @@ class HomeWidget(QWidget):
         extrude_retract_layout.addWidget(self.retract_button)
         control_layout.addLayout(extrude_retract_layout)
         control_layout.addWidget(self.command_widget)
-        control_button_layout = QHBoxLayout()
+
+        # 三个按钮与 klipper_status_widget 互斥显示在同一位置
+        self._buttons_container = QWidget()
+        control_button_layout = QHBoxLayout(self._buttons_container)
+        control_button_layout.setContentsMargins(0, 0, 0, 0)
         control_button_layout.addWidget(self.play_pause_button)
-        # control_button_layout.addWidget(self.stop_button)
         control_button_layout.addWidget(self.stop_button)
         control_button_layout.addWidget(self.restart_button)
-        control_layout.addLayout(control_button_layout)
+        control_layout.addWidget(self._buttons_container)
+        control_layout.addWidget(self.klipper_status_widget)
+
         data_layout = QVBoxLayout()
-        klipper_row = QHBoxLayout()
-        klipper_row.addStretch()
-        klipper_row.addWidget(self.klipper_status_widget)
-        data_layout.addLayout(klipper_row)
         status_and_vision_layout = QHBoxLayout()
         status_and_vision_layout.addWidget(self.status_widget)
         status_and_vision_layout.addWidget(self.dieswell_widget)
@@ -130,6 +131,10 @@ class HomeWidget(QWidget):
         layout.addLayout(control_layout)
         layout.addLayout(data_layout)
         self.setLayout(layout)
+
+        self.klipper_status_widget.sig_visible_changed.connect(
+            lambda visible: self._buttons_container.setVisible(not visible)
+        )
 
         # Signal and slot
         self.restart_button.clicked.connect(self.on_restart_clicked)
