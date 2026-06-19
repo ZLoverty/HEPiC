@@ -54,6 +54,7 @@ class KlipperWorker(QObject):
         self.progress = 0.0
         self.file_position = 0
         self.active_gcode = ""
+        self.print_state = ""
 
     @asyncSlot()
     async def run(self):
@@ -195,6 +196,9 @@ class KlipperWorker(QObject):
                         self.active_feedrate_mms = sub_msg.get("motion_report", {}).get("live_extruder_velocity", 0.0)
                         self.progress = sub_msg.get("virtual_sdcard", {}).get("progress", 0.0)
                         self.file_position = sub_msg.get("virtual_sdcard", {}).get("file_position", 0.0)
+                        self.print_state = sub_msg.get("print_stats", {}).get("state", self.print_state)
+                        if self.print_state == "complete":
+                            self.progress = 1.0
                         webhooks = sub_msg.get("webhooks", {})
                         state = webhooks.get("state", "")
                         message = webhooks.get("state_message", "")
@@ -255,6 +259,7 @@ class KlipperWorker(QObject):
                     "extruder": None,
                     "motion_report": None,
                     "virtual_sdcard": None,
+                    "print_stats": None,
                     "webhooks": None,
                 }
             },

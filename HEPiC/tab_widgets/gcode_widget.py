@@ -101,13 +101,14 @@ class GcodeWidget(QWidget):
             return
 
     def on_click_run(self):
+        self.gcode = self.gcode_display.toPlainText()
+        self.mapper = GcodePositionMapper(self.gcode)
+        self.gcode_list = self.gcode.splitlines()
+
         self.file_path = Path(__file__).resolve().parent / "tmp.gcode"
         with open(self.file_path, "w", encoding="utf-8") as f:
             f.write(self.gcode)
-
-        if self.file_path:
-            # emit file path
-            self.sigFilePath.emit(str(self.file_path))
+        self.sigFilePath.emit(str(self.file_path))
     
     def on_click_gen(self):
         dialog = JobSequenceDialog(self)

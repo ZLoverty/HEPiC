@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QProgressBar,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -37,8 +38,10 @@ class PlatformStatusWidget(QWidget):
         self.die_temperature_value = QLabel(f"{placeholder}")
         self.die_diameter_label = QLabel("出口熔体直径:")
         self.die_diameter_value = QLabel(f"{placeholder}")
-        self.progress_label = QLabel("任务进度:")
-        self.progress_value = QLabel(f"{placeholder}")
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("%p%")
 
         self.tcp_sensor_widgets: dict[str, dict] = {}
 
@@ -68,8 +71,7 @@ class PlatformStatusWidget(QWidget):
         die_diameter_row_layout.addWidget(self.die_diameter_value)
 
         progress_row_layout = QHBoxLayout()
-        progress_row_layout.addWidget(self.progress_label)
-        progress_row_layout.addWidget(self.progress_value)
+        progress_row_layout.addWidget(self.progress_bar)
 
         layout.addLayout(row_layout_1)
         layout.addLayout(row_layout_2)
@@ -78,6 +80,7 @@ class PlatformStatusWidget(QWidget):
         layout.addLayout(die_diameter_row_layout)
         layout.addLayout(progress_row_layout)
 
+        self.setFixedWidth(290)
         self.setLayout(layout)
         self.hotend_temperature_input.returnPressed.connect(self.on_temp_enter_pressed)
 
@@ -157,7 +160,11 @@ class PlatformStatusWidget(QWidget):
 
     @Slot(float)
     def update_progress(self, progress):
-        self.progress_value.setText(f"{progress*100:.1f}%")
+        self.progress_bar.setValue(int(progress * 100))
+
+    @Slot(str)
+    def set_status_text(self, text: str):
+        self.progress_bar.setFormat(text if text.strip() else "%p%")
 
 
 if __name__ == "__main__":

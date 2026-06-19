@@ -214,6 +214,7 @@ class MainWindow(QMainWindow):
         self.home_widget.stop_button.clicked.connect(self.on_stop_clicked)
         self.sigNewStatus.connect(self.status_widget.update_display)
         self.sigFilePosition.connect(self.job_sequence_widget.gcode_widget.update_file_position)
+        self.job_sequence_widget.gcode_widget.sigFilePath.connect(lambda _: self.tabs.setCurrentIndex(0))
         
         # --- 质检模式的材料属性会在第一次显示时自动初始化 ---
         
@@ -397,6 +398,7 @@ class MainWindow(QMainWindow):
         if normalized.upper().startswith("STATUS "):
             msg = normalized[7:].strip()
             self.quality_check_widget.set_status_message(msg)
+            self.status_widget.set_status_text(msg)
 
     def _start_quality_check_extrusion_progress(self):
         if not hasattr(self, "quality_check_widget") or self.quality_check_widget is None:

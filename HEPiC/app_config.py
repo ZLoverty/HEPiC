@@ -99,4 +99,18 @@ def build_main_window_stylesheet(
             background-color: {secondary_foreground_color};
             color: {background_color};
         }}
+        QProgressBar {{
+            background-color: {secondary_background_color};
+            color: {foreground_color};
+            border: 1px solid {secondary_background_color};
+            border-radius: 6px;
+            text-align: center;
+            min-height: 28px;
+            max-height: 28px;
+            font-size: 12px;
+        }}
+        QProgressBar::chunk {{
+            background-color: {secondary_foreground_color};
+            border-radius: 5px;
+        }}
         """
