@@ -316,6 +316,19 @@ class TCPClient(QObject):
     def get_zeroable_sensor_names(self) -> list[str]:
         return [name for name, sensor in self.sensor_data_map.items() if sensor.can_zero]
 
+    def get_sensor_labels(self) -> dict[str, str]:
+        labels: dict[str, str] = {}
+        if self.sensor_config is None:
+            return labels
+        for item in self.sensor_config.get("sensors", []):
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name") or item.get("id")
+            label = item.get("label")
+            if name and label:
+                labels[str(name)] = str(label)
+        return labels
+
     def compute_filament_velocity(self):
         if np.isnan(self.meter_count):
             self.filament_velocity = np.nan

@@ -88,7 +88,7 @@ class PlatformStatusWidget(QWidget):
         layout.addLayout(die_diameter_row_layout)
         layout.addLayout(progress_row_layout)
 
-        self.setFixedWidth(290)
+        self.setFixedWidth(240)
         self.setLayout(layout)
         self.hotend_temperature_input.returnPressed.connect(self.on_temp_enter_pressed)
 
@@ -100,7 +100,10 @@ class PlatformStatusWidget(QWidget):
         self.die_temperature_label.setVisible(visible)
         self.die_temperature_value.setVisible(visible)
 
-    def configure_tcp_sensors(self, sensor_names: list[str], zeroable_sensor_names: list[str]):
+    def configure_tcp_sensors(self, sensor_names: list[str], zeroable_sensor_names: list[str], sensor_labels: dict[str, str] | None = None):
+        if sensor_labels is None:
+            sensor_labels = {}
+
         for name in list(self.tcp_sensor_widgets.keys()):
             if name not in sensor_names:
                 row = self.tcp_sensor_widgets.pop(name)
@@ -118,8 +121,9 @@ class PlatformStatusWidget(QWidget):
                     row["button"].setVisible(name in zeroable_set)
                 continue
 
+            display_name = sensor_labels.get(name, name)
             row_layout = QHBoxLayout()
-            label = QLabel(f"{name}:")
+            label = QLabel(f"{display_name}:")
             value = QLabel(f"{self.placeholder}")
             row_layout.addWidget(label)
             row_layout.addWidget(value)

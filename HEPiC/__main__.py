@@ -262,7 +262,8 @@ class MainWindow(QMainWindow):
         sensor_items = [col for col in sensor_columns if col not in self.base_data_items]
         self._register_sensor_items(sensor_items)
         zeroable_sensor_names = self.worker.get_zeroable_sensor_names() if self.worker else []
-        self.status_widget.configure_tcp_sensors(sensor_items, zeroable_sensor_names)
+        sensor_labels = self.worker.get_sensor_labels() if self.worker else {}
+        self.status_widget.configure_tcp_sensors(sensor_items, zeroable_sensor_names, sensor_labels)
         self.logger.info(f"Configured sensor recording columns: {sensor_columns}")
 
     @Slot(int)
