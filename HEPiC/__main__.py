@@ -577,6 +577,7 @@ class MainWindow(QMainWindow):
         else:
             self.home_widget.play_pause_button.setIcon(self.home_widget.play_icon)
             self.logger.info("停止记录数据 ...")
+            self.statusBar().showMessage("记录已停止")
             self.autosave_filename = None
             self.is_recording = False
             with self._csv_lock:

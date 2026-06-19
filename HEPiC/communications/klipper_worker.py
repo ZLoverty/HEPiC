@@ -55,6 +55,7 @@ class KlipperWorker(QObject):
         self.file_position = 0
         self.active_gcode = ""
         self.print_state = ""
+        self._prev_klipper_state = ""
 
     @asyncSlot()
     async def run(self):
@@ -70,7 +71,6 @@ class KlipperWorker(QObject):
             try:
                 self.logger.info(f"正在连接 Klipper {self.uri} ...")
                 self.connection_status.emit(f"正在连接 Klipper {self.uri} ...")
-                # async with asyncio.wait_for(websockets.connect(self.uri), timeout=2.0) as websocket:
                 async with websockets.connect(self.uri, open_timeout=2.0) as websocket:
                     self.logger.info("Klipper 连接成功！")
                     self.connection_status.emit("Klipper 连接成功！")
@@ -83,7 +83,7 @@ class KlipperWorker(QObject):
                     self.listener_task = asyncio.create_task(self.message_listener(websocket))
                     self.processor_task = asyncio.create_task(self.data_processor(websocket))
                     self.query_task = asyncio.create_task(self.query_klipper())
-                    
+
                     done, pending = await asyncio.wait(
                         [self.listener_task, self.processor_task],
                         return_when=asyncio.FIRST_COMPLETED
@@ -96,15 +96,26 @@ class KlipperWorker(QObject):
                             await task
                         except asyncio.CancelledError:
                             pass
-            
+
             except (websockets.exceptions.ConnectionClosedError, ConnectionRefusedError) as e:
-                self.logger.error(f"Klipper 连接失败")
+                self.logger.error(f"Klipper 连接被拒绝: {e}")
+                self.connection_status.emit("Klipper 连接被拒绝，等待重连...")
             except TimeoutError as e:
                 self.logger.error("Klipper 连接超时，检查服务器是否开启")
                 self.connection_status.emit("Klipper 连接超时，检查服务器是否开启")
+            except Exception as e:
+                self.logger.error(f"Klipper 连接异常: {e}")
+                self.connection_status.emit(f"Klipper 连接异常，等待重连...")
 
             # 如果 is_running 依然为 True，说明是意外断开，需要重连
             if self.is_running:
+                # 取消 query_task（避免任务泄漏）
+                if self.query_task and not self.query_task.done():
+                    self.query_task.cancel()
+                    try:
+                        await self.query_task
+                    except asyncio.CancelledError:
+                        pass
                 self.connection_status.emit("连接断开，3秒后重连...")
                 self.logger.info("将在 3 秒后尝试重连...")
                 await asyncio.sleep(3)
@@ -178,6 +189,11 @@ class KlipperWorker(QObject):
                     await websocket.send(json.dumps(data))
                 elif data["method"] == "notify_gcode_response":
                     response = data.get("params")[0]
+                    _state_map = {
+                        "// Klipper state: Shutdown":   "// Klipper 紧急停止，已关闭！",
+                        "// Klipper state: Disconnect": "// Klipper MCU 已断开，等待重连...",
+                    }
+                    response = _state_map.get(response, response)
                     self.gcode_response.emit(response)
                 else:
                     self.logger.debug(data)
@@ -204,6 +220,22 @@ class KlipperWorker(QObject):
                         message = webhooks.get("state_message", "")
                         if state:
                             self.sigKlipperState.emit(state, message)
+                            _state_labels = {
+                                "ready":    "Klipper 就绪",
+                                "startup":  "Klipper 正在启动...",
+                                "shutdown": "Klipper 已关闭",
+                                "error":    f"Klipper 错误: {message[:80]}" if message else "Klipper 错误",
+                            }
+                            self.connection_status.emit(_state_labels.get(state, f"Klipper 状态: {state}"))
+                            if state != self._prev_klipper_state:
+                                _response_labels = {
+                                    "ready":    "// Klipper 已就绪",
+                                    "startup":  "// Klipper 正在启动...",
+                                    "error":    f"!! Klipper 错误: {message[:120]}" if message else "!! Klipper 错误",
+                                }
+                                if state in _response_labels:
+                                    self.gcode_response.emit(_response_labels[state])
+                                self._prev_klipper_state = state
             else:
                 self.logger.debug(data)
 
@@ -322,6 +354,8 @@ class KlipperWorker(QObject):
     @asyncSlot()
     async def restart_firmware(self):
         self.logger.info("Restarting firmware ...")
+        self.gcode_response.emit("// 正在发送固件重启指令，等待 Klipper 就绪...")
+        self._prev_klipper_state = ""
         payload = {
             "jsonrpc": "2.0",
             "method": "printer.firmware_restart",
@@ -332,6 +366,8 @@ class KlipperWorker(QObject):
     @asyncSlot()
     async def printer_restart(self):
         self.logger.info("Restarting Klipper ...")
+        self.gcode_response.emit("// 正在发送 Klipper 重启指令，等待就绪...")
+        self._prev_klipper_state = ""
         payload = {
             "jsonrpc": "2.0",
             "method": "printer.restart",

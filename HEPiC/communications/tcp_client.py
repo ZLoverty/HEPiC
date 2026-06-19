@@ -111,6 +111,7 @@ class TCPClient(QObject):
                     asyncio.open_connection(self.host, self.port), timeout=2.0
                 )
                 self.logger.info(f"HEPiC server connected: {self.host}:{self.port}")
+                self.connection_status.emit(f"HEPiC server 已连接 ({self.host}:{self.port})")
 
                 await self.request_sensor_config()
                 self.receive_task = asyncio.create_task(self.receive_data())
