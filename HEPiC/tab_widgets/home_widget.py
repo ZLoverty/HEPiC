@@ -1,7 +1,10 @@
+from pathlib import Path
+
 from PySide6.QtWidgets import (
      QWidget, QVBoxLayout, QHBoxLayout, QSizePolicy, QPushButton, QStyle
 )
 from PySide6.QtCore import QSize, Signal, Slot, QTimer
+from PySide6.QtGui import QIcon
 from .command_widget import CommandWidget
 from .data_plot_widget import DataPlotWidget
 from .platform_status_widget import PlatformStatusWidget
@@ -12,7 +15,6 @@ import logging
 class HomeWidget(QWidget):
     """主页控件，包含 G-code 控件和数据状态监视控件"""
 
-    sigRestart = Signal()
     sigExtrude = Signal(str)
     sigRetract = Signal(str)
 
@@ -71,16 +73,13 @@ class HomeWidget(QWidget):
         self.play_pause_button.setStyleSheet(qss_style)
 
         self.stop_button = QPushButton()
-        self.stop_icon = style.standardIcon(QStyle.StandardPixmap.SP_DialogCancelButton)
+        _icon_dir = Path(__file__).resolve().parent / "icons"
+        self.stop_icon = QIcon(str(_icon_dir / "emergency_stop.png"))
         self.stop_button.setIcon(self.stop_icon)
         self.stop_button.setFixedSize(button_size, button_size)
-        self.stop_button.setIconSize(QSize(button_size // 2, button_size // 2))
-        self.stop_button.setStyleSheet(qss_style)
+        self.stop_button.setIconSize(QSize(button_size, button_size))
+        self.stop_button.setStyleSheet("QPushButton { border: none; padding: 0; background: transparent; }")
 
-        self.restart_button = QPushButton("🍓")
-        self.restart_button.setFixedSize(button_size, button_size)
-        self.restart_button.setIconSize(QSize(button_size // 2, button_size // 2))
-        self.restart_button.setStyleSheet(qss_style)
 
         # extrude, retract buttons (按住连续挤出/回抽，松开立即停止)
         self.extrude_button = QPushButton("挤出（长按）")
@@ -117,7 +116,6 @@ class HomeWidget(QWidget):
         control_button_layout.setContentsMargins(0, 0, 0, 0)
         control_button_layout.addWidget(self.play_pause_button)
         control_button_layout.addWidget(self.stop_button)
-        control_button_layout.addWidget(self.restart_button)
         control_layout.addWidget(self._buttons_container)
         control_layout.addWidget(self.klipper_status_widget)
 
@@ -137,16 +135,11 @@ class HomeWidget(QWidget):
         )
 
         # Signal and slot
-        self.restart_button.clicked.connect(self.on_restart_clicked)
         self.extrude_button.pressed.connect(self.on_extrude_pressed)
         self.extrude_button.released.connect(self.on_extrude_released)
         self.retract_button.pressed.connect(self.on_retract_pressed)
         self.retract_button.released.connect(self.on_retract_released)
 
-    @Slot()
-    def on_restart_clicked(self):
-        self.sigRestart.emit()
-    
     def on_extrude_pressed(self):
         self.logger.debug("Extrude button pressed")
         self.on_extrude_tick()      # 立即挤出一段，提升按下的响应感

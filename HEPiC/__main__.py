@@ -312,7 +312,7 @@ class MainWindow(QMainWindow):
         self.klipper_worker.gcode_response.connect(self.handle_gcode_response)
         self.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
         self.home_widget.command_widget.command.connect(self.klipper_worker.send_gcode)
-        self.home_widget.sigRestart.connect(self.klipper_worker.restart_firmware)
+
         self.sigEmergencyStop.connect(self.klipper_worker.emergency_stop)
         self.sigProgress.connect(self.status_widget.update_progress)
         self.job_sequence_widget.gcode_widget.sigFilePath.connect(self.klipper_worker.upload_gcode_to_klipper)
