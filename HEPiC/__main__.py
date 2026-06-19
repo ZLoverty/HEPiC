@@ -247,7 +247,7 @@ class MainWindow(QMainWindow):
             if item not in self.data_status:
                 self.data_status[item] = np.nan
 
-    def _register_sensor_items(self, items):
+    def _register_sensor_items(self, items, sensor_labels: dict | None = None):
         added = False
         for item in items:
             if item and item not in self.sensor_data_items:
@@ -255,14 +255,14 @@ class MainWindow(QMainWindow):
                 added = True
         if added:
             self._ensure_data_keys(self.sensor_data_items)
-            self.home_widget.data_widget.set_sensor_items(self.sensor_data_items)
+            self.home_widget.data_widget.set_sensor_items(self.sensor_data_items, sensor_labels)
 
     @Slot(list)
     def on_sensor_config_received(self, sensor_columns):
         sensor_items = [col for col in sensor_columns if col not in self.base_data_items]
-        self._register_sensor_items(sensor_items)
         zeroable_sensor_names = self.worker.get_zeroable_sensor_names() if self.worker else []
         sensor_labels = self.worker.get_sensor_labels() if self.worker else {}
+        self._register_sensor_items(sensor_items, sensor_labels)
         self.status_widget.configure_tcp_sensors(sensor_items, zeroable_sensor_names, sensor_labels)
         self.logger.info(f"Configured sensor recording columns: {sensor_columns}")
 

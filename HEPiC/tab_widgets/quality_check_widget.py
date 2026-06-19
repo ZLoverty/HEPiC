@@ -226,7 +226,7 @@ class QualityCheckWidget(QWidget):
         material_layout.addLayout(family_selector_row)
 
         pi_code_selector_row = QHBoxLayout()
-        pi_code_selector_row.addWidget(QLabel("PI_Code:"))
+        pi_code_selector_row.addWidget(QLabel("PI Code:"))
         self.material_combo = QComboBox()
         self.material_combo.currentTextChanged.connect(self.update_material_properties_display)
         pi_code_selector_row.addWidget(self.material_combo)
@@ -348,8 +348,8 @@ class QualityCheckWidget(QWidget):
         layout.addLayout(info_row)
 
         self.plot_widget = pg.PlotWidget()
-        self.plot_widget.setLabel("bottom", "Time", units="s")
-        self.plot_widget.setLabel("left", "Extrusion Force", units="N")
+        self.plot_widget.setLabel("bottom", "时间", units="s")
+        self.plot_widget.setLabel("left", "挤出力", units="N")
         self.plot_widget.setTitle("实时挤出力数据")
         self.plot_widget.addLegend()
         self.force_curve = self.plot_widget.plot(
