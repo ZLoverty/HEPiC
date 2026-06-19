@@ -1,3 +1,5 @@
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from PySide6.QtCore import Signal, Slot
@@ -24,6 +26,8 @@ class PlatformStatusWidget(QWidget):
         icon_path = current_file_path.parent / icon_path
         self.zero_icon = QIcon(str(icon_path / "toZero.png"))
         self.placeholder = placeholder
+        self._print_start_time: float | None = None
+        self._status_text = ""
 
         self.hotend_temperature_label = QLabel("温度:")
         self.hotend_temperature_value = QLabel(f"{placeholder:5s} /")
@@ -161,10 +165,34 @@ class PlatformStatusWidget(QWidget):
     @Slot(float)
     def update_progress(self, progress):
         self.progress_bar.setValue(int(progress * 100))
+        if progress > 0.01 and self._print_start_time is None:
+            self._print_start_time = time.monotonic()
+        elif progress <= 0.01:
+            self._print_start_time = None
+        self._refresh_format()
 
     @Slot(str)
     def set_status_text(self, text: str):
-        self.progress_bar.setFormat(text if text.strip() else "%p%")
+        self._status_text = text.strip()
+        self._refresh_format()
+
+    def _refresh_format(self):
+        progress = self.progress_bar.value() / 100.0
+        base = self._status_text if self._status_text else "%p%"
+        eta = self._eta_str(progress)
+        self.progress_bar.setFormat(f"{base}  {eta}" if eta else base)
+
+    def _eta_str(self, progress: float) -> str:
+        if progress >= 1.0:
+            return "已完成"
+        if self._print_start_time is None or progress < 0.01:
+            return ""
+        elapsed = time.monotonic() - self._print_start_time
+        if elapsed < 5:
+            return ""
+        remaining_s = elapsed * (1.0 - progress) / progress
+        eta_time = datetime.now() + timedelta(seconds=remaining_s)
+        return f"预计 {eta_time.strftime('%H:%M')} 完成"
 
 
 if __name__ == "__main__":
