@@ -58,9 +58,9 @@ class JobSequenceDialog(QDialog):
         """返回用户输入的数据"""
 
         job_sequence_list = [
-            "M118 开启相对运动模式",
+            "M118 STATUS 启相对运动模式",
             "G91",
-            "M118 正在加热"
+            "M118 STATUS 正在加热"
         ]
 
         Ts = np.linspace(float(self.tmin_input.text()), float(self.tmax_input.text()), self.tnum_input.value())
@@ -72,7 +72,7 @@ class JobSequenceDialog(QDialog):
             if num == 0:
                 job_sequence_list.extend([
                     "M400",
-                    "M118 正在归零传感器 ...",
+                    "M118 STATUS 正在归零传感器 ...",
                     "G1 E-10 F600",
                     "M400",
                     "G4 P2000",
@@ -90,18 +90,18 @@ class JobSequenceDialog(QDialog):
                     "G4 P1000",
                     "M118 1 ...",
                     "M400",
-                    "M118 -- 测试开始! --",
+                    "M118 STATUS 测试开始!",
                     "M118 START_RECORDING"
                 ])
             for V in Vs:
-                job_sequence_list.append(f"M118 V = {V:.2f} mm/s")
+                job_sequence_list.append(f"M118 STATUS V = {V:.2f} mm/s")
                 ext_length = V*t_each
                 job_sequence_list.append(f"G1 E{ext_length:.2f} F{V*60:.2f}")
                 job_sequence_list.append("M400")
                 
-        job_sequence_list.append("M118 Test finished. Lowering hotend temperature.")
+        job_sequence_list.append("M118 STATUS 测试结束!")
         job_sequence_list.append("M118 STOP_RECORDING")
-        job_sequence_list.append("M109 S0")
+        job_sequence_list.append("FIRMWARE_RESTART\n")
 
         return "\n".join(job_sequence_list)
     

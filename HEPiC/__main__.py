@@ -214,6 +214,7 @@ class MainWindow(QMainWindow):
         self.home_widget.stop_button.clicked.connect(self.on_stop_clicked)
         self.sigNewStatus.connect(self.status_widget.update_display)
         self.sigFilePosition.connect(self.job_sequence_widget.gcode_widget.update_file_position)
+        self.job_sequence_widget.gcode_widget.sigFilePath.connect(lambda _: self.tabs.setCurrentIndex(0))
         
         # --- 质检模式的材料属性会在第一次显示时自动初始化 ---
         
@@ -246,7 +247,7 @@ class MainWindow(QMainWindow):
             if item not in self.data_status:
                 self.data_status[item] = np.nan
 
-    def _register_sensor_items(self, items):
+    def _register_sensor_items(self, items, sensor_labels: dict | None = None):
         added = False
         for item in items:
             if item and item not in self.sensor_data_items:
@@ -254,14 +255,15 @@ class MainWindow(QMainWindow):
                 added = True
         if added:
             self._ensure_data_keys(self.sensor_data_items)
-            self.home_widget.data_widget.set_sensor_items(self.sensor_data_items)
+            self.home_widget.data_widget.set_sensor_items(self.sensor_data_items, sensor_labels)
 
     @Slot(list)
     def on_sensor_config_received(self, sensor_columns):
         sensor_items = [col for col in sensor_columns if col not in self.base_data_items]
-        self._register_sensor_items(sensor_items)
         zeroable_sensor_names = self.worker.get_zeroable_sensor_names() if self.worker else []
-        self.status_widget.configure_tcp_sensors(sensor_items, zeroable_sensor_names)
+        sensor_labels = self.worker.get_sensor_labels() if self.worker else {}
+        self._register_sensor_items(sensor_items, sensor_labels)
+        self.status_widget.configure_tcp_sensors(sensor_items, zeroable_sensor_names, sensor_labels)
         self.logger.info(f"Configured sensor recording columns: {sensor_columns}")
 
     @Slot(int)
@@ -311,7 +313,7 @@ class MainWindow(QMainWindow):
         self.klipper_worker.gcode_response.connect(self.handle_gcode_response)
         self.status_widget.set_temperature.connect(self.klipper_worker.set_temperature)
         self.home_widget.command_widget.command.connect(self.klipper_worker.send_gcode)
-        self.home_widget.sigRestart.connect(self.klipper_worker.restart_firmware)
+
         self.sigEmergencyStop.connect(self.klipper_worker.emergency_stop)
         self.sigProgress.connect(self.status_widget.update_progress)
         self.job_sequence_widget.gcode_widget.sigFilePath.connect(self.klipper_worker.upload_gcode_to_klipper)
@@ -397,6 +399,7 @@ class MainWindow(QMainWindow):
         if normalized.upper().startswith("STATUS "):
             msg = normalized[7:].strip()
             self.quality_check_widget.set_status_message(msg)
+            self.status_widget.set_status_text(msg)
 
     def _start_quality_check_extrusion_progress(self):
         if not hasattr(self, "quality_check_widget") or self.quality_check_widget is None:
@@ -478,6 +481,8 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.logger.error(f"初始化熔体状态相机失败: {e}")
             self.video_worker = None
+
+        self.status_widget.set_die_diameter_visible(self.video_worker is not None)
         
         # 创建 image processing worker 用于处理图像，探测熔体直径
         self.processing_worker = ProcessingWorker()
@@ -533,6 +538,8 @@ class MainWindow(QMainWindow):
             else:
                 self.logger.warning(f"初始化热成像仪失败，热成像仪不可用: {e}")
             self.ir_worker = None
+
+        self.status_widget.set_die_temperature_visible(self.ir_worker is not None)
             
         if not hasattr(self, "_display_timer") or self._display_timer is None:
             self._display_timer = QTimer(self)
@@ -571,6 +578,7 @@ class MainWindow(QMainWindow):
         else:
             self.home_widget.play_pause_button.setIcon(self.home_widget.play_icon)
             self.logger.info("停止记录数据 ...")
+            self.statusBar().showMessage("记录已停止")
             self.autosave_filename = None
             self.is_recording = False
             with self._csv_lock:
@@ -712,9 +720,6 @@ def start_app():
     ############################
 
     # Request 1ms timer resolution on Windows so QTimer fires accurately at high frequencies.
-    import ctypes
-    winmm = ctypes.windll.winmm
-    winmm.timeBeginPeriod(1)
 
     app = QApplication(sys.argv)
     window = MainWindow(test_mode=args.test)
@@ -726,8 +731,6 @@ def start_app():
             loop.run_forever()
     except KeyboardInterrupt:
         pass
-    finally:
-        winmm.timeEndPeriod(1)
 
 # ====================================================================
 # 3. 应用程序入口

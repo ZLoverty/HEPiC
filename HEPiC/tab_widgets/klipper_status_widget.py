@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton
-from PySide6.QtCore import Slot
+from PySide6.QtCore import Signal, Slot
 
 _STATE_COLORS = {
     "ready":    "#4CAF50",
@@ -10,6 +10,7 @@ _STATE_COLORS = {
 
 
 class KlipperStatusWidget(QWidget):
+    sig_visible_changed = Signal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -72,7 +73,9 @@ class KlipperStatusWidget(QWidget):
         if not has_message:
             self._detail_label.setVisible(False)
             self._toggle_btn.setText("▼ 详情")
-        self.setVisible(state != "ready")
+        visible = state != "ready"
+        self.setVisible(visible)
+        self.sig_visible_changed.emit(visible)
 
     def _toggle_detail(self):
         visible = not self._detail_label.isVisible()

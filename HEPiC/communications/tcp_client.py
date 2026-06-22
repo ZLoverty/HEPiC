@@ -111,6 +111,7 @@ class TCPClient(QObject):
                     asyncio.open_connection(self.host, self.port), timeout=2.0
                 )
                 self.logger.info(f"HEPiC server connected: {self.host}:{self.port}")
+                self.connection_status.emit(f"HEPiC server 已连接 ({self.host}:{self.port})")
 
                 await self.request_sensor_config()
                 self.receive_task = asyncio.create_task(self.receive_data())
@@ -314,6 +315,19 @@ class TCPClient(QObject):
 
     def get_zeroable_sensor_names(self) -> list[str]:
         return [name for name, sensor in self.sensor_data_map.items() if sensor.can_zero]
+
+    def get_sensor_labels(self) -> dict[str, str]:
+        labels: dict[str, str] = {}
+        if self.sensor_config is None:
+            return labels
+        for item in self.sensor_config.get("sensors", []):
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name") or item.get("id")
+            label = item.get("label")
+            if name and label:
+                labels[str(name)] = str(label)
+        return labels
 
     def compute_filament_velocity(self):
         if np.isnan(self.meter_count):

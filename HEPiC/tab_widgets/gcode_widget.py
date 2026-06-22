@@ -23,16 +23,19 @@ class GcodeWidget(QWidget):
         super().__init__()
 
         # 组件
-        self.gcode_title = QLabel("输入 G-code 或打开文件")
+        self.gcode_title = QLabel("G-code 动作序列")
+        self.edit_button = QPushButton("✏️")
+        self.edit_button.setCheckable(True)
+        self.edit_button.setMaximumWidth(60)
         style = self.style()
-        warning_icon = style.standardIcon(QStyle.StandardPixmap.SP_MessageBoxWarning)
-        self.warning_label = QLabel()
-        icon_size = QSize(16, 16)
-        self.warning_label.setPixmap(warning_icon.pixmap(icon_size))
-        tooltip_text = """
-        <p>注意：点击运行后，下面的 G-code 会原封不动发给 Klipper。如果文本包含无效的 G-code，平台不会执行该行，并会报错。请留意最下方状态栏中的报错信息。本软件不会对文本进行任何检查，因为输入无效 G-code 导致的测试失败由测试者本人负责。<p>
-        """
-        self.warning_label.setToolTip(tooltip_text)
+        # warning_icon = style.standardIcon(QStyle.StandardPixmap.SP_MessageBoxWarning)
+        # self.warning_label = QLabel()
+        # icon_size = QSize(16, 16)
+        # self.warning_label.setPixmap(warning_icon.pixmap(icon_size))
+        # tooltip_text = """
+        # <p>注意：点击运行后，下面的 G-code 会原封不动发给 Klipper。如果文本包含无效的 G-code，平台不会执行该行，并会报错。请留意最下方状态栏中的报错信息。本软件不会对文本进行任何检查，因为输入无效 G-code 导致的测试失败由测试者本人负责。<p>
+        # """
+        # self.warning_label.setToolTip(tooltip_text)
         self.gcode_title.setMaximumWidth(300)
         self.gcode_display = QTextEdit()
         self.gcode_display.setReadOnly(True)
@@ -45,8 +48,9 @@ class GcodeWidget(QWidget):
         layout = QVBoxLayout()
         label_layout = QHBoxLayout()
         label_layout.addWidget(self.gcode_title)
-        label_layout.addWidget(self.warning_label)
         label_layout.addStretch(1)
+        label_layout.addWidget(self.edit_button)
+        # label_layout.addWidget(self.warning_label)
         button_layout1 = QHBoxLayout()
 
         button_layout1.addWidget(self.gen_button)
@@ -59,6 +63,7 @@ class GcodeWidget(QWidget):
         self.setLayout(layout)
 
         # 信号槽连接
+        self.edit_button.toggled.connect(self.on_toggle_edit)
         self.open_button.clicked.connect(self.on_click_open)
         self.run_button.clicked.connect(self.on_click_run)
         self.sigCurrentLine.connect(self.highlight_current_line)
@@ -72,6 +77,10 @@ class GcodeWidget(QWidget):
 
         # logger
         self.logger = logging.getLogger(__name__)
+
+    def on_toggle_edit(self, checked):
+        self.gcode_display.setReadOnly(not checked)
+        self.edit_button.setText("✅" if checked else "✏️")
 
     def on_click_open(self):
         """打开 gcode 文件，清理注释，显示在 display 窗口"""
@@ -92,13 +101,14 @@ class GcodeWidget(QWidget):
             return
 
     def on_click_run(self):
+        self.gcode = self.gcode_display.toPlainText()
+        self.mapper = GcodePositionMapper(self.gcode)
+        self.gcode_list = self.gcode.splitlines()
+
         self.file_path = Path(__file__).resolve().parent / "tmp.gcode"
         with open(self.file_path, "w", encoding="utf-8") as f:
             f.write(self.gcode)
-
-        if self.file_path:
-            # emit file path
-            self.sigFilePath.emit(str(self.file_path))
+        self.sigFilePath.emit(str(self.file_path))
     
     def on_click_gen(self):
         dialog = JobSequenceDialog(self)

@@ -32,6 +32,12 @@ from PySide6.QtWidgets import (
 
 from PySide6.QtGui import QColor, QTextCharFormat, QTextCursor
 
+_LABEL_STYLE = "font-size: 9pt; color: #888888;"
+_VALUE_STYLE = "font-size: 12pt;"
+_HERO_VALUE_STYLE = "font-size: 28pt; font-weight: bold;"
+_UNIT_STYLE = "font-size: 14pt; color: #888888;"
+
+
 class StatusIndicator(QFrame):
     """Circular status indicator."""
 
@@ -220,33 +226,85 @@ class QualityCheckWidget(QWidget):
         material_layout.addLayout(family_selector_row)
 
         pi_code_selector_row = QHBoxLayout()
-        pi_code_selector_row.addWidget(QLabel("PI_Code:"))
+        pi_code_selector_row.addWidget(QLabel("PI Code:"))
         self.material_combo = QComboBox()
         self.material_combo.currentTextChanged.connect(self.update_material_properties_display)
         pi_code_selector_row.addWidget(self.material_combo)
         material_layout.addLayout(pi_code_selector_row)
 
-        self.temperature_label = QLabel("温度: -- °C")
-        self.speed_label = QLabel("速度: -- mm/s")
-        self.excellent_force_range_label = QLabel("优秀范围: -- N")
-        self.force_range_label = QLabel("合格范围: -- N")
-        self.stability_threshold_label = QLabel("稳定阈值: -- N")
-        material_layout.addWidget(self.temperature_label)
-        material_layout.addWidget(self.speed_label)
-        material_layout.addWidget(self.excellent_force_range_label)
-        material_layout.addWidget(self.force_range_label)
-        material_layout.addWidget(self.stability_threshold_label)
+        self.temperature_value = QLabel("--")
+        self.speed_value = QLabel("--")
+        self.excellent_force_range_value = QLabel("--")
+        self.force_range_value = QLabel("--")
+        self.stability_threshold_value = QLabel("--")
+        for name, val_widget, unit in [
+            ("温度", self.temperature_value, "°C"),
+            ("速度", self.speed_value, "mm/s"),
+            ("优秀范围", self.excellent_force_range_value, "N"),
+            ("合格范围", self.force_range_value, "N"),
+            ("稳定阈值", self.stability_threshold_value, "N"),
+        ]:
+            val_widget.setStyleSheet(_VALUE_STYLE)
+            row = QHBoxLayout()
+            name_lbl = QLabel(name)
+            name_lbl.setStyleSheet(_LABEL_STYLE)
+            unit_lbl = QLabel(unit)
+            unit_lbl.setStyleSheet(_LABEL_STYLE)
+            row.addWidget(name_lbl)
+            row.addStretch()
+            row.addWidget(val_widget)
+            row.addWidget(unit_lbl)
+            material_layout.addLayout(row)
         material_layout.addStretch()
         info_row.addWidget(material_block, 2)
 
         system_block, system_layout = self._make_info_block("系统信息")
-        self.system_temperature_label = QLabel("实时温度: -- °C")
-        self.system_feedrate_label = QLabel("实时挤出速度: -- mm/s")
-        self.system_force_label = QLabel("实时挤出力: -- N")
-        system_layout.addWidget(self.system_temperature_label)
-        system_layout.addWidget(self.system_feedrate_label)
-        system_layout.addWidget(self.system_force_label)
-        system_layout.addSpacing(10)
+
+        # 温度行
+        self.system_temperature_value = QLabel("--")
+        self.system_temperature_value.setStyleSheet(_VALUE_STYLE)
+        temp_row = QHBoxLayout()
+        temp_name = QLabel("实时温度")
+        temp_name.setStyleSheet(_LABEL_STYLE)
+        temp_unit = QLabel("°C")
+        temp_unit.setStyleSheet(_LABEL_STYLE)
+        temp_row.addWidget(temp_name)
+        temp_row.addStretch()
+        temp_row.addWidget(self.system_temperature_value)
+        temp_row.addWidget(temp_unit)
+        system_layout.addLayout(temp_row)
+
+        # 挤出速度行
+        self.system_feedrate_value = QLabel("--")
+        self.system_feedrate_value.setStyleSheet(_VALUE_STYLE)
+        feedrate_row = QHBoxLayout()
+        feedrate_name = QLabel("实时挤出速度")
+        feedrate_name.setStyleSheet(_LABEL_STYLE)
+        feedrate_unit = QLabel("mm/s")
+        feedrate_unit.setStyleSheet(_LABEL_STYLE)
+        feedrate_row.addWidget(feedrate_name)
+        feedrate_row.addStretch()
+        feedrate_row.addWidget(self.system_feedrate_value)
+        feedrate_row.addWidget(feedrate_unit)
+        system_layout.addLayout(feedrate_row)
+
+        system_layout.addSpacing(8)
+
+        # 实时挤出力英雄数字
+        force_header = QLabel("实时挤出力")
+        force_header.setStyleSheet(_LABEL_STYLE)
+        system_layout.addWidget(force_header)
+        self.system_force_value = QLabel("--")
+        self.system_force_value.setStyleSheet(_HERO_VALUE_STYLE)
+        force_unit = QLabel("N")
+        force_unit.setStyleSheet(_UNIT_STYLE)
+        force_row = QHBoxLayout()
+        force_row.addWidget(self.system_force_value)
+        force_row.addWidget(force_unit)
+        force_row.addStretch()
+        system_layout.addLayout(force_row)
+
+        system_layout.addSpacing(4)
         self.status_message_label = QLabel("")
         self.status_message_label.setStyleSheet("color: #2980b9; font-style: italic;")
         self.status_message_label.setWordWrap(False)
@@ -264,13 +322,24 @@ class QualityCheckWidget(QWidget):
         self.check_button = QPushButton("开始质检")
         self.check_button.clicked.connect(self.on_quality_check_clicked)
         self.check_button.setMinimumHeight(56)
-        self.force_expectation_indicator = StatusIndicator(size=40)
-        self.status_indicator = StabilityBarIndicator(width=48, height=36)
+        self.force_expectation_indicator = StatusIndicator(size=64)
+        self.status_indicator = StabilityBarIndicator(width=80, height=52)
         action_layout.addWidget(self.check_button)
-        action_layout.addWidget(QLabel("挤出力 | 稳定性"))
         indicator_row = QHBoxLayout()
-        indicator_row.addWidget(self.force_expectation_indicator)
-        indicator_row.addWidget(self.status_indicator)
+        force_col = QVBoxLayout()
+        force_col.addWidget(self.force_expectation_indicator)
+        force_ind_lbl = QLabel("力值")
+        force_ind_lbl.setStyleSheet(_LABEL_STYLE)
+        force_ind_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        force_col.addWidget(force_ind_lbl)
+        stab_col = QVBoxLayout()
+        stab_col.addWidget(self.status_indicator)
+        stab_ind_lbl = QLabel("稳定性")
+        stab_ind_lbl.setStyleSheet(_LABEL_STYLE)
+        stab_ind_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        stab_col.addWidget(stab_ind_lbl)
+        indicator_row.addLayout(force_col)
+        indicator_row.addLayout(stab_col)
         indicator_row.addStretch()
         action_layout.addLayout(indicator_row)
         action_layout.addStretch()
@@ -279,8 +348,8 @@ class QualityCheckWidget(QWidget):
         layout.addLayout(info_row)
 
         self.plot_widget = pg.PlotWidget()
-        self.plot_widget.setLabel("bottom", "Time", units="s")
-        self.plot_widget.setLabel("left", "Extrusion Force", units="N")
+        self.plot_widget.setLabel("bottom", "时间", units="s")
+        self.plot_widget.setLabel("left", "挤出力", units="N")
         self.plot_widget.setTitle("实时挤出力数据")
         self.plot_widget.addLegend()
         self.force_curve = self.plot_widget.plot(
@@ -369,16 +438,14 @@ class QualityCheckWidget(QWidget):
 
     def update_material_properties_display(self):
         props = self.get_current_material_properties()
-        self.temperature_label.setText(f"温度: {props.get('temperature', '--')} °C")
-        self.speed_label.setText(f"速度: {props.get('speed', '--')} mm/s")
+        self.temperature_value.setText(str(props.get("temperature", "--")))
+        self.speed_value.setText(str(props.get("speed", "--")))
         excellent_force_min, excellent_force_max = props.get("excellent_force_range", ("--", "--"))
-        self.excellent_force_range_label.setText(
-            f"优秀范围: {excellent_force_min} - {excellent_force_max} N"
-        )
+        self.excellent_force_range_value.setText(f"{excellent_force_min} - {excellent_force_max}")
         force_min, force_max = props.get("force_range", ("--", "--"))
-        self.force_range_label.setText(f"力值范围: {force_min} - {force_max} N")
+        self.force_range_value.setText(f"{force_min} - {force_max}")
         stability_threshold = props.get("stability_threshold", self.default_stability_threshold)
-        self.stability_threshold_label.setText(f"稳定阈值: {stability_threshold} N")
+        self.stability_threshold_value.setText(str(stability_threshold))
         excellent_force_range = props.get("excellent_force_range", (0, 0))
         force_range = props.get("force_range", (0, 0))
         self.excellent_band.setRegion(excellent_force_range)
@@ -398,7 +465,7 @@ class QualityCheckWidget(QWidget):
             self.time_cache.clear()
             self.current_time = 0
             self._last_evaluation = None
-            self.system_force_label.setText("实时挤出力: -- N")
+            self.system_force_value.setText("--")
             self.status_message_label.setText("")
             self.force_expectation_indicator.update_status("unknown")
             self.status_indicator.update_status("unknown")
@@ -482,15 +549,8 @@ class QualityCheckWidget(QWidget):
         temperature = data.get("measured_temperature_C", np.nan)
         feedrate = data.get("feedrate_mms", np.nan)
 
-        if np.isnan(temperature):
-            self.system_temperature_label.setText("实时温度: -- °C")
-        else:
-            self.system_temperature_label.setText(f"实时温度: {temperature:.1f} °C")
-
-        if np.isnan(feedrate):
-            self.system_feedrate_label.setText("实时挤出速度: -- mm/s")
-        else:
-            self.system_feedrate_label.setText(f"实时挤出速度: {feedrate:.1f} mm/s")
+        self.system_temperature_value.setText("--" if np.isnan(temperature) else f"{temperature:.1f}")
+        self.system_feedrate_value.setText("--" if np.isnan(feedrate) else f"{feedrate:.1f}")
 
     def update_plot(self):
         if len(self.time_cache) > 0:
@@ -503,14 +563,12 @@ class QualityCheckWidget(QWidget):
         )
         if evaluation is None:
             self.status_indicator.update_status("unknown")
-            self.system_force_label.setText("实时挤出力: -- N")
+            self.system_force_value.setText("--")
             self.force_expectation_indicator.update_status("unknown")
             return
 
         self._last_evaluation = evaluation
-        self.system_force_label.setText(
-            f"实时挤出力: {evaluation.mean:.2f} ± {evaluation.std:.2f} N"
-        )
+        self.system_force_value.setText(f"{evaluation.mean:.2f} ± {evaluation.std:.2f}")
         self.status_indicator.update_status(evaluation.stability_status)
         self.force_expectation_indicator.update_status(evaluation.force_status)
 

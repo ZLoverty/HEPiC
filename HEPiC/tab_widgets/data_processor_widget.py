@@ -15,8 +15,8 @@ class DataProcessorWidget(QWidget):
         super().__init__()
 
         self.plot_widget = pg.PlotWidget()
-        self.plot_widget.setLabel("bottom", "Filament_velocity", units="mm/s")
-        self.plot_widget.setLabel("left", "Extrusion Force", units="N")
+        self.plot_widget.setLabel("bottom", "进线速度", units="mm/s")
+        self.plot_widget.setLabel("left", "挤出力", units="N")
         self.plot_widget.addLegend()
         self.open_csv_button = QPushButton("打开文件（.csv）")
         self.clean_button = QPushButton("清洗数据")

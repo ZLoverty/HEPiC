@@ -14,6 +14,7 @@ class DataPlotWidget(QWidget):
         self.line_width = line_width
 
         self.sensor_items: list[str] = []
+        self.sensor_labels: dict[str, str] = {}
         self.checkboxes: dict[str, QCheckBox] = {}
         self.plots: dict[str, pg.PlotWidget] = {}
         self.curves: dict[str, pg.PlotDataItem] = {}
@@ -43,7 +44,10 @@ class DataPlotWidget(QWidget):
     def _next_color(self, idx: int) -> str:
         return self.color_pool[idx % len(self.color_pool)]
 
-    def set_sensor_items(self, sensor_items: list[str]):
+    def set_sensor_items(self, sensor_items: list[str], sensor_labels: dict[str, str] | None = None):
+        if sensor_labels is not None:
+            self.sensor_labels = sensor_labels
+
         new_items = [item for item in sensor_items if item]
 
         # Remove disappeared sensors.
@@ -58,7 +62,8 @@ class DataPlotWidget(QWidget):
         for key in new_items:
             if key in self.checkboxes:
                 continue
-            checkbox = QCheckBox(key)
+            display_name = self.sensor_labels.get(key, key)
+            checkbox = QCheckBox(display_name)
             checkbox.toggled.connect(lambda checked, name=key: self._on_toggle_sensor(name, checked))
             checkbox.setChecked(True)
             self.checkboxes[key] = checkbox
@@ -76,7 +81,8 @@ class DataPlotWidget(QWidget):
         if sensor_name in self.plots:
             return
         color = self._next_color(len(self.plots))
-        plot = pg.PlotWidget(title=sensor_name)
+        display_name = self.sensor_labels.get(sensor_name, sensor_name)
+        plot = pg.PlotWidget(title=display_name)
         curve = plot.plot(pen=pg.mkPen(color, width=self.line_width))
         self.plots[sensor_name] = plot
         self.curves[sensor_name] = curve

@@ -1,3 +1,5 @@
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from PySide6.QtCore import Signal, Slot
@@ -6,6 +8,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QProgressBar,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -23,6 +26,8 @@ class PlatformStatusWidget(QWidget):
         icon_path = current_file_path.parent / icon_path
         self.zero_icon = QIcon(str(icon_path / "toZero.png"))
         self.placeholder = placeholder
+        self._print_start_time: float | None = None
+        self._status_text = ""
 
         self.hotend_temperature_label = QLabel("温度:")
         self.hotend_temperature_value = QLabel(f"{placeholder:5s} /")
@@ -35,10 +40,16 @@ class PlatformStatusWidget(QWidget):
 
         self.die_temperature_label = QLabel("出口熔体温度:")
         self.die_temperature_value = QLabel(f"{placeholder}")
+        self.die_temperature_label.setVisible(False)
+        self.die_temperature_value.setVisible(False)
         self.die_diameter_label = QLabel("出口熔体直径:")
         self.die_diameter_value = QLabel(f"{placeholder}")
-        self.progress_label = QLabel("任务进度:")
-        self.progress_value = QLabel(f"{placeholder}")
+        self.die_diameter_label.setVisible(False)
+        self.die_diameter_value.setVisible(False)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("%p%")
 
         self.tcp_sensor_widgets: dict[str, dict] = {}
 
@@ -68,8 +79,7 @@ class PlatformStatusWidget(QWidget):
         die_diameter_row_layout.addWidget(self.die_diameter_value)
 
         progress_row_layout = QHBoxLayout()
-        progress_row_layout.addWidget(self.progress_label)
-        progress_row_layout.addWidget(self.progress_value)
+        progress_row_layout.addWidget(self.progress_bar)
 
         layout.addLayout(row_layout_1)
         layout.addLayout(row_layout_2)
@@ -78,10 +88,22 @@ class PlatformStatusWidget(QWidget):
         layout.addLayout(die_diameter_row_layout)
         layout.addLayout(progress_row_layout)
 
+        self.setFixedWidth(240)
         self.setLayout(layout)
         self.hotend_temperature_input.returnPressed.connect(self.on_temp_enter_pressed)
 
-    def configure_tcp_sensors(self, sensor_names: list[str], zeroable_sensor_names: list[str]):
+    def set_die_diameter_visible(self, visible: bool):
+        self.die_diameter_label.setVisible(visible)
+        self.die_diameter_value.setVisible(visible)
+
+    def set_die_temperature_visible(self, visible: bool):
+        self.die_temperature_label.setVisible(visible)
+        self.die_temperature_value.setVisible(visible)
+
+    def configure_tcp_sensors(self, sensor_names: list[str], zeroable_sensor_names: list[str], sensor_labels: dict[str, str] | None = None):
+        if sensor_labels is None:
+            sensor_labels = {}
+
         for name in list(self.tcp_sensor_widgets.keys()):
             if name not in sensor_names:
                 row = self.tcp_sensor_widgets.pop(name)
@@ -99,8 +121,9 @@ class PlatformStatusWidget(QWidget):
                     row["button"].setVisible(name in zeroable_set)
                 continue
 
+            display_name = sensor_labels.get(name, name)
             row_layout = QHBoxLayout()
-            label = QLabel(f"{name}:")
+            label = QLabel(f"{display_name}:")
             value = QLabel(f"{self.placeholder}")
             row_layout.addWidget(label)
             row_layout.addWidget(value)
@@ -157,7 +180,35 @@ class PlatformStatusWidget(QWidget):
 
     @Slot(float)
     def update_progress(self, progress):
-        self.progress_value.setText(f"{progress*100:.1f}%")
+        self.progress_bar.setValue(int(progress * 100))
+        if progress > 0.01 and self._print_start_time is None:
+            self._print_start_time = time.monotonic()
+        elif progress <= 0.01:
+            self._print_start_time = None
+        self._refresh_format()
+
+    @Slot(str)
+    def set_status_text(self, text: str):
+        self._status_text = text.strip()
+        self._refresh_format()
+
+    def _refresh_format(self):
+        progress = self.progress_bar.value() / 100.0
+        base = self._status_text if self._status_text else "%p%"
+        eta = self._eta_str(progress)
+        self.progress_bar.setFormat(f"{base}  {eta}" if eta else base)
+
+    def _eta_str(self, progress: float) -> str:
+        if progress >= 1.0:
+            return "已完成"
+        if self._print_start_time is None or progress < 0.01:
+            return ""
+        elapsed = time.monotonic() - self._print_start_time
+        if elapsed < 5:
+            return ""
+        remaining_s = elapsed * (1.0 - progress) / progress
+        eta_time = datetime.now() + timedelta(seconds=remaining_s)
+        return f"预计 {eta_time.strftime('%H:%M')} 完成"
 
 
 if __name__ == "__main__":
