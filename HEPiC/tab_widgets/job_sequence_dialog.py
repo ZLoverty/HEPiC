@@ -101,7 +101,7 @@ class JobSequenceDialog(QDialog):
                 
         job_sequence_list.append("M118 STATUS 测试结束!")
         job_sequence_list.append("M118 STOP_RECORDING")
-        job_sequence_list.append("FIRMWARE_RESTART")
+        job_sequence_list.append("FIRMWARE_RESTART\n")
 
         return "\n".join(job_sequence_list)
     
