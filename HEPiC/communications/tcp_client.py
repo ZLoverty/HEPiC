@@ -145,7 +145,10 @@ class TCPClient(QObject):
                 self._invalidate_sensor_data()
                 if self.writer:
                     self.writer.close()
-                    await self.writer.wait_closed()
+                    try:
+                        await asyncio.wait_for(self.writer.wait_closed(), timeout=5.0)
+                    except Exception:
+                        pass
                     self.writer = None
                 self.reader = None
 
