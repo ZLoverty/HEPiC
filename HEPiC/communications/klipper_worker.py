@@ -23,7 +23,8 @@ class KlipperWorker(QObject):
     gcode_response = Signal(str)
     sigKlipperState = Signal(str, str)  # (state, message)
 
-    def __init__(self, host, port, query_delay=1, test_mode=False):
+    def __init__(self, host, port, query_delay=1, test_mode=False,
+                 reconnect_base_delay=1.0, reconnect_max_delay=30.0):
         super().__init__()
 
         # connection / args
@@ -33,6 +34,11 @@ class KlipperWorker(QObject):
         self.query_delay = query_delay
         self.test_mode = test_mode
         self.logger = logging.getLogger(__name__)
+
+        # reconnect backoff
+        self.reconnect_base_delay = reconnect_base_delay
+        self.reconnect_max_delay = reconnect_max_delay
+        self._reconnect_attempts = 0
 
         # status / data
         self.is_running = True
@@ -57,6 +63,30 @@ class KlipperWorker(QObject):
         self.print_state = ""
         self._prev_klipper_state = ""
 
+    def _next_reconnect_delay(self) -> float:
+        """Exponential backoff delay (seconds), capped at reconnect_max_delay."""
+        delay = min(
+            self.reconnect_base_delay * (2 ** self._reconnect_attempts),
+            self.reconnect_max_delay,
+        )
+        self._reconnect_attempts += 1
+        return delay
+
+    def _reset_reconnect_backoff(self) -> None:
+        """Reset backoff after a successful connection."""
+        self._reconnect_attempts = 0
+
+    async def _cancel_task(self, task):
+        """Cancel a task and await its completion, swallowing CancelledError."""
+        if task and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                self.logger.debug(f"任务取消时出现异常: {e}")
+
     @asyncSlot()
     async def run(self):
         """Asyncio 事件循环，处理 WebSocket 连接和通信"""
@@ -74,6 +104,7 @@ class KlipperWorker(QObject):
                 async with websockets.connect(self.uri, open_timeout=2.0) as websocket:
                     self.logger.info("Klipper 连接成功！")
                     self.connection_status.emit("Klipper 连接成功！")
+                    self._reset_reconnect_backoff()
 
                     # clear message queue if it's not empty
                     while not self.message_queue.empty():
@@ -90,6 +121,12 @@ class KlipperWorker(QObject):
                     )
 
                     self.logger.warning("连接已中断，正在清理任务...")
+                    # 读取已完成任务的异常，避免 "Task exception was never retrieved" 噪音。
+                    # ConnectionClosed 等断开异常是预期的（触发重连）。
+                    for task in done:
+                        exc = task.exception()
+                        if exc is not None:
+                            self.logger.info(f"任务结束于异常（将重连）: {exc!r}")
                     for task in pending:
                         task.cancel()
                         try:
@@ -106,19 +143,22 @@ class KlipperWorker(QObject):
             except Exception as e:
                 self.logger.error(f"Klipper 连接异常: {e}")
                 self.connection_status.emit(f"Klipper 连接异常，等待重连...")
+            finally:
+                # 始终取消 query_task，避免任务泄漏（包括 stop() 退出时）
+                await self._cancel_task(self.query_task)
+                self.query_task = None
 
             # 如果 is_running 依然为 True，说明是意外断开，需要重连
             if self.is_running:
-                # 取消 query_task（避免任务泄漏）
-                if self.query_task and not self.query_task.done():
-                    self.query_task.cancel()
-                    try:
-                        await self.query_task
-                    except asyncio.CancelledError:
-                        pass
-                self.connection_status.emit("连接断开，3秒后重连...")
-                self.logger.info("将在 3 秒后尝试重连...")
-                await asyncio.sleep(3)
+                delay = self._next_reconnect_delay()
+                self.connection_status.emit(f"连接断开，{delay:.0f}秒后重连...")
+                self.logger.info(f"将在 {delay:.0f} 秒后尝试重连...")
+                # 分段 sleep，使 stop()/is_running 能被及时响应
+                remaining = delay
+                while remaining > 0 and self.is_running:
+                    step = min(1.0, remaining)
+                    await asyncio.sleep(step)
+                    remaining -= step
             
     async def message_listener(self, websocket):
         self.logger.info("消息监听器已启动")
@@ -172,75 +212,101 @@ class KlipperWorker(QObject):
             # 核心：在这里await，等待队列中有新数据
             data = await self.message_queue.get()
 
-            # Moonraker的数据的主要类型：
-            # 1. 对你请求的响应 (包含 "result" 键)
-            # 2. 服务器主动推送的状态更新 (方法为 "notify_status_update")
-            # 3. 我发送的 gcode 请求，包含 "method" 键，方法为 "printer.gcode.script"
-            
-            if "method" in data: 
-                if data["method"] in [
+            # 单条畸形/意外结构的消息不应拖垮整个连接：逐条隔离处理。
+            # 连接级错误 (ConnectionClosed) 仍向上抛出，由 run() 触发重连。
+            try:
+                self._process_message(data)
+                if isinstance(data, dict) and "method" in data and data.get("method") in (
                     "printer.gcode.script",
                     "printer.objects.subscribe",
                     "printer.objects.query",
                     "printer.emergency_stop",
                     "printer.restart",
                     "printer.firmware_restart",
-                ]: # 发送 G-code
+                ):
                     await websocket.send(json.dumps(data))
-                elif data["method"] == "notify_gcode_response":
-                    response = data.get("params")[0]
-                    _state_map = {
-                        "// Klipper state: Shutdown":   "// Klipper 紧急停止，已关闭！",
-                        "// Klipper state: Disconnect": "// Klipper MCU 已断开，等待重连...",
-                    }
-                    response = _state_map.get(response, response)
-                    self.gcode_response.emit(response)
-                else:
-                    self.logger.debug(data)
-            elif "error" in data:
-                    err_msg = f"Error {data["error"]["code"]}: {data["error"]["message"]}"
-                    self.logger.error(f"error message: {err_msg}")
-                    self.gcode_error.emit(err_msg)
-                    self.connection_status.emit(err_msg)
-            elif "result" in data:
-                self.logger.debug(data)     
-                if "id" in data:
-                    if data["id"] == 2:
-                        sub_msg = data.get("result", {}).get("status", {})
-                        self.hotend_temperature = sub_msg.get("extruder", {}).get("temperature", np.nan)
-                        self.target_hotend_temperature = sub_msg.get("extruder", {}).get("target", np.nan)
-                        self.active_feedrate_mms = sub_msg.get("motion_report", {}).get("live_extruder_velocity", 0.0)
-                        self.progress = sub_msg.get("virtual_sdcard", {}).get("progress", 0.0)
-                        self.file_position = sub_msg.get("virtual_sdcard", {}).get("file_position", 0.0)
-                        self.print_state = sub_msg.get("print_stats", {}).get("state", self.print_state)
-                        if self.print_state == "complete":
-                            self.progress = 1.0
-                        webhooks = sub_msg.get("webhooks", {})
-                        state = webhooks.get("state", "")
-                        message = webhooks.get("state_message", "")
-                        if state:
-                            self.sigKlipperState.emit(state, message)
-                            _state_labels = {
-                                "ready":    "Klipper 就绪",
-                                "startup":  "Klipper 正在启动...",
-                                "shutdown": "Klipper 已关闭",
-                                "error":    f"Klipper 错误: {message[:80]}" if message else "Klipper 错误",
-                            }
-                            self.connection_status.emit(_state_labels.get(state, f"Klipper 状态: {state}"))
-                            if state != self._prev_klipper_state:
-                                _response_labels = {
-                                    "ready":    "// Klipper 已就绪",
-                                    "startup":  "// Klipper 正在启动...",
-                                    "error":    f"!! Klipper 错误: {message[:120]}" if message else "!! Klipper 错误",
-                                }
-                                if state in _response_labels:
-                                    self.gcode_response.emit(_response_labels[state])
-                                self._prev_klipper_state = state
+            except websockets.exceptions.ConnectionClosed:
+                raise  # 让 run() 重连
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                self.logger.error(f"处理消息时出错，已跳过该消息: {e}. 消息体: {data}")
+            finally:
+                # 标记任务完成，这对于优雅退出很重要
+                self.message_queue.task_done()
+
+    def _process_message(self, data):
+        """解析并分发单条来自 Klipper 的消息（不含网络发送，发送由 data_processor 处理）。"""
+        if not isinstance(data, dict):
+            self.logger.debug(f"忽略非字典消息: {data!r}")
+            return
+
+        if "method" in data:
+            if data["method"] in [
+                "printer.gcode.script",
+                "printer.objects.subscribe",
+                "printer.objects.query",
+                "printer.emergency_stop",
+                "printer.restart",
+                "printer.firmware_restart",
+            ]:
+                # 这是我们要发往 Klipper 的出站消息；实际发送在 data_processor 中完成。
+                return
+            elif data["method"] == "notify_gcode_response":
+                params = data.get("params") or []
+                if not params:
+                    self.logger.debug(f"notify_gcode_response 无 params，已忽略: {data}")
+                    return
+                response = params[0]
+                _state_map = {
+                    "// Klipper state: Shutdown":   "// Klipper 紧急停止，已关闭！",
+                    "// Klipper state: Disconnect": "// Klipper MCU 已断开，等待重连...",
+                }
+                response = _state_map.get(response, response)
+                self.gcode_response.emit(response)
             else:
                 self.logger.debug(data)
-
-            # 标记任务完成，这对于优雅退出很重要
-            self.message_queue.task_done()
+        elif "error" in data:
+            err = data.get("error") or {}
+            err_msg = f"Error {err.get('code')}: {err.get('message')}"
+            self.logger.error(f"error message: {err_msg}")
+            self.gcode_error.emit(err_msg)
+            self.connection_status.emit(err_msg)
+        elif "result" in data:
+            self.logger.debug(data)
+            if data.get("id") == 2:
+                sub_msg = data.get("result", {}).get("status", {})
+                self.hotend_temperature = sub_msg.get("extruder", {}).get("temperature", np.nan)
+                self.target_hotend_temperature = sub_msg.get("extruder", {}).get("target", np.nan)
+                self.active_feedrate_mms = sub_msg.get("motion_report", {}).get("live_extruder_velocity", 0.0)
+                self.progress = sub_msg.get("virtual_sdcard", {}).get("progress", 0.0)
+                self.file_position = sub_msg.get("virtual_sdcard", {}).get("file_position", 0.0)
+                self.print_state = sub_msg.get("print_stats", {}).get("state", self.print_state)
+                if self.print_state == "complete":
+                    self.progress = 1.0
+                webhooks = sub_msg.get("webhooks", {})
+                state = webhooks.get("state", "")
+                message = webhooks.get("state_message", "")
+                if state:
+                    self.sigKlipperState.emit(state, message)
+                    _state_labels = {
+                        "ready":    "Klipper 就绪",
+                        "startup":  "Klipper 正在启动...",
+                        "shutdown": "Klipper 已关闭",
+                        "error":    f"Klipper 错误: {message[:80]}" if message else "Klipper 错误",
+                    }
+                    self.connection_status.emit(_state_labels.get(state, f"Klipper 状态: {state}"))
+                    if state != self._prev_klipper_state:
+                        _response_labels = {
+                            "ready":    "// Klipper 已就绪",
+                            "startup":  "// Klipper 正在启动...",
+                            "error":    f"!! Klipper 错误: {message[:120]}" if message else "!! Klipper 错误",
+                        }
+                        if state in _response_labels:
+                            self.gcode_response.emit(_response_labels[state])
+                        self._prev_klipper_state = state
+        else:
+            self.logger.debug(data)
 
     @Slot()
     def stop(self):
@@ -250,6 +316,8 @@ class KlipperWorker(QObject):
             self.listener_task.cancel()
         if self.processor_task:
             self.processor_task.cancel()
+        if self.query_task:
+            self.query_task.cancel()
 
     @asyncSlot(float)
     async def set_temperature(self, target):
