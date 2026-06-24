@@ -74,6 +74,7 @@ class TCPClient(QObject):
         rotary_encoder_steps_total: int = 1000,
         rotary_encoder_wheel_diameter: float = 28.6,
         meter_count_cache_size: int = 100,
+        read_timeout: float = 3.0,
     ):
         super().__init__()
         self.host = host
@@ -97,6 +98,7 @@ class TCPClient(QObject):
         self.meter_count_cache = deque(maxlen=self.cache_size)
         self.time_cache = deque(maxlen=self.cache_size)
         self.filament_velocity = 0.0
+        self.read_timeout = read_timeout
 
         self.latest_sensor_data: dict[str, float] = {}
         self.sensor_columns: list[str] = []
@@ -140,6 +142,7 @@ class TCPClient(QObject):
                 self.logger.error(f"TCP client error: {e}")
             finally:
                 self.logger.info("Closing HEPiC server connection...")
+                self._invalidate_sensor_data()
                 if self.writer:
                     self.writer.close()
                     await self.writer.wait_closed()
@@ -240,12 +243,26 @@ class TCPClient(QObject):
             return payload
         return {k: payload[k] for k in self.sensor_columns if k in payload}
 
+    def _invalidate_sensor_data(self) -> None:
+        """Set all sensor values to nan while disconnected to prevent stale readings."""
+        for sensor in self.sensor_data_map.values():
+            sensor.raw_value = np.nan
+            sensor.value = np.nan
+        if self.sensor_data_map:
+            self.latest_sensor_data = {name: np.nan for name in self.sensor_data_map}
+        self.filament_velocity = 0.0
+
     async def receive_data(self):
         try:
             while self.is_running:
                 if self.reader is None:
                     break
-                data = await self.reader.readline()
+                try:
+                    data = await asyncio.wait_for(self.reader.readline(), timeout=self.read_timeout)
+                except asyncio.TimeoutError:
+                    self.logger.warning(f"No data received for {self.read_timeout}s, reconnecting.")
+                    self.connection_status.emit("Data timeout, reconnecting...")
+                    break
                 if not data:
                     raise ConnectionResetError("Socket closed by server")
 
