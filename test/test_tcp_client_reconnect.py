@@ -171,6 +171,93 @@ class TestSendFailureDoesNotKillReconnect(unittest.IsolatedAsyncioTestCase):
 
 
 # ---------------------------------------------------------------------------
+# Test: send failure proactively invalidates writer to trigger reconnect
+# (Vulnerability 2: send failures were silently swallowed, leaving a zombie
+#  writer and relying solely on the read timeout to notice the dead link.)
+# ---------------------------------------------------------------------------
+
+class TestSendFailureTriggersReconnect(unittest.IsolatedAsyncioTestCase):
+    async def test_send_data_failure_closes_writer(self):
+        """A failed send must close the writer so the read side gets EOF and reconnects."""
+        client = TCPClient("127.0.0.1", 19999)
+        mock_writer = MagicMock()
+        mock_writer.drain = AsyncMock(side_effect=ConnectionResetError("drop"))
+        client.writer = mock_writer
+
+        await client.send_data("hello")
+
+        mock_writer.close.assert_called_once()
+
+    async def test_send_json_failure_closes_writer(self):
+        client = TCPClient("127.0.0.1", 19999)
+        mock_writer = MagicMock()
+        mock_writer.drain = AsyncMock(side_effect=BrokenPipeError("drop"))
+        client.writer = mock_writer
+
+        await client.send_json({"message_type": "ping"})
+
+        mock_writer.close.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Test: drain() must not block forever
+# (Vulnerability 3: writer.drain() had no timeout and could hang the caller
+#  indefinitely on a half-open / congested connection.)
+# ---------------------------------------------------------------------------
+
+class TestSendTimeout(unittest.IsolatedAsyncioTestCase):
+    async def test_send_data_does_not_hang_when_drain_blocks(self):
+        client = TCPClient("127.0.0.1", 19999, send_timeout=0.1)
+        mock_writer = MagicMock()
+
+        async def _hang(*_a, **_k):
+            await asyncio.sleep(30)
+
+        mock_writer.drain = AsyncMock(side_effect=_hang)
+        client.writer = mock_writer
+
+        # If drain were unbounded this would hit the outer 2s timeout and fail.
+        await asyncio.wait_for(client.send_data("x"), timeout=2.0)
+        self.assertTrue(client.is_running)
+
+    async def test_send_json_does_not_hang_when_drain_blocks(self):
+        client = TCPClient("127.0.0.1", 19999, send_timeout=0.1)
+        mock_writer = MagicMock()
+
+        async def _hang(*_a, **_k):
+            await asyncio.sleep(30)
+
+        mock_writer.drain = AsyncMock(side_effect=_hang)
+        client.writer = mock_writer
+
+        await asyncio.wait_for(client.send_json({"a": 1}), timeout=2.0)
+        self.assertTrue(client.is_running)
+
+
+# ---------------------------------------------------------------------------
+# Test: exponential reconnect backoff
+# (Vulnerability 4: fixed 3s delay with cosmetic countdown; no backoff.)
+# ---------------------------------------------------------------------------
+
+class TestReconnectBackoff(unittest.TestCase):
+    def test_delay_grows_exponentially_and_caps(self):
+        client = TCPClient(
+            "h", 1, reconnect_base_delay=1.0, reconnect_max_delay=8.0
+        )
+        delays = [client._next_reconnect_delay() for _ in range(6)]
+        self.assertEqual(delays, [1.0, 2.0, 4.0, 8.0, 8.0, 8.0])
+
+    def test_successful_connection_resets_backoff(self):
+        client = TCPClient(
+            "h", 1, reconnect_base_delay=1.0, reconnect_max_delay=8.0
+        )
+        client._next_reconnect_delay()
+        client._next_reconnect_delay()
+        client._reset_reconnect_backoff()
+        self.assertEqual(client._next_reconnect_delay(), 1.0)
+
+
+# ---------------------------------------------------------------------------
 # Integration tests: reconnect with a live mock server
 # ---------------------------------------------------------------------------
 
@@ -225,6 +312,29 @@ class TestReconnectIntegration(unittest.IsolatedAsyncioTestCase):
         await self.server.send(_sensor_config_msg(["force"]))
         await self.server.send(_sensor_data_msg({"force": 5.55}))
         await self._wait_for_value("force", 5.55)
+
+    async def test_malformed_message_does_not_drop_connection(self):
+        """A bad JSON / non-UTF8 line must be skipped, not trigger a reconnect.
+
+        (Vulnerability 1: decode/json errors bubbled up and killed receive_data,
+         recycling a perfectly healthy connection on a single bad message.)
+        """
+        await self.server.wait_for_connection(1)
+        await self.server.send(_sensor_config_msg(["force"]))
+
+        # Garbage that previously crashed receive_data and forced a reconnect.
+        await self.server.send(b"this is not json\n")
+        await self.server.send(b"\xff\xfe not valid utf-8\n")
+        await self.server.send(b"\n")  # empty line
+
+        # A valid message right after must still be processed on the SAME connection.
+        await self.server.send(_sensor_data_msg({"force": 7.77}))
+        await self._wait_for_value("force", 7.77)
+
+        self.assertEqual(
+            self.server.connection_count, 1,
+            "malformed data must not trigger a reconnect",
+        )
 
     async def test_null_values_in_payload_become_nan(self):
         """Server sending null for a sensor must result in nan, not a crash."""
