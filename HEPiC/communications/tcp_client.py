@@ -42,6 +42,10 @@ class SensorData:
     value: float = np.nan
 
     def update(self, raw_value):
+        if raw_value is None:
+            self.raw_value = np.nan
+            self.value = np.nan
+            return
         self.raw_value = float(raw_value)
         self.value = self.raw_value - self.offset
 
@@ -107,6 +111,9 @@ class TCPClient(QObject):
     async def run(self):
         while self.is_running:
             try:
+                while not self.queue.empty():
+                    self.queue.get_nowait()
+
                 self.reader, self.writer = await asyncio.wait_for(
                     asyncio.open_connection(self.host, self.port), timeout=2.0
                 )
@@ -148,7 +155,7 @@ class TCPClient(QObject):
                 await asyncio.sleep(1)
 
     async def send_data(self, message: str):
-        if not self.is_running or not self.writer:
+        if not self.writer:
             self.logger.info("Connection not established; cannot send message.")
             return
 
@@ -158,11 +165,10 @@ class TCPClient(QObject):
             await self.writer.drain()
             self.logger.info(f"Sent -> {message}")
         except Exception as e:
-            self.logger.error(f"Error sending message: {e}")
-            self.is_running = False
+            self.logger.warning(f"Send failed (will reconnect): {e}")
 
     async def send_json(self, message: dict):
-        if not self.is_running or not self.writer:
+        if not self.writer:
             self.logger.info("Connection not established; cannot send json.")
             return
 
@@ -171,8 +177,7 @@ class TCPClient(QObject):
             self.writer.write(data_to_send)
             await self.writer.drain()
         except Exception as e:
-            self.logger.error(f"Error sending json: {e}")
-            self.is_running = False
+            self.logger.warning(f"Send failed (will reconnect): {e}")
 
     async def request_sensor_config(self):
         await self.send_json({"message_type": "get_sensor_config"})
@@ -250,7 +255,7 @@ class TCPClient(QObject):
                 message_dict = json.loads(message_str)
                 await self.queue.put(self._normalize_message(message_dict))
         except (ConnectionResetError, ConnectionAbortedError):
-            self.logger.error("Connection reset/aborted.")
+            self.logger.warning("Connection reset/aborted.")
             self.connection_status.emit("Connection lost")
         except Exception as e:
             self.logger.error(f"Receive error: {e}")
