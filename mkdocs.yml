@@ -42,3 +42,4 @@ nav:
       - 质检模式: pages/quality-check.md
 not_in_nav: |
   superpowers/**
+  images/README.md
