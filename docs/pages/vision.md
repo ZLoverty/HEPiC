@@ -18,13 +18,13 @@
 
 **白话**：右侧小图显示左侧 ROI 框选区域经过图像处理后的结果——包括二值化、骨架提取，以及叠加到灰度图上的熔体轮廓线。这是软件实际用于计算熔体直径的图像。
 
-**技术说明**：对应 `VisionPageWidget.roi_vision_widget`（`VisionWidget` 实例）。`VideoWorker.roi_frame_signal` 把裁剪后的帧送入 `ProcessingWorker.add_frame_to_queue`；`ProcessingWorker.process_frame()` 执行 CLAHE 增强 → 二值化 → 距离变换/骨架检测 → 绘制轮廓，最终通过 `proc_frame_signal` 把处理帧传给 `roi_vision_widget.update_live_display()`。
+**技术说明**：对应 `VisionPageWidget.roi_vision_widget`（`VisionWidget` 实例）。`VideoWorker.roi_frame_signal` 把裁剪后的帧送入 `ProcessingWorker.add_frame_to_queue`；`ProcessingWorker.process_frame()` 执行 CLAHE 增强 → 二值化 → 距离变换/骨架检测 → 绘制轮廓，并将结果存入内部缓冲。实际应用中右侧视图的刷新与左侧视图相同，由 `MainWindow._refresh_displays()` 定时器轮询 `ProcessingWorker.get_latest_proc_frame()`，再调用 `roi_vision_widget.update_live_display(proc_frame)`（`__main__.py:433-435`）；并非由 `proc_frame_signal` 直连到该视图（那种直连仅存在于源码的测试脚本中）。
 
 ---
 
 ## 控制面板
 
-控制面板位于页面左侧，宽度固定为 200 px，包含以下控件。
+控制面板位于页面左侧，最大宽度为 200 px（`setMaximumWidth(200)`），包含以下控件。
 
 ---
 
@@ -38,9 +38,12 @@
 
 ### FPS（帧率）
 
-**白话**：在"FPS"输入框中输入帧率数字，按 Enter 键即刻更改相机取帧频率。默认值为 10 帧/秒。降低帧率可减少 CPU 负担；提高帧率可获得更流畅的画面，但对计算机性能要求更高。
+**白话**：界面上有一个"FPS"输入框，默认值为 10。**请注意：在当前版本的应用程序中，此输入框尚未接入相机，修改它不会产生任何效果。** 它是为后续调节取帧频率预留的控件。
 
-**技术说明**：`fps`（`QLineEdit`，默认值 `"10"`）。按 Enter 触发 `on_fps_pressed()`，将文本解析为 `float` 后通过 `sigFPS` 信号发送给 `VideoWorker.set_fps(fps)`。`set_fps` 重置定时器步长为 `1000 / fps` ms，显示刷新计时器也相应更新。
+**技术说明**：`fps`（`QLineEdit`，默认值 `"10"`）。按 Enter 触发 `on_fps_pressed()`，发出 `sigFPS` 信号。但 `MainWindow.initiate_camera()`（`__main__.py:446-501`）**并未**将 `sigFPS` 连接到 `VideoWorker.set_fps`——该连接仅出现在 `video_worker.py` 的 `if __name__ == "__main__"` 测试块中（`video_worker.py:256`）。因此在实际应用中 `sigFPS` 没有接收方，FPS 输入框当前无效。
+
+!!! note "即便接入也不会改变界面刷新率"
+    `VideoWorker.set_fps`（`video_worker.py:95-100`）只重启 `self._timer`（即每 10 ms 读取硬件帧的定时器），并不影响真正决定送帧频率的 `_timer_get`，也不会改动 `__main__.py` 的显示刷新定时器 `_display_timer`。
 
 ---
 
@@ -54,9 +57,9 @@
 
 ### 棋盘校准
 
-**白话**：点击"棋盘校准"按钮，弹出校准对话框。在对话框内对棋盘格图像上已知长度的格子画一条测量线，输入实际尺寸（mm），点击"校准"，软件会计算出每像素对应的实际尺寸（mm/px）并存入系统，供后续将 `die_diameter_px` 换算为毫米使用。
+**白话**：点击"棋盘校准"按钮，弹出校准对话框。在对话框内对棋盘格图像上已知长度的格子画一条测量线，输入实际尺寸（mm），点击"校准"，对话框会在日志区显示测得的像素长度与换算出的每像素实际尺寸（mm/px）。**已知限制：当前版本仅把该结果显示出来，并不会将其保存到系统中，因此目前无法用它把 `die_diameter_px` 自动换算为毫米。**
 
-**技术说明**：`calibration_button`（`QPushButton`，标签"棋盘校准"）。点击触发 `on_calibration_pressed()`：实例化 `CalibrationDialog`（对话框内置一个 `"measure"` 模式的 `VisionWidget`，支持拉线段 ROI），将当前帧通过 `sigCapturedFrame` 发送到对话框；用户确认后调用 `dialog.get_mpp()` 取得 mm/px 值，通过 `sigMPP` 信号发出，供主程序保存。
+**技术说明**：`calibration_button`（`QPushButton`，标签"棋盘校准"）。点击触发 `on_calibration_pressed()`：实例化 `CalibrationDialog`（对话框内置一个 `"measure"` 模式的 `VisionWidget`，支持拉线段 ROI），将当前帧通过 `sigCapturedFrame` 发送到对话框。在 `CalibrationDialog.on_calibration_pressed()`（`calibration_dialog.py:64-88`）中，mm/px 仅作为局部变量 `mpp` 拼入日志消息；`self.mpp` 始终保持初始值 `float("nan")`（`calibration_dialog.py:57`），从未被赋值。因此 `dialog.get_mpp()` 返回 `nan`，`sigMPP` 即使发射也只携带 `nan`。此外 `MainWindow` 中并未连接 `sigMPP`（`__main__.py` 内无该信号的接收方），校准结果在当前版本中不会被持久化或使用。
 
 ---
 
