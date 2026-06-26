@@ -18,7 +18,7 @@
 
 **白话**：显示热端当前温度和你设定的目标温度，格式为"实测值 / 目标值"。旁边有一个输入框，输入数字后按 Enter 即可修改目标温度。
 
-**技术说明**：`hotend_temperature_value`（`QLabel`）显示实测温度，来自 Klipper 的 `extruder.temperature`。`hotend_temperature_input`（`QLineEdit`，最大宽度 60 px）接收用户输入，按 Enter 触发 `on_temp_enter_pressed`，通过 `set_temperature` 信号发送给 `KlipperWorker.set_temperature`，下发 `M104 S{value}` G-code。
+**技术说明**：`hotend_temperature_value`（`QLabel`）显示实测温度，读取数据字典中的 `measured_temperature_C` 键（其上游由 Klipper 的 `extruder.temperature` 映射而来）。`hotend_temperature_input`（`QLineEdit`，最大宽度 60 px）接收用户输入，按 Enter 触发 `on_temp_enter_pressed`，通过 `set_temperature` 信号发送给 `KlipperWorker.set_temperature`，下发 `M104 S{value}` G-code。
 
 ---
 
@@ -102,9 +102,22 @@
 
 ### 响应显示区
 
-**白话**：上方深色文字区域会实时显示平台返回的所有消息和你发送的指令，按颜色区分类型：绿色=你发的指令，白色=普通响应，灰色=信息消息，橙色=系统动作，红色=错误。每条消息前有时间戳。
+**白话**：上方深色文字区域会实时显示平台返回的所有消息和你发送的指令，并按消息内容自动着色，方便区分类型。每条消息前有时间戳。
 
-**技术说明**：`command_display`（`QPlainTextEdit`，只读）。`display_message(message)` 根据消息前缀（`!!` / `action:` / `//` / `>`）判断类型，使用 `QTextCharFormat` 插入带颜色的文本并自动滚动到底部。`KlipperWorker.gcode_response` 信号连接到此槽，Klipper 的所有回复均会在此显示。
+**技术说明**：`command_display`（`QPlainTextEdit`，只读）。`display_message(message)` 仅根据**消息文本的前缀**判断颜色，与"谁发的"无关：
+
+| 颜色 | 触发条件 | 含义 |
+|------|----------|------|
+| 红色 `#f44336` | 以 `!!` 开头 | 错误消息 |
+| 橙色 `#ff9800` | 含 `action:` | 系统动作 |
+| 灰色 `#bdbdbd` | 以 `//` 开头 | 信息/提示消息 |
+| 绿色 `#4caf50` | 以 `>` 开头 | 指令回显行 |
+| 白色 `#ffffff` | 以上都不匹配 | 普通响应 |
+
+!!! note "用户发送的指令显示为白色"
+    点击"发送指令"时，`on_send_clicked` 把**原始 G-code**（如 `G1 E10 F300`）直接传给 `display_message`。由于原始 G-code 不以 `>` 开头，它落入"普通响应"分支，显示为**白色**而非绿色。绿色仅用于文本以 `>` 开头的行。
+
+`KlipperWorker.gcode_response` 信号也连接到此槽，Klipper 的所有回复均会在此显示。
 
 ---
 
@@ -150,6 +163,9 @@
 - **checked = False**（停止记录）：切换回播放图标，关闭 CSV 文件（和视频文件）。
 
 G-code 响应中的 `START_RECORDING` / `STOP_RECORDING` 动作标记也可自动触发此按钮状态切换。详见[数据记录](../concepts/data-recording.md)。
+
+!!! note "按钮可能暂时消失"
+    播放/暂停按钮和急停按钮放在同一个容器中，与下方的 **Klipper 状态控件**互斥显示。当 Klipper 处于非 `ready` 状态（`startup` / `shutdown` / `error`）时，状态控件弹出并隐藏这两个按钮；状态恢复 `ready` 后按钮重新出现（由 `sig_visible_changed` 信号驱动，见下文 Klipper 状态控件章节）。
 
 ---
 

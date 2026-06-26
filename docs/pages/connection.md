@@ -23,7 +23,7 @@
 **技术说明**：对应 `ConnectionWidget.connect_button`（`QPushButton`，标签"连接"）。点击后：
 
 1. 读取输入框中的 IP 字符串，通过 `host` 信号传递给主窗口。
-2. 主窗口调用 `ConnectionTester` 执行 4 步自检（Ping → TCP 端口 → Moonraker HTTP → Klipper 状态）。
+2. 主窗口调用 `ConnectionTester` 执行 4 步自检（Ping → TCP 端口 → Moonraker HTTP → Klipper 服务是否已连接）。第 4 步仅检查 `klippy_connected` 是否为真，**不要求** Klipper 处于 `ready` 等特定状态。
 3. 全部通过后，同时建立 **TCP 数据连接**（端口 10001）和 **Moonraker WebSocket 连接**（端口 7125）。详见[软件架构](../concepts/architecture.md)。
 4. 连接成功时，`update_button_status("连接成功")` 被调用，按钮禁用；失败时按钮保持可用，可再次尝试。
 
