@@ -1,0 +1,1337 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Hotend Extrusion Platform 控制软件 — 用户 wiki">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Klipper Status Widget Implementation Plan - HEPiC 使用手册</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#klipper-status-widget-implementation-plan" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href="../../.." title="HEPiC 使用手册" class="md-header__button md-logo" aria-label="HEPiC 使用手册" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            HEPiC 使用手册
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Klipper Status Widget Implementation Plan
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换到深色模式"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="切换到深色模式" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换到浅色模式"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="切换到浅色模式" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="HEPiC 使用手册" class="md-nav__button md-logo" aria-label="HEPiC 使用手册" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    HEPiC 使用手册
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    首页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    快速开始
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    核心概念
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    核心概念
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../concepts/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    软件架构
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../concepts/data-recording/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    数据记录
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    界面说明
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    界面说明
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../pages/connection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    连接页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../pages/home/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    主页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../pages/vision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    视觉页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../pages/ir/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    红外页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../pages/gcode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    G-code 页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../pages/data-processor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    数据处理页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../pages/quality-check/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    质检模式
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#file-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File Map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task 1: 测试基础设施
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-2-klipperworker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task 2: KlipperWorker 后端扩展
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-3-klipperstatuswidget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task 3: 新建 KlipperStatusWidget
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-4-connectionwidget-homewidget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task 4: 导出 + 嵌入 ConnectionWidget 和 HomeWidget
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#task-5-mainwindow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task 5: 在 MainWindow 接线
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="klipper-status-widget-implementation-plan">Klipper Status Widget Implementation Plan<a class="headerlink" href="#klipper-status-widget-implementation-plan" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (<code>- [ ]</code>) syntax for tracking.</p>
+</blockquote>
+<p><strong>Goal:</strong> 在连接页右下角和主页右上角各嵌入一个 <code>KlipperStatusWidget</code>，显示固件状态、可折叠错误详情，并提供固件重启和 Klipper 软重启按钮。</p>
+<p><strong>Architecture:</strong> 新建可复用的 <code>KlipperStatusWidget</code>（独立文件），后端在 <code>KlipperWorker</code> 新增 <code>sigKlipperState</code> 信号和 <code>printer_restart()</code> 方法，并扩展 webhooks 查询。<code>MainWindow.connect_to_ip()</code> 负责将 worker 连接到两处 widget 实例。</p>
+<p><strong>Tech Stack:</strong> PySide6, qasync, pytest, pytest-qt, pytest-asyncio</p>
+<hr />
+<h2 id="file-map">File Map<a class="headerlink" href="#file-map" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>操作</th>
+<th>文件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>新建</td>
+<td><code>HEPiC/tab_widgets/klipper_status_widget.py</code></td>
+</tr>
+<tr>
+<td>新建</td>
+<td><code>test/conftest.py</code></td>
+</tr>
+<tr>
+<td>新建</td>
+<td><code>test/test_klipper_worker_ext.py</code></td>
+</tr>
+<tr>
+<td>新建</td>
+<td><code>test/test_klipper_status_widget.py</code></td>
+</tr>
+<tr>
+<td>修改</td>
+<td><code>HEPiC/communications/klipper_worker.py</code></td>
+</tr>
+<tr>
+<td>修改</td>
+<td><code>HEPiC/tab_widgets/__init__.py</code></td>
+</tr>
+<tr>
+<td>修改</td>
+<td><code>HEPiC/tab_widgets/connection_widget.py</code></td>
+</tr>
+<tr>
+<td>修改</td>
+<td><code>HEPiC/tab_widgets/home_widget.py</code></td>
+</tr>
+<tr>
+<td>修改</td>
+<td><code>HEPiC/__main__.py</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="task-1">Task 1: 测试基础设施<a class="headerlink" href="#task-1" title="Permanent link">&para;</a></h2>
+<p><strong>Files:</strong>
+- Create: <code>test/conftest.py</code>
+- Modify: <code>pyproject.toml</code></p>
+<ul>
+<li>[ ] <strong>Step 1: 安装测试依赖</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>c:/Users/zhengyang/Documents/GitHub/HEPiC
+.venv/Scripts/pip<span class="w"> </span>install<span class="w"> </span>pytest<span class="w"> </span>pytest-qt<span class="w"> </span>pytest-asyncio
+</code></pre></div>
+<p>Expected: <code>Successfully installed pytest pytest-qt pytest-asyncio</code> (版本号不同无影响)</p>
+<ul>
+<li>[ ] <strong>Step 2: 创建 conftest.py</strong></li>
+</ul>
+<p>创建 <code>test/conftest.py</code>：</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+
+<span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">parent</span><span class="p">))</span>
+</code></pre></div>
+<ul>
+<li>[ ] <strong>Step 3: 验证 pytest 能找到测试目录</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>c:/Users/zhengyang/Documents/GitHub/HEPiC
+.venv/Scripts/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>test/<span class="w"> </span>--collect-only<span class="w"> </span>-q
+</code></pre></div>
+<p>Expected: <code>no tests ran</code> 或已有测试列表，没有 import 报错即可。</p>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>add<span class="w"> </span>test/conftest.py
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;test: add pytest infrastructure and conftest&quot;</span>
+</code></pre></div>
+<hr />
+<h2 id="task-2-klipperworker">Task 2: KlipperWorker 后端扩展<a class="headerlink" href="#task-2-klipperworker" title="Permanent link">&para;</a></h2>
+<p><strong>Files:</strong>
+- Modify: <code>HEPiC/communications/klipper_worker.py</code>
+- Create: <code>test/test_klipper_worker_ext.py</code></p>
+<ul>
+<li>[ ] <strong>Step 1: 写失败测试</strong></li>
+</ul>
+<p>创建 <code>test/test_klipper_worker_ext.py</code>：</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pytest</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">HEPiC.communications.klipper_worker</span><span class="w"> </span><span class="kn">import</span> <span class="n">KlipperWorker</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_sigKlipperState_exists</span><span class="p">(</span><span class="n">qapp</span><span class="p">):</span>
+    <span class="n">worker</span> <span class="o">=</span> <span class="n">KlipperWorker</span><span class="p">(</span><span class="s2">&quot;localhost&quot;</span><span class="p">,</span> <span class="mi">7125</span><span class="p">)</span>
+    <span class="c1"># Signal 必须存在且可连接</span>
+    <span class="n">received</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">worker</span><span class="o">.</span><span class="n">sigKlipperState</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="k">lambda</span> <span class="n">s</span><span class="p">,</span> <span class="n">m</span><span class="p">:</span> <span class="n">received</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">s</span><span class="p">,</span> <span class="n">m</span><span class="p">)))</span>
+    <span class="n">worker</span><span class="o">.</span><span class="n">sigKlipperState</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="s2">&quot;ready&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">received</span> <span class="o">==</span> <span class="p">[(</span><span class="s2">&quot;ready&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_webhooks_in_query_objects</span><span class="p">(</span><span class="n">qapp</span><span class="p">):</span>
+    <span class="n">worker</span> <span class="o">=</span> <span class="n">KlipperWorker</span><span class="p">(</span><span class="s2">&quot;localhost&quot;</span><span class="p">,</span> <span class="mi">7125</span><span class="p">)</span>
+    <span class="c1"># query_klipper 的查询对象必须包含 webhooks</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">inspect</span><span class="o">,</span><span class="w"> </span><span class="nn">ast</span>
+    <span class="n">src</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">getsource</span><span class="p">(</span><span class="n">worker</span><span class="o">.</span><span class="n">query_klipper</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="s1">&#39;&quot;webhooks&quot;&#39;</span> <span class="ow">in</span> <span class="n">src</span> <span class="ow">or</span> <span class="s2">&quot;&#39;webhooks&#39;&quot;</span> <span class="ow">in</span> <span class="n">src</span>
+
+
+<span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">asyncio</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">test_printer_restart_enqueues_correct_message</span><span class="p">(</span><span class="n">qapp</span><span class="p">):</span>
+    <span class="n">worker</span> <span class="o">=</span> <span class="n">KlipperWorker</span><span class="p">(</span><span class="s2">&quot;localhost&quot;</span><span class="p">,</span> <span class="mi">7125</span><span class="p">)</span>
+    <span class="k">while</span> <span class="ow">not</span> <span class="n">worker</span><span class="o">.</span><span class="n">message_queue</span><span class="o">.</span><span class="n">empty</span><span class="p">():</span>
+        <span class="n">worker</span><span class="o">.</span><span class="n">message_queue</span><span class="o">.</span><span class="n">get_nowait</span><span class="p">()</span>
+
+    <span class="c1"># asyncSlot 返回 Task（asyncio.ensure_future），直接 await</span>
+    <span class="k">await</span> <span class="n">worker</span><span class="o">.</span><span class="n">printer_restart</span><span class="p">()</span>
+
+    <span class="n">msg</span> <span class="o">=</span> <span class="n">worker</span><span class="o">.</span><span class="n">message_queue</span><span class="o">.</span><span class="n">get_nowait</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;method&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;printer.restart&quot;</span>
+    <span class="k">assert</span> <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;jsonrpc&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;2.0&quot;</span>
+</code></pre></div>
+<ul>
+<li>[ ] <strong>Step 2: 运行，确认全部 FAIL</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>c:/Users/zhengyang/Documents/GitHub/HEPiC
+.venv/Scripts/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>test/test_klipper_worker_ext.py<span class="w"> </span>-v
+</code></pre></div>
+<p>Expected: 3 项 FAIL（<code>sigKlipperState</code> 不存在，<code>webhooks</code> 不在查询，<code>printer_restart</code> 不存在）</p>
+<ul>
+<li>[ ] <strong>Step 3: 修改 klipper_worker.py — 新增信号</strong></li>
+</ul>
+<p>在 <code>KlipperWorker</code> 类的信号定义区（<code>gcode_response = Signal(str)</code> 之后）添加：</p>
+<div class="highlight"><pre><span></span><code><span class="n">sigKlipperState</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>  <span class="c1"># (state, message)</span>
+</code></pre></div>
+<ul>
+<li>[ ] <strong>Step 4: 修改 klipper_worker.py — 扩展 query_klipper()</strong></li>
+</ul>
+<p>将 <code>query_klipper</code> 方法中的 <code>objects</code> 字典改为：</p>
+<div class="highlight"><pre><span></span><code><span class="s2">&quot;objects&quot;</span><span class="p">:</span> <span class="p">{</span>
+    <span class="s2">&quot;extruder&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="s2">&quot;motion_report&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="s2">&quot;virtual_sdcard&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="s2">&quot;webhooks&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div>
+<ul>
+<li>[ ] <strong>Step 5: 修改 klipper_worker.py — data_processor 提取 webhooks 状态</strong></li>
+</ul>
+<p>在 <code>data_processor</code> 的 <code>if data["id"] == 2:</code> 分支末尾（<code>self.file_position = ...</code> 之后）添加：</p>
+<div class="highlight"><pre><span></span><code><span class="n">webhooks</span> <span class="o">=</span> <span class="n">sub_msg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;webhooks&quot;</span><span class="p">,</span> <span class="p">{})</span>
+<span class="n">state</span> <span class="o">=</span> <span class="n">webhooks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;state&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+<span class="n">message</span> <span class="o">=</span> <span class="n">webhooks</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;state_message&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">state</span><span class="p">:</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">sigKlipperState</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
+</code></pre></div>
+<ul>
+<li>[ ] <strong>Step 6: 修改 klipper_worker.py — 新增 printer_restart() 方法</strong></li>
+</ul>
+<p>在 <code>restart_firmware</code> 方法之后添加：</p>
+<div class="highlight"><pre><span></span><code><span class="nd">@asyncSlot</span><span class="p">()</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">printer_restart</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Restarting Klipper ...&quot;</span><span class="p">)</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;jsonrpc&quot;</span><span class="p">:</span> <span class="s2">&quot;2.0&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;method&quot;</span><span class="p">:</span> <span class="s2">&quot;printer.restart&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="mi">6</span><span class="p">,</span>
+    <span class="p">}</span>
+    <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">message_queue</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span>
+</code></pre></div>
+<ul>
+<li>[ ] <strong>Step 7: 修改 klipper_worker.py — 将 printer.restart 加入发送白名单</strong></li>
+</ul>
+<p>将 <code>data_processor</code> 中的发送白名单改为：</p>
+<div class="highlight"><pre><span></span><code><span class="k">if</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;method&quot;</span><span class="p">]</span> <span class="ow">in</span> <span class="p">[</span>
+    <span class="s2">&quot;printer.gcode.script&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;printer.objects.subscribe&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;printer.objects.query&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;printer.emergency_stop&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;printer.restart&quot;</span><span class="p">,</span>
+<span class="p">]:</span>
+</code></pre></div>
+<ul>
+<li>[ ] <strong>Step 8: 运行测试，确认全部 PASS</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>.venv/Scripts/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>test/test_klipper_worker_ext.py<span class="w"> </span>-v
+</code></pre></div>
+<p>Expected:
+<div class="highlight"><pre><span></span><code>test_sigKlipperState_exists PASSED
+test_webhooks_in_query_objects PASSED
+test_printer_restart_enqueues_correct_message PASSED
+</code></pre></div></p>
+<ul>
+<li>[ ] <strong>Step 9: Commit</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>add<span class="w"> </span>HEPiC/communications/klipper_worker.py<span class="w"> </span>test/test_klipper_worker_ext.py
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;feat: add sigKlipperState, printer_restart, webhooks query to KlipperWorker&quot;</span>
+</code></pre></div>
+<hr />
+<h2 id="task-3-klipperstatuswidget">Task 3: 新建 KlipperStatusWidget<a class="headerlink" href="#task-3-klipperstatuswidget" title="Permanent link">&para;</a></h2>
+<p><strong>Files:</strong>
+- Create: <code>HEPiC/tab_widgets/klipper_status_widget.py</code>
+- Create: <code>test/test_klipper_status_widget.py</code></p>
+<ul>
+<li>[ ] <strong>Step 1: 写失败测试</strong></li>
+</ul>
+<p>创建 <code>test/test_klipper_status_widget.py</code>：</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">pytest</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">PySide6.QtCore</span><span class="w"> </span><span class="kn">import</span> <span class="n">Signal</span><span class="p">,</span> <span class="n">QObject</span><span class="p">,</span> <span class="n">Qt</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">HEPiC.tab_widgets.klipper_status_widget</span><span class="w"> </span><span class="kn">import</span> <span class="n">KlipperStatusWidget</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_initial_state_buttons_disabled</span><span class="p">(</span><span class="n">qtbot</span><span class="p">):</span>
+    <span class="n">w</span> <span class="o">=</span> <span class="n">KlipperStatusWidget</span><span class="p">()</span>
+    <span class="n">qtbot</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">w</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="ow">not</span> <span class="n">w</span><span class="o">.</span><span class="n">_firmware_btn</span><span class="o">.</span><span class="n">isEnabled</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="ow">not</span> <span class="n">w</span><span class="o">.</span><span class="n">_klipper_btn</span><span class="o">.</span><span class="n">isEnabled</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_initial_toggle_btn_hidden</span><span class="p">(</span><span class="n">qtbot</span><span class="p">):</span>
+    <span class="n">w</span> <span class="o">=</span> <span class="n">KlipperStatusWidget</span><span class="p">()</span>
+    <span class="n">qtbot</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">w</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="ow">not</span> <span class="n">w</span><span class="o">.</span><span class="n">_toggle_btn</span><span class="o">.</span><span class="n">isVisible</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="ow">not</span> <span class="n">w</span><span class="o">.</span><span class="n">_detail_label</span><span class="o">.</span><span class="n">isVisible</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_on_state_changed_ready</span><span class="p">(</span><span class="n">qtbot</span><span class="p">):</span>
+    <span class="n">w</span> <span class="o">=</span> <span class="n">KlipperStatusWidget</span><span class="p">()</span>
+    <span class="n">qtbot</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">w</span><span class="p">)</span>
+    <span class="n">w</span><span class="o">.</span><span class="n">on_state_changed</span><span class="p">(</span><span class="s2">&quot;ready&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">w</span><span class="o">.</span><span class="n">_state_label</span><span class="o">.</span><span class="n">text</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;ready&quot;</span>
+    <span class="k">assert</span> <span class="ow">not</span> <span class="n">w</span><span class="o">.</span><span class="n">_toggle_btn</span><span class="o">.</span><span class="n">isVisible</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_on_state_changed_error_shows_toggle</span><span class="p">(</span><span class="n">qtbot</span><span class="p">):</span>
+    <span class="n">w</span> <span class="o">=</span> <span class="n">KlipperStatusWidget</span><span class="p">()</span>
+    <span class="n">qtbot</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">w</span><span class="p">)</span>
+    <span class="n">w</span><span class="o">.</span><span class="n">on_state_changed</span><span class="p">(</span><span class="s2">&quot;error&quot;</span><span class="p">,</span> <span class="s2">&quot;MCU shutdown: Timer too close&quot;</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">w</span><span class="o">.</span><span class="n">_state_label</span><span class="o">.</span><span class="n">text</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;error&quot;</span>
+    <span class="k">assert</span> <span class="n">w</span><span class="o">.</span><span class="n">_toggle_btn</span><span class="o">.</span><span class="n">isVisible</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="n">w</span><span class="o">.</span><span class="n">_detail_label</span><span class="o">.</span><span class="n">text</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;MCU shutdown: Timer too close&quot;</span>
+    <span class="k">assert</span> <span class="ow">not</span> <span class="n">w</span><span class="o">.</span><span class="n">_detail_label</span><span class="o">.</span><span class="n">isVisible</span><span class="p">()</span>  <span class="c1"># 折叠，默认不展开</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_toggle_expands_and_collapses</span><span class="p">(</span><span class="n">qtbot</span><span class="p">):</span>
+    <span class="n">w</span> <span class="o">=</span> <span class="n">KlipperStatusWidget</span><span class="p">()</span>
+    <span class="n">qtbot</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">w</span><span class="p">)</span>
+    <span class="n">w</span><span class="o">.</span><span class="n">on_state_changed</span><span class="p">(</span><span class="s2">&quot;error&quot;</span><span class="p">,</span> <span class="s2">&quot;some error&quot;</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="ow">not</span> <span class="n">w</span><span class="o">.</span><span class="n">_detail_label</span><span class="o">.</span><span class="n">isVisible</span><span class="p">()</span>
+    <span class="n">qtbot</span><span class="o">.</span><span class="n">mouseClick</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">_toggle_btn</span><span class="p">,</span> <span class="n">Qt</span><span class="o">.</span><span class="n">LeftButton</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">w</span><span class="o">.</span><span class="n">_detail_label</span><span class="o">.</span><span class="n">isVisible</span><span class="p">()</span>
+    <span class="n">qtbot</span><span class="o">.</span><span class="n">mouseClick</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">_toggle_btn</span><span class="p">,</span> <span class="n">Qt</span><span class="o">.</span><span class="n">LeftButton</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="ow">not</span> <span class="n">w</span><span class="o">.</span><span class="n">_detail_label</span><span class="o">.</span><span class="n">isVisible</span><span class="p">()</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_MockWorker</span><span class="p">(</span><span class="n">QObject</span><span class="p">):</span>
+    <span class="n">sigKlipperState</span> <span class="o">=</span> <span class="n">Signal</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">restart_firmware</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> <span class="k">pass</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">printer_restart</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> <span class="k">pass</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_connect_worker_enables_buttons</span><span class="p">(</span><span class="n">qtbot</span><span class="p">):</span>
+    <span class="n">w</span> <span class="o">=</span> <span class="n">KlipperStatusWidget</span><span class="p">()</span>
+    <span class="n">qtbot</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">w</span><span class="p">)</span>
+    <span class="n">mock_worker</span> <span class="o">=</span> <span class="n">_MockWorker</span><span class="p">()</span>
+    <span class="n">w</span><span class="o">.</span><span class="n">connect_worker</span><span class="p">(</span><span class="n">mock_worker</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">w</span><span class="o">.</span><span class="n">_firmware_btn</span><span class="o">.</span><span class="n">isEnabled</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="n">w</span><span class="o">.</span><span class="n">_klipper_btn</span><span class="o">.</span><span class="n">isEnabled</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_connect_worker_receives_state</span><span class="p">(</span><span class="n">qtbot</span><span class="p">):</span>
+    <span class="n">w</span> <span class="o">=</span> <span class="n">KlipperStatusWidget</span><span class="p">()</span>
+    <span class="n">qtbot</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="n">w</span><span class="p">)</span>
+    <span class="n">mock_worker</span> <span class="o">=</span> <span class="n">_MockWorker</span><span class="p">()</span>
+    <span class="n">w</span><span class="o">.</span><span class="n">connect_worker</span><span class="p">(</span><span class="n">mock_worker</span><span class="p">)</span>
+    <span class="n">mock_worker</span><span class="o">.</span><span class="n">sigKlipperState</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="s2">&quot;shutdown&quot;</span><span class="p">,</span> <span class="s2">&quot;Printer shutdown&quot;</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">w</span><span class="o">.</span><span class="n">_state_label</span><span class="o">.</span><span class="n">text</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;shutdown&quot;</span>
+    <span class="k">assert</span> <span class="n">w</span><span class="o">.</span><span class="n">_toggle_btn</span><span class="o">.</span><span class="n">isVisible</span><span class="p">()</span>
+</code></pre></div>
+<ul>
+<li>[ ] <strong>Step 2: 运行，确认全部 FAIL</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>.venv/Scripts/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>test/test_klipper_status_widget.py<span class="w"> </span>-v
+</code></pre></div>
+<p>Expected: 全部 FAIL（<code>KlipperStatusWidget</code> 不存在）</p>
+<ul>
+<li>[ ] <strong>Step 3: 创建 KlipperStatusWidget</strong></li>
+</ul>
+<p>创建 <code>HEPiC/tab_widgets/klipper_status_widget.py</code>：</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">PySide6.QtWidgets</span><span class="w"> </span><span class="kn">import</span> <span class="n">QWidget</span><span class="p">,</span> <span class="n">QHBoxLayout</span><span class="p">,</span> <span class="n">QVBoxLayout</span><span class="p">,</span> <span class="n">QLabel</span><span class="p">,</span> <span class="n">QPushButton</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">PySide6.QtCore</span><span class="w"> </span><span class="kn">import</span> <span class="n">Slot</span>
+
+<span class="n">_STATE_COLORS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;ready&quot;</span><span class="p">:</span>    <span class="s2">&quot;#4CAF50&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;startup&quot;</span><span class="p">:</span>  <span class="s2">&quot;#FF9800&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;shutdown&quot;</span><span class="p">:</span> <span class="s2">&quot;#9E9E9E&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;error&quot;</span><span class="p">:</span>    <span class="s2">&quot;#F44336&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">KlipperStatusWidget</span><span class="p">(</span><span class="n">QWidget</span><span class="p">):</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parent</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">parent</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_dot</span> <span class="o">=</span> <span class="n">QLabel</span><span class="p">(</span><span class="s2">&quot;●&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_dot</span><span class="o">.</span><span class="n">setStyleSheet</span><span class="p">(</span><span class="s2">&quot;color: #9E9E9E; font-size: 16px;&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_state_label</span> <span class="o">=</span> <span class="n">QLabel</span><span class="p">(</span><span class="s2">&quot;未连接&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_btn</span> <span class="o">=</span> <span class="n">QPushButton</span><span class="p">(</span><span class="s2">&quot;▼ 详情&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_btn</span><span class="o">.</span><span class="n">setFlat</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_btn</span><span class="o">.</span><span class="n">setVisible</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+
+        <span class="n">status_row</span> <span class="o">=</span> <span class="n">QHBoxLayout</span><span class="p">()</span>
+        <span class="n">status_row</span><span class="o">.</span><span class="n">setContentsMargins</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">status_row</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_dot</span><span class="p">)</span>
+        <span class="n">status_row</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_state_label</span><span class="p">)</span>
+        <span class="n">status_row</span><span class="o">.</span><span class="n">addStretch</span><span class="p">()</span>
+        <span class="n">status_row</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_toggle_btn</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_detail_label</span> <span class="o">=</span> <span class="n">QLabel</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_detail_label</span><span class="o">.</span><span class="n">setWordWrap</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_detail_label</span><span class="o">.</span><span class="n">setVisible</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_firmware_btn</span> <span class="o">=</span> <span class="n">QPushButton</span><span class="p">(</span><span class="s2">&quot;固件重启&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_firmware_btn</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_klipper_btn</span> <span class="o">=</span> <span class="n">QPushButton</span><span class="p">(</span><span class="s2">&quot;Klipper 重启&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_klipper_btn</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+
+        <span class="n">btn_row</span> <span class="o">=</span> <span class="n">QHBoxLayout</span><span class="p">()</span>
+        <span class="n">btn_row</span><span class="o">.</span><span class="n">setContentsMargins</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">btn_row</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_firmware_btn</span><span class="p">)</span>
+        <span class="n">btn_row</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_klipper_btn</span><span class="p">)</span>
+
+        <span class="n">layout</span> <span class="o">=</span> <span class="n">QVBoxLayout</span><span class="p">()</span>
+        <span class="n">layout</span><span class="o">.</span><span class="n">setContentsMargins</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+        <span class="n">layout</span><span class="o">.</span><span class="n">addLayout</span><span class="p">(</span><span class="n">status_row</span><span class="p">)</span>
+        <span class="n">layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_detail_label</span><span class="p">)</span>
+        <span class="n">layout</span><span class="o">.</span><span class="n">addLayout</span><span class="p">(</span><span class="n">btn_row</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setLayout</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_btn</span><span class="o">.</span><span class="n">clicked</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_toggle_detail</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">connect_worker</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">worker</span><span class="p">):</span>
+        <span class="n">worker</span><span class="o">.</span><span class="n">sigKlipperState</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">on_state_changed</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_firmware_btn</span><span class="o">.</span><span class="n">clicked</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">worker</span><span class="o">.</span><span class="n">restart_firmware</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_klipper_btn</span><span class="o">.</span><span class="n">clicked</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">worker</span><span class="o">.</span><span class="n">printer_restart</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_firmware_btn</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_klipper_btn</span><span class="o">.</span><span class="n">setEnabled</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="nd">@Slot</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_state_changed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="n">color</span> <span class="o">=</span> <span class="n">_STATE_COLORS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="s2">&quot;#9E9E9E&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_dot</span><span class="o">.</span><span class="n">setStyleSheet</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;color: </span><span class="si">{</span><span class="n">color</span><span class="si">}</span><span class="s2">; font-size: 16px;&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_state_label</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_detail_label</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+        <span class="n">has_message</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_btn</span><span class="o">.</span><span class="n">setVisible</span><span class="p">(</span><span class="n">has_message</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">has_message</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_detail_label</span><span class="o">.</span><span class="n">setVisible</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_btn</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;▼ 详情&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_toggle_detail</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">visible</span> <span class="o">=</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_detail_label</span><span class="o">.</span><span class="n">isVisible</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_detail_label</span><span class="o">.</span><span class="n">setVisible</span><span class="p">(</span><span class="n">visible</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_toggle_btn</span><span class="o">.</span><span class="n">setText</span><span class="p">(</span><span class="s2">&quot;▲ 详情&quot;</span> <span class="k">if</span> <span class="n">visible</span> <span class="k">else</span> <span class="s2">&quot;▼ 详情&quot;</span><span class="p">)</span>
+</code></pre></div>
+<ul>
+<li>[ ] <strong>Step 4: 运行测试，确认全部 PASS</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>.venv/Scripts/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>test/test_klipper_status_widget.py<span class="w"> </span>-v
+</code></pre></div>
+<p>Expected:
+<div class="highlight"><pre><span></span><code>test_initial_state_buttons_disabled PASSED
+test_initial_toggle_btn_hidden PASSED
+test_on_state_changed_ready PASSED
+test_on_state_changed_error_shows_toggle PASSED
+test_toggle_expands_and_collapses PASSED
+test_connect_worker_enables_buttons PASSED
+test_connect_worker_receives_state PASSED
+</code></pre></div></p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>add<span class="w"> </span>HEPiC/tab_widgets/klipper_status_widget.py<span class="w"> </span>test/test_klipper_status_widget.py
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;feat: add KlipperStatusWidget&quot;</span>
+</code></pre></div>
+<hr />
+<h2 id="task-4-connectionwidget-homewidget">Task 4: 导出 + 嵌入 ConnectionWidget 和 HomeWidget<a class="headerlink" href="#task-4-connectionwidget-homewidget" title="Permanent link">&para;</a></h2>
+<p><strong>Files:</strong>
+- Modify: <code>HEPiC/tab_widgets/__init__.py</code>
+- Modify: <code>HEPiC/tab_widgets/connection_widget.py</code>
+- Modify: <code>HEPiC/tab_widgets/home_widget.py</code></p>
+<ul>
+<li>[ ] <strong>Step 1: 在 <code>__init__.py</code> 导出新 widget</strong></li>
+</ul>
+<p>在 <code>HEPiC/tab_widgets/__init__.py</code> 末尾添加：</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">.klipper_status_widget</span><span class="w"> </span><span class="kn">import</span> <span class="n">KlipperStatusWidget</span>
+</code></pre></div>
+<ul>
+<li>[ ] <strong>Step 2: 修改 ConnectionWidget — 导入并实例化</strong></li>
+</ul>
+<p>在 <code>connection_widget.py</code> 顶部 import 区添加：</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">.klipper_status_widget</span><span class="w"> </span><span class="kn">import</span> <span class="n">KlipperStatusWidget</span>
+</code></pre></div>
+<p>在 <code>__init__</code> 的组件创建区（<code>self.self_test = QLabel("...")</code> 之后）添加：</p>
+<div class="highlight"><pre><span></span><code><span class="bp">self</span><span class="o">.</span><span class="n">klipper_status_widget</span> <span class="o">=</span> <span class="n">KlipperStatusWidget</span><span class="p">()</span>
+</code></pre></div>
+<ul>
+<li>[ ] <strong>Step 3: 修改 ConnectionWidget — 重构底部布局</strong></li>
+</ul>
+<p>将现有布局代码：</p>
+<div class="highlight"><pre><span></span><code><span class="n">message_layout</span> <span class="o">=</span> <span class="n">QHBoxLayout</span><span class="p">()</span>
+<span class="n">message_layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">self_test</span><span class="p">)</span>
+<span class="n">layout</span><span class="o">.</span><span class="n">addLayout</span><span class="p">(</span><span class="n">ip_layout</span><span class="p">)</span>
+<span class="n">layout</span><span class="o">.</span><span class="n">addStretch</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">layout</span><span class="o">.</span><span class="n">addLayout</span><span class="p">(</span><span class="n">message_layout</span><span class="p">)</span>
+</code></pre></div>
+<p>替换为：</p>
+<div class="highlight"><pre><span></span><code><span class="n">bottom_layout</span> <span class="o">=</span> <span class="n">QHBoxLayout</span><span class="p">()</span>
+<span class="n">bottom_layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">self_test</span><span class="p">)</span>
+<span class="n">bottom_layout</span><span class="o">.</span><span class="n">addStretch</span><span class="p">()</span>
+<span class="n">bottom_layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">klipper_status_widget</span><span class="p">)</span>
+<span class="n">layout</span><span class="o">.</span><span class="n">addLayout</span><span class="p">(</span><span class="n">ip_layout</span><span class="p">)</span>
+<span class="n">layout</span><span class="o">.</span><span class="n">addStretch</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">layout</span><span class="o">.</span><span class="n">addLayout</span><span class="p">(</span><span class="n">bottom_layout</span><span class="p">)</span>
+</code></pre></div>
+<ul>
+<li>[ ] <strong>Step 4: 修改 HomeWidget — 导入并实例化</strong></li>
+</ul>
+<p>在 <code>home_widget.py</code> 顶部 import 区添加（在现有 from .xxx import 语句之后）：</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">.klipper_status_widget</span><span class="w"> </span><span class="kn">import</span> <span class="n">KlipperStatusWidget</span>
+</code></pre></div>
+<p>在 <code>__init__</code> 的组件创建区（<code>self.retract_button = QPushButton("回抽 10 mm")</code> 之后）添加：</p>
+<div class="highlight"><pre><span></span><code><span class="bp">self</span><span class="o">.</span><span class="n">klipper_status_widget</span> <span class="o">=</span> <span class="n">KlipperStatusWidget</span><span class="p">()</span>
+</code></pre></div>
+<ul>
+<li>[ ] <strong>Step 5: 修改 HomeWidget — 在 data_layout 顶部插入 klipper_status_widget</strong></li>
+</ul>
+<p>将现有布局代码：</p>
+<div class="highlight"><pre><span></span><code><span class="n">data_layout</span> <span class="o">=</span> <span class="n">QVBoxLayout</span><span class="p">()</span>
+<span class="n">status_and_vision_layout</span> <span class="o">=</span> <span class="n">QHBoxLayout</span><span class="p">()</span>
+<span class="n">status_and_vision_layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">status_widget</span><span class="p">)</span>
+<span class="n">status_and_vision_layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dieswell_widget</span><span class="p">)</span>
+<span class="n">status_and_vision_layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ir_roi_widget</span><span class="p">)</span>
+<span class="n">data_layout</span><span class="o">.</span><span class="n">addLayout</span><span class="p">(</span><span class="n">status_and_vision_layout</span><span class="p">)</span>
+<span class="n">data_layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data_widget</span><span class="p">)</span>
+</code></pre></div>
+<p>替换为：</p>
+<div class="highlight"><pre><span></span><code><span class="n">data_layout</span> <span class="o">=</span> <span class="n">QVBoxLayout</span><span class="p">()</span>
+<span class="n">klipper_row</span> <span class="o">=</span> <span class="n">QHBoxLayout</span><span class="p">()</span>
+<span class="n">klipper_row</span><span class="o">.</span><span class="n">addStretch</span><span class="p">()</span>
+<span class="n">klipper_row</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">klipper_status_widget</span><span class="p">)</span>
+<span class="n">data_layout</span><span class="o">.</span><span class="n">addLayout</span><span class="p">(</span><span class="n">klipper_row</span><span class="p">)</span>
+<span class="n">status_and_vision_layout</span> <span class="o">=</span> <span class="n">QHBoxLayout</span><span class="p">()</span>
+<span class="n">status_and_vision_layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">status_widget</span><span class="p">)</span>
+<span class="n">status_and_vision_layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dieswell_widget</span><span class="p">)</span>
+<span class="n">status_and_vision_layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ir_roi_widget</span><span class="p">)</span>
+<span class="n">data_layout</span><span class="o">.</span><span class="n">addLayout</span><span class="p">(</span><span class="n">status_and_vision_layout</span><span class="p">)</span>
+<span class="n">data_layout</span><span class="o">.</span><span class="n">addWidget</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data_widget</span><span class="p">)</span>
+</code></pre></div>
+<ul>
+<li>[ ] <strong>Step 6: 运行全部测试，确认无回归</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>.venv/Scripts/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>test/test_klipper_status_widget.py<span class="w"> </span>test/test_klipper_worker_ext.py<span class="w"> </span>-v
+</code></pre></div>
+<p>Expected: 全部 PASS</p>
+<ul>
+<li>[ ] <strong>Step 7: Commit</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>add<span class="w"> </span>HEPiC/tab_widgets/__init__.py<span class="w"> </span>HEPiC/tab_widgets/connection_widget.py<span class="w"> </span>HEPiC/tab_widgets/home_widget.py
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;feat: embed KlipperStatusWidget in ConnectionWidget and HomeWidget&quot;</span>
+</code></pre></div>
+<hr />
+<h2 id="task-5-mainwindow">Task 5: 在 MainWindow 接线<a class="headerlink" href="#task-5-mainwindow" title="Permanent link">&para;</a></h2>
+<p><strong>Files:</strong>
+- Modify: <code>HEPiC/__main__.py</code></p>
+<ul>
+<li>[ ] <strong>Step 1: 在 connect_to_ip 中调用 connect_worker</strong></li>
+</ul>
+<p>在 <code>connect_to_ip</code> 方法中，找到现有信号连接的末尾（<code>self.home_widget.sigRetract.connect(self.klipper_worker.send_gcode)</code> 之后），添加：</p>
+<div class="highlight"><pre><span></span><code><span class="bp">self</span><span class="o">.</span><span class="n">connection_widget</span><span class="o">.</span><span class="n">klipper_status_widget</span><span class="o">.</span><span class="n">connect_worker</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">klipper_worker</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">home_widget</span><span class="o">.</span><span class="n">klipper_status_widget</span><span class="o">.</span><span class="n">connect_worker</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">klipper_worker</span><span class="p">)</span>
+</code></pre></div>
+<ul>
+<li>[ ] <strong>Step 2: 运行全部测试</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>.venv/Scripts/python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>test/test_klipper_status_widget.py<span class="w"> </span>test/test_klipper_worker_ext.py<span class="w"> </span>-v
+</code></pre></div>
+<p>Expected: 全部 PASS</p>
+<ul>
+<li>[ ] <strong>Step 3: 手动验证（如有设备可连接）</strong></li>
+</ul>
+<p>启动 app，进入连接页，检查右下角是否出现 <code>● 未连接 [固件重启(disabled)] [Klipper重启(disabled)]</code>。<br />
+连接成功后，检查按钮是否变为 enabled，状态是否变为 <code>● ready</code>（绿色）。<br />
+如有固件报错，检查 <code>▼ 详情</code> 按钮是否可见，点击后是否展开错误消息。</p>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>add<span class="w"> </span>HEPiC/__main__.py
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;feat: wire KlipperStatusWidget to KlipperWorker in MainWindow&quot;</span>
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  回到页面顶部
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.sections", "navigation.top", "search.suggest", "content.code.copy"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

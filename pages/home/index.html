@@ -1,0 +1,1395 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Hotend Extrusion Platform 控制软件 — 用户 wiki">
+      
+      
+      
+      
+        <link rel="prev" href="../connection/">
+      
+      
+        <link rel="next" href="../vision/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>主页 - HEPiC 使用手册</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#_1" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href="../.." title="HEPiC 使用手册" class="md-header__button md-logo" aria-label="HEPiC 使用手册" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            HEPiC 使用手册
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              主页
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换到深色模式"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="切换到深色模式" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换到浅色模式"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="切换到浅色模式" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="HEPiC 使用手册" class="md-nav__button md-logo" aria-label="HEPiC 使用手册" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    HEPiC 使用手册
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    首页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    快速开始
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    核心概念
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    核心概念
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    软件架构
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/data-recording/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    数据记录
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    界面说明
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    界面说明
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../connection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    连接页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    主页
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    主页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        状态面板
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="状态面板">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        温度行（实测 / 目标）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        进线速度行（实测 / 设定）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TCP 传感器行（动态）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        出口熔体直径（可选）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        出口熔体温度（可选）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        任务进度条
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#roi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        模口膨胀 ROI 视图
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#roi_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        红外 ROI 视图
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        实时数据曲线图
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        命令窗口
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="命令窗口">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        响应显示区
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#g-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G-code 输入框
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        发送指令按钮
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        挤出按钮（长按）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        回抽按钮（长按）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_14" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        播放 / 暂停按钮（记录开关）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        急停按钮
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#klipper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Klipper 状态控件
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    视觉页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ir/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    红外页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gcode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    G-code 页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../data-processor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    数据处理页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality-check/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    质检模式
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        状态面板
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="状态面板">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        温度行（实测 / 目标）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        进线速度行（实测 / 设定）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TCP 传感器行（动态）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        出口熔体直径（可选）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        出口熔体温度（可选）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        任务进度条
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#roi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        模口膨胀 ROI 视图
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#roi_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        红外 ROI 视图
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        实时数据曲线图
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        命令窗口
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="命令窗口">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        响应显示区
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#g-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        G-code 输入框
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        发送指令按钮
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        挤出按钮（长按）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        回抽按钮（长按）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_14" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        播放 / 暂停按钮（记录开关）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        急停按钮
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#klipper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Klipper 状态控件
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="_1">主页<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
+<p>主页是 HEPiC 的核心操作界面，连接成功后自动显示。左侧为手动操作与控制区，右侧为实时数据监视区。</p>
+<p><img alt="主页整体截图" src="../../images/home-page.png" /></p>
+<hr />
+<h2 id="_2">状态面板<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
+<p><img alt="状态面板截图" src="../../images/home-status-panel.png" /></p>
+<p>状态面板（<code>PlatformStatusWidget</code>）固定宽度显示在右侧区域左上角，汇总当前平台的关键运行参数。</p>
+<hr />
+<h3 id="_3">温度行（实测 / 目标）<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：显示热端当前温度和你设定的目标温度，格式为"实测值 / 目标值"。旁边有一个输入框，输入数字后按 Enter 即可修改目标温度。</p>
+<p><strong>技术说明</strong>：<code>hotend_temperature_value</code>（<code>QLabel</code>）显示实测温度，读取数据字典中的 <code>measured_temperature_C</code> 键（其上游由 Klipper 的 <code>extruder.temperature</code> 映射而来）。<code>hotend_temperature_input</code>（<code>QLineEdit</code>，最大宽度 60 px）接收用户输入，按 Enter 触发 <code>on_temp_enter_pressed</code>，通过 <code>set_temperature</code> 信号发送给 <code>KlipperWorker.set_temperature</code>，下发 <code>M104 S{value}</code> G-code。</p>
+<hr />
+<h3 id="_4">进线速度行（实测 / 设定）<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：第一个数字是编码器实测到的丝材进线速度，第二个数字是 Klipper 当前的挤出速度设定值，单位均为 mm/s。两者接近说明平台运行正常。</p>
+<p><strong>技术说明</strong>：<code>measured_feedrate_value</code>（<code>QLabel</code>）显示来自 TCP 传感器的 <code>measured_feedrate_mms</code>；<code>feedrate_value</code>（<code>QLabel</code>）显示来自 Klipper <code>motion_report.live_extruder_velocity</code> 的 <code>feedrate_mms</code>。两者均由 <code>update_display(data)</code> 槽刷新。</p>
+<hr />
+<h3 id="tcp">TCP 传感器行（动态）<a class="headerlink" href="#tcp" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：连接后，平台会告诉软件它装了哪些传感器（如挤出力、计米数等），状态面板会自动为每个传感器添加一行，显示实时读数。部分传感器旁边有一个小图标按钮，点击可将该传感器归零。</p>
+<p><strong>技术说明</strong>：调用 <code>configure_tcp_sensors(sensor_names, zeroable_sensor_names, sensor_labels)</code> 动态创建行布局。可归零传感器对应的行会添加一个带 <code>toZero.png</code> 图标的 <code>QPushButton</code>，点击后触发 <code>zero_sensor(name)</code> 信号，由 <code>TCPClient.zero_sensor</code> 槽处理。</p>
+<hr />
+<h3 id="_5">出口熔体直径（可选）<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：若 Hikrobot 工业相机初始化成功，此行显示视觉模块检测到的口模熔体直径（像素值）。</p>
+<p><strong>技术说明</strong>：<code>die_diameter_value</code>（<code>QLabel</code>）默认隐藏（<code>setVisible(False)</code>），相机初始化成功后由 <code>set_die_diameter_visible(True)</code> 显示。数值来自 <code>DataProcessorWidget</code> 检测结果，通过 <code>die_diameter_px</code> 字段更新。</p>
+<hr />
+<h3 id="_6">出口熔体温度（可选）<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：若 Optris 红外热像仪初始化成功，此行显示红外 ROI 区域内的熔体出口温度（°C）。</p>
+<p><strong>技术说明</strong>：<code>die_temperature_value</code>（<code>QLabel</code>）默认隐藏，红外仪初始化成功后由 <code>set_die_temperature_visible(True)</code> 显示。数值来自 <code>IRWorker.die_temperature</code>，字段名 <code>die_temperature_C</code>。</p>
+<hr />
+<h3 id="_7">任务进度条<a class="headerlink" href="#_7" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：运行 G-code 任务文件时，进度条显示整体完成百分比，旁边会显示预计完成时间（格式如"预计 15:30 完成"）。</p>
+<p><strong>技术说明</strong>：<code>progress_bar</code>（<code>QProgressBar</code>，范围 0–100）由 <code>update_progress(progress)</code> 槽驱动，<code>progress</code> 来自 Klipper 的 <code>virtual_sdcard.progress</code>。<code>_eta_str()</code> 根据已用时间线性估算剩余时间，进度低于 1% 或刚启动（不足 5 秒）时不显示预计时间。</p>
+<hr />
+<h2 id="roi">模口膨胀 ROI 视图<a class="headerlink" href="#roi" title="Permanent link">&para;</a></h2>
+<p><img alt="模口膨胀 ROI 视图截图" src="../../images/home-dieswell-roi.png" /></p>
+<p><strong>白话</strong>：此区域显示 Hikrobot 工业相机拍到的口模区域裁剪图，用于实时观察丝材从口模挤出后的膨胀状态。</p>
+<p><strong>技术说明</strong>：对应 <code>HomeWidget.dieswell_widget</code>（<code>VisionWidget</code> 实例）。<code>_refresh_displays()</code> 定时器每帧从 <code>ProcessingWorker.get_latest_proc_frame()</code> 取最新的处理帧并调用 <code>dieswell_widget.update_live_display(frame)</code>。仅在相机初始化成功后有实时画面；无相机时显示为空白占位区。</p>
+<hr />
+<h2 id="roi_1">红外 ROI 视图<a class="headerlink" href="#roi_1" title="Permanent link">&para;</a></h2>
+<p><img alt="红外 ROI 视图截图" src="../../images/home-ir-roi.png" /></p>
+<p><strong>白话</strong>：此区域显示红外热像仪对准口模区域的热成像裁剪图，颜色越亮表示温度越高，帮助你直观判断熔体出口温度分布。</p>
+<p><strong>技术说明</strong>：对应 <code>HomeWidget.ir_roi_widget</code>（<code>VisionWidget</code> 实例）。定时器从 <code>IRWorker.get_latest_roi_frame()</code> 取裁剪后的红外帧并调用 <code>ir_roi_widget.update_live_display(ir_roi)</code>。仅在红外热像仪初始化成功后有实时画面。</p>
+<hr />
+<h2 id="_8">实时数据曲线图<a class="headerlink" href="#_8" title="Permanent link">&para;</a></h2>
+<p><img alt="实时数据曲线图截图" src="../../images/home-data-plot.png" /></p>
+<p><strong>白话</strong>：连接后，所有传感器的实时数值会在此区域以时间为横轴绘制成折线图。每个传感器对应一张图表，图表上方有复选框，勾选或取消勾选可控制哪些传感器显示、哪些隐藏，方便专注观察你关心的数据。</p>
+<p><strong>技术说明</strong>：对应 <code>HomeWidget.data_widget</code>（<code>DataPlotWidget</code>）。连接后 <code>set_sensor_items()</code> 动态注册传感器，每个传感器生成一个 <code>QCheckBox</code> 和一个 <code>pg.PlotWidget</code>（基于 pyqtgraph）。<code>_display_data_timer</code> 以最高 15 Hz 频率触发 <code>update_display(data)</code>，只渲染当前时间窗口（默认 60 秒）内的数据点，避免长时间运行时画面卡顿。</p>
+<hr />
+<h2 id="_9">命令窗口<a class="headerlink" href="#_9" title="Permanent link">&para;</a></h2>
+<p><img alt="命令窗口截图" src="../../images/home-command-widget.png" /></p>
+<p>命令窗口（<code>CommandWidget</code>）位于左侧控制区，用于手动输入和查看 G-code 交互记录。</p>
+<hr />
+<h3 id="_10">响应显示区<a class="headerlink" href="#_10" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：上方深色文字区域会实时显示平台返回的所有消息和你发送的指令，并按消息内容自动着色，方便区分类型。每条消息前有时间戳。</p>
+<p><strong>技术说明</strong>：<code>command_display</code>（<code>QPlainTextEdit</code>，只读）。<code>display_message(message)</code> 仅根据<strong>消息文本的前缀</strong>判断颜色，与"谁发的"无关：</p>
+<table>
+<thead>
+<tr>
+<th>颜色</th>
+<th>触发条件</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>红色 <code>#f44336</code></td>
+<td>以 <code>!!</code> 开头</td>
+<td>错误消息</td>
+</tr>
+<tr>
+<td>橙色 <code>#ff9800</code></td>
+<td>含 <code>action:</code></td>
+<td>系统动作</td>
+</tr>
+<tr>
+<td>灰色 <code>#bdbdbd</code></td>
+<td>以 <code>//</code> 开头</td>
+<td>信息/提示消息</td>
+</tr>
+<tr>
+<td>绿色 <code>#4caf50</code></td>
+<td>以 <code>&gt;</code> 开头</td>
+<td>指令回显行</td>
+</tr>
+<tr>
+<td>白色 <code>#ffffff</code></td>
+<td>以上都不匹配</td>
+<td>普通响应</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="admonition-title">用户发送的指令显示为白色</p>
+<p>点击"发送指令"时，<code>on_send_clicked</code> 把<strong>原始 G-code</strong>（如 <code>G1 E10 F300</code>）直接传给 <code>display_message</code>。由于原始 G-code 不以 <code>&gt;</code> 开头，它落入"普通响应"分支，显示为<strong>白色</strong>而非绿色。绿色仅用于文本以 <code>&gt;</code> 开头的行。</p>
+</div>
+<p><code>KlipperWorker.gcode_response</code> 信号也连接到此槽，Klipper 的所有回复均会在此显示。</p>
+<hr />
+<h3 id="g-code">G-code 输入框<a class="headerlink" href="#g-code" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：在下方输入框里输入任意 G-code 指令（如 <code>G1 E10 F300</code> 挤出 10 mm），按 Enter 或点击"发送指令"按钮即可发送。按上方向键可恢复上一条发送过的指令，方便重复操作。</p>
+<p><strong>技术说明</strong>：<code>command_input</code>（自定义 <code>CommandInput(QLineEdit)</code>）。按 Enter 或点击 <code>send_button</code> 均触发 <code>on_send_clicked</code>，通过 <code>command</code> 信号发给 <code>KlipperWorker.send_gcode</code>。上方向键触发 <code>upArrowPressed</code> 信号，<code>on_prev_clicked</code> 从 <code>command_cache</code> 列表弹出上一条指令填入输入框。未连接时输入框和发送按钮均禁用。</p>
+<hr />
+<h3 id="_11">发送指令按钮<a class="headerlink" href="#_11" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：点击此按钮将当前输入框中的 G-code 发送给平台，与按 Enter 效果相同。</p>
+<p><strong>技术说明</strong>：<code>send_button</code>（<code>QPushButton</code>，标签"发送指令"）。<code>clicked</code> 信号连接到 <code>on_send_clicked</code>。</p>
+<hr />
+<h2 id="_12">挤出按钮（长按）<a class="headerlink" href="#_12" title="Permanent link">&para;</a></h2>
+<p><strong>白话</strong>：按住此按钮，平台开始持续向前挤出丝材；松开立即停止。这是在没有 G-code 文件时手动控制进料的快捷方式。</p>
+<p><strong>技术说明</strong>：<code>extrude_button</code>（<code>QPushButton</code>，标签"挤出（长按）"）。<code>pressed</code> 信号触发 <code>on_extrude_pressed</code>：立即发出一段 G-code（<code>G91\nG1 E{step} F{feedrate}\n</code>）提升响应感，随后每隔 <code>jog_interval_ms</code>（默认 1000 ms）重复发送一次，直到 <code>released</code> 信号触发 <code>_extrude_timer.stop()</code>。每段的步长 <code>jog_step_mm = feedrate_mm_per_min / 60 × interval_s</code>（默认约 3.33 mm），使运动时间约等于发送间隔，避免 Klipper 运动队列堆积，松开后最多再走一小段即停止。挤出速度默认 200 mm/min。</p>
+<hr />
+<h2 id="_13">回抽按钮（长按）<a class="headerlink" href="#_13" title="Permanent link">&para;</a></h2>
+<p><strong>白话</strong>：按住此按钮，平台反向回抽丝材；松开立即停止。用于实验结束后清退余料，或出现丝材堵塞时快速后退。</p>
+<p><strong>技术说明</strong>：<code>retract_button</code>（<code>QPushButton</code>，标签"回抽（长按）"）。机制与挤出按钮完全对称，发送的 G-code 为 <code>G91\nG1 E-{step} F{feedrate}\n</code>（E 值取负）。<code>_retract_timer</code> 与 <code>_extrude_timer</code> 独立，两者共享相同的步长和间隔参数。</p>
+<hr />
+<h2 id="_14">播放 / 暂停按钮（记录开关）<a class="headerlink" href="#_14" title="Permanent link">&para;</a></h2>
+<p><strong>白话</strong>：点击此圆形按钮开始记录数据（按钮变为"暂停"图标），再次点击停止记录。每次开始会自动在桌面生成一个带时间戳的 CSV 文件；若相机在线，还会同步录制视频。</p>
+<p><strong>技术说明</strong>：<code>play_pause_button</code>（<code>QPushButton</code>，可切换，固定尺寸 80×80 px，圆形样式）。<code>toggled</code> 信号连接到 <code>MainWindow.on_toggle_play_pause(checked)</code>：</p>
+<ul>
+<li><strong>checked = True</strong>（开始记录）：切换为暂停图标，生成 <code>~/Desktop/&lt;时间戳&gt;_autosave.csv</code> 并写入列标题；若相机在线同时启动 <code>VideoRecorder</code>。</li>
+<li><strong>checked = False</strong>（停止记录）：切换回播放图标，关闭 CSV 文件（和视频文件）。</li>
+</ul>
+<p>G-code 响应中的 <code>START_RECORDING</code> / <code>STOP_RECORDING</code> 动作标记也可自动触发此按钮状态切换。详见<a href="../../concepts/data-recording/">数据记录</a>。</p>
+<div class="admonition note">
+<p class="admonition-title">按钮可能暂时消失</p>
+<p>播放/暂停按钮和急停按钮放在同一个容器中，与下方的 <strong>Klipper 状态控件</strong>互斥显示。当 Klipper 处于非 <code>ready</code> 状态（<code>startup</code> / <code>shutdown</code> / <code>error</code>）时，状态控件弹出并隐藏这两个按钮；状态恢复 <code>ready</code> 后按钮重新出现（由 <code>sig_visible_changed</code> 信号驱动，见下文 Klipper 状态控件章节）。</p>
+</div>
+<hr />
+<h2 id="_15">急停按钮<a class="headerlink" href="#_15" title="Permanent link">&para;</a></h2>
+<p><strong>白话</strong>：点击此按钮立即停止一切运动，同时清空当前记录会话的内存数据，相当于"紧急刹车"。仅在确认需要强制中止时使用。</p>
+<p><strong>技术说明</strong>：<code>stop_button</code>（<code>QPushButton</code>，使用 <code>emergency_stop.png</code> 图标，固定尺寸 80×80 px，透明背景）。<code>clicked</code> 信号连接到 <code>MainWindow.on_stop_clicked</code>，该槽依次调用 <code>init_data()</code>（清空内存数据队列）、将 <code>play_pause_button</code> 设为非选中状态（停止记录）、发出 <code>sigEmergencyStop</code> 信号，最终由 <code>KlipperWorker.emergency_stop</code> 通过 Moonraker 调用 <code>printer.emergency_stop</code>。</p>
+<div class="admonition warning">
+<p class="admonition-title">注意</p>
+<p>急停后 Klipper 会进入 <code>shutdown</code> 状态，需在 Klipper 状态控件中点击"固件重启"或"Klipper 重启"方可恢复正常操作。</p>
+</div>
+<hr />
+<h2 id="klipper">Klipper 状态控件<a class="headerlink" href="#klipper" title="Permanent link">&para;</a></h2>
+<p><img alt="Klipper 状态控件截图" src="../../images/home-klipper-status.png" /></p>
+<p><strong>白话</strong>：正常运行时，此区域隐藏，不占界面空间。当 Klipper 出现异常（如 <code>startup</code> / <code>shutdown</code> / <code>error</code> 状态）时，它会自动弹出，显示当前状态、错误详情，以及"固件重启"和"Klipper 重启"两个修复按钮。状态恢复为 <code>ready</code> 后自动隐藏。</p>
+<p><strong>技术说明</strong>：<code>klipper_status_widget</code>（<code>KlipperStatusWidget</code>）。<code>KlipperWorker</code> 的 <code>sigKlipperState(state, message)</code> 信号驱动 <code>on_state_changed</code>：</p>
+<ul>
+<li>状态圆点（<code>_dot</code>）颜色随状态变化：<code>ready</code>=绿色，<code>startup</code>=橙色，<code>shutdown</code>=灰色，<code>error</code>=红色。</li>
+<li><code>state == "ready"</code> 时控件整体隐藏（<code>setVisible(False)</code>），并通过 <code>sig_visible_changed</code> 信号通知主页将播放/急停按钮容器重新显示。</li>
+<li><code>_toggle_btn</code>（"▼ 详情"）展开/收起 <code>_detail_label</code> 中的错误信息。</li>
+<li><code>_firmware_btn</code>（"固件重启"）触发 <code>KlipperWorker.restart_firmware</code>；<code>_klipper_btn</code>（"Klipper 重启"）触发 <code>KlipperWorker.printer_restart</code>。</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  回到页面顶部
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "search.suggest", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

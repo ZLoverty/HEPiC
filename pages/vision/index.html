@@ -1,0 +1,1040 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Hotend Extrusion Platform 控制软件 — 用户 wiki">
+      
+      
+      
+      
+        <link rel="prev" href="../home/">
+      
+      
+        <link rel="next" href="../ir/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>视觉页 - HEPiC 使用手册</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#_1" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href="../.." title="HEPiC 使用手册" class="md-header__button md-logo" aria-label="HEPiC 使用手册" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            HEPiC 使用手册
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              视觉页
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换到深色模式"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="切换到深色模式" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换到浅色模式"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="切换到浅色模式" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="HEPiC 使用手册" class="md-nav__button md-logo" aria-label="HEPiC 使用手册" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    HEPiC 使用手册
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    首页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    快速开始
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    核心概念
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    核心概念
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    软件架构
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/data-recording/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    数据记录
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    界面说明
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    界面说明
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../connection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    连接页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    主页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    视觉页
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    视觉页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        实时相机画面（左侧视图）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#roi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ROI 结果视图（右侧视图）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        控制面板
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="控制面板">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        曝光时间
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FPS（帧率）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        黑白反转
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        棋盘校准
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#die_diameter_px" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        熔体直径检测（die_diameter_px）
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ir/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    红外页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gcode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    G-code 页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../data-processor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    数据处理页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quality-check/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    质检模式
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        实时相机画面（左侧视图）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#roi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ROI 结果视图（右侧视图）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        控制面板
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="控制面板">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        曝光时间
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FPS（帧率）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        黑白反转
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        棋盘校准
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#die_diameter_px" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        熔体直径检测（die_diameter_px）
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="_1">视觉页<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
+<p>视觉页（<code>VisionPageWidget</code>）承载 Hikrobot 工业相机的实时画面、ROI 框选与曝光控制，并在后台持续检测挤出口模熔体直径。</p>
+<p><img alt="视觉页整体截图" src="../../images/vision-page.png" /></p>
+<hr />
+<h2 id="_2">实时相机画面（左侧视图）<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
+<p><strong>白话</strong>：左侧大图实时显示 Hikrobot 工业相机拍到的全幅画面。在画面上按住鼠标左键并拖拽，即可框选一块感兴趣区域（ROI）；松开鼠标后 ROI 即生效。ROI 框的四角有缩放句柄，可拖动调整大小；若想重新框选，在画面空白处拖拽即可自动替换旧框。</p>
+<p><strong>技术说明</strong>：对应 <code>VisionPageWidget.vision_widget</code>（<code>VisionWidget</code> 实例，模式固定为 <code>"roi"</code>）。画面由 <code>VideoWorker</code> 在独立线程中每 10 ms 读一次最新帧；<code>MainWindow._refresh_displays()</code> 定时器（间隔 <code>1000 / fps</code> ms）调用 <code>video_worker.get_latest_frame()</code> 后通过 <code>update_live_display(frame)</code> 刷新显示。鼠标释放后 <code>VisionWidget.on_roi_changed()</code> 发出 <code>sigRoiChanged(x, y, w, h)</code> 信号，连接到 <code>VideoWorker.set_roi</code>，使后续裁剪在后台完成。</p>
+<hr />
+<h2 id="roi">ROI 结果视图（右侧视图）<a class="headerlink" href="#roi" title="Permanent link">&para;</a></h2>
+<p><strong>白话</strong>：右侧小图显示左侧 ROI 框选区域经过图像处理后的结果——包括二值化、骨架提取，以及叠加到灰度图上的熔体轮廓线。这是软件实际用于计算熔体直径的图像。</p>
+<p><strong>技术说明</strong>：对应 <code>VisionPageWidget.roi_vision_widget</code>（<code>VisionWidget</code> 实例）。<code>VideoWorker.roi_frame_signal</code> 把裁剪后的帧送入 <code>ProcessingWorker.add_frame_to_queue</code>；<code>ProcessingWorker.process_frame()</code> 执行 CLAHE 增强 → 二值化 → 距离变换/骨架检测 → 绘制轮廓，并将结果存入内部缓冲。实际应用中右侧视图的刷新与左侧视图相同，由 <code>MainWindow._refresh_displays()</code> 定时器轮询 <code>ProcessingWorker.get_latest_proc_frame()</code>，再调用 <code>roi_vision_widget.update_live_display(proc_frame)</code>（<code>__main__.py:433-435</code>）；并非由 <code>proc_frame_signal</code> 直连到该视图（那种直连仅存在于源码的测试脚本中）。</p>
+<hr />
+<h2 id="_3">控制面板<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h2>
+<p>控制面板位于页面左侧，最大宽度为 200 px（<code>setMaximumWidth(200)</code>），包含以下控件。</p>
+<hr />
+<h3 id="_4">曝光时间<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：在"曝光时间"输入框中输入数值（单位 ms），按 Enter 键即刻生效。曝光时间越长，画面越亮，但快速运动的熔体可能出现模糊；曝光时间越短，画面越暗，适合高速丝材。默认值为 50 ms。</p>
+<p><strong>技术说明</strong>：<code>exp_time</code>（<code>QLineEdit</code>，最大宽度 30 px，默认值 <code>"50"</code>）。按 Enter 触发 <code>on_exp_time_pressed()</code>，将文本解析为 <code>float</code> 后通过 <code>sigExpTime</code> 信号发送给 <code>VideoWorker.set_exp_time(exp_time)</code>。<code>set_exp_time</code> 会先释放当前相机对象，再以新的 <code>exposure_time=exp_time*1000</code>（转换为 μs）重新实例化 <code>HikVideoCapture</code>。</p>
+<hr />
+<h3 id="fps">FPS（帧率）<a class="headerlink" href="#fps" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：界面上有一个"FPS"输入框，默认值为 10。<strong>请注意：在当前版本的应用程序中，此输入框尚未接入相机，修改它不会产生任何效果。</strong> 它是为后续调节取帧频率预留的控件。</p>
+<p><strong>技术说明</strong>：<code>fps</code>（<code>QLineEdit</code>，默认值 <code>"10"</code>）。按 Enter 触发 <code>on_fps_pressed()</code>，发出 <code>sigFPS</code> 信号。但 <code>MainWindow.initiate_camera()</code>（<code>__main__.py:446-501</code>）<strong>并未</strong>将 <code>sigFPS</code> 连接到 <code>VideoWorker.set_fps</code>——该连接仅出现在 <code>video_worker.py</code> 的 <code>if __name__ == "__main__"</code> 测试块中（<code>video_worker.py:256</code>）。因此在实际应用中 <code>sigFPS</code> 没有接收方，FPS 输入框当前无效。</p>
+<div class="admonition note">
+<p class="admonition-title">即便接入也不会改变界面刷新率</p>
+<p><code>VideoWorker.set_fps</code>（<code>video_worker.py:95-100</code>）只重启 <code>self._timer</code>（即每 10 ms 读取硬件帧的定时器），并不影响真正决定送帧频率的 <code>_timer_get</code>，也不会改动 <code>__main__.py</code> 的显示刷新定时器 <code>_display_timer</code>。</p>
+</div>
+<hr />
+<h3 id="_5">黑白反转<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：勾选"黑白反转"后，图像处理算法会对二值图像取反，即把白色熔体识别为黑色背景。若熔体颜色比背景深（例如深色耗材在亮背景前拍摄），通常需要勾选此选项，否则直径检测会失败。</p>
+<p><strong>技术说明</strong>：<code>invert_button</code>（<code>QCheckBox</code>，标签"黑白反转"）。<code>toggled(bool)</code> 信号连接到 <code>ProcessingWorker.invert_toggle(checked)</code>，将 <code>self.invert</code> 设为 <code>checked</code>。在 <code>process_frame()</code> 中，若 <code>self.invert is True</code>，则执行 <code>cv2.bitwise_not(binary)</code> 后再进行骨架检测。</p>
+<hr />
+<h3 id="_6">棋盘校准<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：点击"棋盘校准"按钮，弹出校准对话框。在对话框内对棋盘格图像上已知长度的格子画一条测量线，输入实际尺寸（mm），点击"校准"，对话框会在日志区显示测得的像素长度与换算出的每像素实际尺寸（mm/px）。<strong>已知限制：当前版本仅把该结果显示出来，并不会将其保存到系统中，因此目前无法用它把 <code>die_diameter_px</code> 自动换算为毫米。</strong></p>
+<p><strong>技术说明</strong>：<code>calibration_button</code>（<code>QPushButton</code>，标签"棋盘校准"）。点击触发 <code>on_calibration_pressed()</code>：实例化 <code>CalibrationDialog</code>（对话框内置一个 <code>"measure"</code> 模式的 <code>VisionWidget</code>，支持拉线段 ROI），将当前帧通过 <code>sigCapturedFrame</code> 发送到对话框。在 <code>CalibrationDialog.on_calibration_pressed()</code>（<code>calibration_dialog.py:64-88</code>）中，mm/px 仅作为局部变量 <code>mpp</code> 拼入日志消息；<code>self.mpp</code> 始终保持初始值 <code>float("nan")</code>（<code>calibration_dialog.py:57</code>），从未被赋值。因此 <code>dialog.get_mpp()</code> 返回 <code>nan</code>，<code>sigMPP</code> 即使发射也只携带 <code>nan</code>。此外 <code>MainWindow</code> 中并未连接 <code>sigMPP</code>（<code>__main__.py</code> 内无该信号的接收方），校准结果在当前版本中不会被持久化或使用。</p>
+<hr />
+<h2 id="die_diameter_px">熔体直径检测（<code>die_diameter_px</code>）<a class="headerlink" href="#die_diameter_px" title="Permanent link">&para;</a></h2>
+<p><strong>白话</strong>：软件会持续对 ROI 视图中的画面做分析，自动检测熔体从口模挤出后的直径（以像素为单位）。检测结果会同步显示在主页状态面板的"出口熔体直径"一行，并记录到 CSV 数据文件的 <code>die_diameter_px</code> 列中。</p>
+<p><strong>技术说明</strong>：<code>ProcessingWorker.die_diameter</code> 在每次成功的 <code>process_frame()</code> 调用后更新。流程为：灰度化 → 8 bit 转换 → CLAHE 增强 → Otsu 二值化（可选黑白反转）→ 距离变换（<code>cv2.distanceTransform</code>）→ 骨架提取（<code>skimage.morphology.skeletonize</code>）→ 对骨架像素的距离变换值求均值后乘以 2.0，得到 <code>diameter_refine</code>（像素），赋值给 <code>self.die_diameter</code>。主循环通过 <code>MainWindow.grab_status()</code> 读取此值并写入 <code>data_status["die_diameter_px"]</code>。若图像无法处理（如纯色），<code>die_diameter</code> 保持 <code>np.nan</code>。</p>
+<div class="admonition note">
+<p class="admonition-title">记录期间 ROI 框选被禁用</p>
+<p>点击播放/记录按钮开始数据采集后，左侧视图的鼠标模式会自动切换为 <code>"view"</code>（只读），防止意外修改 ROI 区域。停止记录后恢复为 <code>"roi"</code> 模式。</p>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  回到页面顶部
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "search.suggest", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

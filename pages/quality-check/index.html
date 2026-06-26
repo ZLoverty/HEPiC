@@ -1,0 +1,1472 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Hotend Extrusion Platform 控制软件 — 用户 wiki">
+      
+      
+      
+      
+        <link rel="prev" href="../data-processor/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>质检模式 - HEPiC 使用手册</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#_1" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href="../.." title="HEPiC 使用手册" class="md-header__button md-logo" aria-label="HEPiC 使用手册" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            HEPiC 使用手册
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              质检模式
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换到深色模式"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="切换到深色模式" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换到浅色模式"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="切换到浅色模式" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="HEPiC 使用手册" class="md-nav__button md-logo" aria-label="HEPiC 使用手册" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    HEPiC 使用手册
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    首页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    快速开始
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    核心概念
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    核心概念
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    软件架构
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/data-recording/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    数据记录
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    界面说明
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    界面说明
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../connection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    连接页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    主页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    视觉页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ir/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    红外页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gcode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    G-code 页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../data-processor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    数据处理页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    质检模式
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    质检模式
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        材料信息面板
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="材料信息面板">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#family-material_family_combo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Family 下拉框（material_family_combo）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pi-code-material_combo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PI Code 下拉框（material_combo）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        材料属性显示（温度 / 速度 / 优秀范围 / 合格范围 / 稳定阈值）
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        系统信息面板
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="系统信息面板">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#system_temperature_value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        实时温度（system_temperature_value）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#system_feedrate_value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        实时挤出速度（system_feedrate_value）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#system_force_value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        实时挤出力（system_force_value，英雄数字）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#status_message_label" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        状态消息（status_message_label）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#extrusion_progress_bar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        挤出进度条（extrusion_progress_bar）
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        质检操作面板
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="质检操作面板">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#check_button" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        开始质检 / 停止质检按钮（check_button）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#force_expectation_indicator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        力值指示灯（force_expectation_indicator）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#status_indicator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        稳定性指示灯（status_indicator）
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plot_widget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        实时挤出力曲线图（plot_widget）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#history_text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        质检历史（history_text）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        典型工作流程
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        材料信息面板
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="材料信息面板">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#family-material_family_combo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Family 下拉框（material_family_combo）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pi-code-material_combo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PI Code 下拉框（material_combo）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        材料属性显示（温度 / 速度 / 优秀范围 / 合格范围 / 稳定阈值）
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        系统信息面板
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="系统信息面板">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#system_temperature_value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        实时温度（system_temperature_value）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#system_feedrate_value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        实时挤出速度（system_feedrate_value）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#system_force_value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        实时挤出力（system_force_value，英雄数字）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#status_message_label" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        状态消息（status_message_label）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#extrusion_progress_bar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        挤出进度条（extrusion_progress_bar）
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        质检操作面板
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="质检操作面板">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#check_button" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        开始质检 / 停止质检按钮（check_button）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#force_expectation_indicator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        力值指示灯（force_expectation_indicator）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#status_indicator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        稳定性指示灯（status_indicator）
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plot_widget" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        实时挤出力曲线图（plot_widget）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#history_text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        质检历史（history_text）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        典型工作流程
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="_1">质检模式<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
+<p>质检模式页（<code>QualityCheckWidget</code>）用于对指定材料执行一次完整的挤出质量检查：根据材料档案自动生成并下发 G-code、实时显示挤出力数据和稳定性评估，并将结果记录在历史列表中。</p>
+<p><img alt="质检模式整体截图" src="../../images/quality-check-page.png" /></p>
+<hr />
+<h2 id="_2">材料信息面板<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
+<p><img alt="材料信息面板截图" src="../../images/quality-check-material-panel.png" /></p>
+<p>材料信息面板（<code>材料信息</code>）显示当前选中材料的档案参数，这些参数同时用于生成质检 G-code 和评估挤出力是否合格。</p>
+<hr />
+<h3 id="family-material_family_combo">Family 下拉框（<code>material_family_combo</code>）<a class="headerlink" href="#family-material_family_combo" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：选择材料的大类（Family），例如 PLA、ABS 等。切换后，下方的 PI Code 下拉框会自动更新为该 Family 下的所有材料编号，材料属性区域也会同步刷新。</p>
+<p><strong>技术说明</strong>：<code>QComboBox</code>（<code>material_family_combo</code>）。初始值来自启动时的默认材料表（<code>DEFAULT_MATERIAL_FAMILIES</code>，<code>materials.py:3-16</code>）；<code>QualityCheckWidget</code> 第一次显示时会从 YAML 数据库（<code>MaterialDatabase</code>，<code>material_database.py</code>）异步加载真实数据并替换。<code>currentTextChanged</code> 信号连接到 <code>on_material_family_changed(family)</code>（<code>quality_check_widget.py:407-409</code>），后者调用 <code>_populate_pi_code_combo_box(family)</code> 刷新 PI Code 列表，再调用 <code>update_material_properties_display()</code> 更新属性显示和曲线区间带。</p>
+<hr />
+<h3 id="pi-code-material_combo">PI Code 下拉框（<code>material_combo</code>）<a class="headerlink" href="#pi-code-material_combo" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：在选定的 Family 下，选择具体的材料编号（PI Code）。切换后，下方的温度、速度、力范围等参数立刻更新。</p>
+<p><strong>技术说明</strong>：<code>QComboBox</code>（<code>material_combo</code>）。<code>currentTextChanged</code> 信号连接到 <code>update_material_properties_display()</code>（<code>quality_check_widget.py:231</code>），该方法从内存中的 <code>material_families</code> 字典读取对应属性，并同步更新曲线图的合格/优秀区间带（<code>qualified_band</code>、<code>excellent_band</code> 及四条虚线分界线，<code>quality_check_widget.py:439-456</code>）。</p>
+<hr />
+<h3 id="_3">材料属性显示（温度 / 速度 / 优秀范围 / 合格范围 / 稳定阈值）<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：面板中间区域用五行只读数字展示当前 PI Code 的档案参数。这些数值由材料数据库决定，不可在此处编辑。</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>说明</th>
+<th>单位</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>温度</td>
+<td>质检目标挤出温度</td>
+<td>°C</td>
+</tr>
+<tr>
+<td>速度</td>
+<td>质检挤出速度</td>
+<td>mm/s</td>
+</tr>
+<tr>
+<td>优秀范围</td>
+<td>挤出力优秀区间（下限 – 上限）</td>
+<td>N</td>
+</tr>
+<tr>
+<td>合格范围</td>
+<td>挤出力合格区间（下限 – 上限）</td>
+<td>N</td>
+</tr>
+<tr>
+<td>稳定阈值</td>
+<td>力值标准差的稳定/警告分界（见下文）</td>
+<td>N</td>
+</tr>
+</tbody>
+</table>
+<p><strong>技术说明</strong>：五个 <code>QLabel</code>（<code>temperature_value</code>、<code>speed_value</code>、<code>excellent_force_range_value</code>、<code>force_range_value</code>、<code>stability_threshold_value</code>，<code>quality_check_widget.py:235-248</code>）均由 <code>update_material_properties_display()</code> 从 <code>material_families[family][pi_code]</code> 字典读取并填写，键名分别为 <code>temperature</code>、<code>speed</code>、<code>excellent_force_range</code>（tuple）、<code>force_range</code>（tuple）、<code>stability_threshold</code>。材料属性的默认后备来自 <code>DEFAULT_MATERIAL_FAMILIES</code>（PLA / L1002：温度 200 °C，速度 30 mm/s，优秀范围 4.5–5.5 N，合格范围 3.0–7.0 N，稳定阈值 0.1 N）；生产数据由 YAML 文件覆盖。</p>
+<hr />
+<h2 id="_4">系统信息面板<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h2>
+<p><img alt="系统信息面板截图" src="../../images/quality-check-system-panel.png" /></p>
+<p>系统信息面板（<code>系统信息</code>）实时显示来自 Klipper 的平台状态和传感器读数。</p>
+<hr />
+<h3 id="system_temperature_value">实时温度（<code>system_temperature_value</code>）<a class="headerlink" href="#system_temperature_value" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：显示热端当前实测温度。质检未开始或 Klipper 断线时显示 <code>--</code>。</p>
+<p><strong>技术说明</strong>：<code>QLabel</code>（<code>system_temperature_value</code>）。由 <code>update_klipper_status(data)</code> 槽更新（<code>quality_check_widget.py:547-553</code>），读取 <code>data["measured_temperature_C"]</code>；若为 <code>NaN</code> 则显示 <code>--</code>，否则格式化为一位小数。该槽由 <code>__main__.py:211</code> 中的 <code>sigNewStatus.connect</code> 连接，每次 Klipper 状态刷新时触发。</p>
+<hr />
+<h3 id="system_feedrate_value">实时挤出速度（<code>system_feedrate_value</code>）<a class="headerlink" href="#system_feedrate_value" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：显示 Klipper 当前上报的挤出速度设定值，单位 mm/s。质检 G-code 发出后若此值与材料档案中的速度匹配，说明 Klipper 已按预设速度运行。</p>
+<p><strong>技术说明</strong>：<code>QLabel</code>（<code>system_feedrate_value</code>）。由 <code>update_klipper_status(data)</code> 读取 <code>data["feedrate_mms"]</code>；若为 <code>NaN</code> 则显示 <code>--</code>，否则格式化为一位小数（<code>quality_check_widget.py:547-553</code>）。</p>
+<hr />
+<h3 id="system_force_value">实时挤出力（<code>system_force_value</code>，英雄数字）<a class="headerlink" href="#system_force_value" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：页面上最显眼的大字数字，格式为 <code>均值 ± 标准差</code>（单位 N），实时反映当前挤出力的平均水平和波动幅度。数据不足 10 个采样点时显示 <code>--</code>。</p>
+<p><strong>技术说明</strong>：<code>QLabel</code>（<code>system_force_value</code>，28pt 粗体，<code>quality_check_widget.py:297-300</code>）。值由 <code>update_stability_indicator()</code> 计算并填写（<code>quality_check_widget.py:559-573</code>）：调用 <code>evaluate_force_window(extrusion_force_cache, material_properties)</code>（<code>evaluator.py:41-72</code>），取滑动窗口最近 200 个采样点的总体标准差（<code>pstdev</code>）和算术平均（<code>fmean</code>）；少于 10 个点时返回 <code>None</code>，显示 <code>--</code>。</p>
+<hr />
+<h3 id="status_message_label">状态消息（<code>status_message_label</code>）<a class="headerlink" href="#status_message_label" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：蓝色斜体的单行文字，显示质检流程的当前阶段说明，例如"正在加热"、"正在挤出"、"质检完毕，请记录数据"。内容由 G-code 中的 <code>M118 STATUS &lt;文字&gt;</code> 指令驱动，无需手动干预。</p>
+<p><strong>技术说明</strong>：<code>QLabel</code>（<code>status_message_label</code>，颜色 <code>#2980b9</code>，斜体，<code>quality_check_widget.py:308-311</code>）。由 <code>set_status_message(msg)</code> 槽更新；<code>__main__.py:391-401</code> 中的 <code>_set_quality_check_status_message</code> 解析 Klipper 返回的 <code>STATUS</code> 软件动作后调用该槽。详见 <a href="../gcode/">G-code 页 → 软件动作</a>。</p>
+<hr />
+<h3 id="extrusion_progress_bar">挤出进度条（<code>extrusion_progress_bar</code>）<a class="headerlink" href="#extrusion_progress_bar" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：质检挤出过程中，进度条从 0% 推进到 100%，反映挤出动作的预计完成度。进度基于时间估算，不是实际丝材位移——质检停止后进度条自动归零。</p>
+<p><strong>技术说明</strong>：<code>QProgressBar</code>（<code>extrusion_progress_bar</code>，范围 0–100，<code>quality_check_widget.py:312-317</code>）。进度推进由 <code>_progress_timer</code>（间隔 100 ms）驱动，<code>_tick_extrusion_progress()</code> 每次累加 100 ms 后按 <code>elapsed / duration * 100</code> 计算百分比（<code>quality_check_widget.py:512-518</code>）。预计总时长 <code>_extrusion_duration_s</code> 由 <code>start_extrusion_progress()</code> 计算：优先读取材料属性中的 <code>quality_check_extrude_length_mm</code>，否则退化为 <code>speed * 60.0</code>（mm），再除以 <code>speed</code>（mm/s）得到秒数（<code>quality_check_widget.py:501-510</code>）。进度条由 <code>START_QUALITY_CHECK</code> 软件动作触发启动（<code>__main__.py:404-408</code>）；点击"停止质检"后 <code>_progress_timer</code> 停止，值归零（<code>quality_check_widget.py:490-491</code>）。</p>
+<hr />
+<h2 id="_5">质检操作面板<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h2>
+<p><img alt="质检操作面板截图" src="../../images/quality-check-action-panel.png" /></p>
+<p>质检操作面板（<code>质检操作</code>）包含开始/停止按钮和两个状态指示灯。</p>
+<hr />
+<h3 id="check_button">开始质检 / 停止质检按钮（<code>check_button</code>）<a class="headerlink" href="#check_button" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：点击"开始质检"，软件立刻按当前 PI Code 的材料档案生成一段完整的质检 G-code，发送给 Klipper 执行——Klipper 会先加热到目标温度，归零传感器，然后以指定速度挤出指定长度的丝材。此时按钮变为红色的"停止质检"；再次点击可随时中断，并将本次结果写入质检历史。</p>
+<p><strong>技术说明</strong>：<code>QPushButton</code>（<code>check_button</code>，最小高度 56 px，<code>quality_check_widget.py:322-327</code>）。点击触发 <code>on_quality_check_clicked()</code>（<code>quality_check_widget.py:458-496</code>）。</p>
+<ul>
+<li><strong>启动流程</strong>（<code>is_checking == False</code> → <code>True</code>）：</li>
+<li>清空力值缓存和历史评估。</li>
+<li>两个指示灯重置为"未知"（灰色）。</li>
+<li>调用 <code>build_quality_check_gcode(material_properties)</code>（<code>gcode.py:4-35</code>）生成 G-code，通过 <code>quality_check_gcode_requested</code> 信号传递给 <code>__main__.py</code>，后者经 <code>on_quality_check_gcode_requested</code> 异步调用 <code>klipper_worker.send_gcode(gcode)</code>（<code>__main__.py:333-339</code>）。</li>
+<li>
+<p>以 100 ms 间隔启动 <code>data_timer</code>（驱动 <code>on_data_update_timeout</code>，当前该槽为空函数）。</p>
+</li>
+<li>
+<p><strong>停止流程</strong>（<code>is_checking == True</code> → <code>False</code>）：</p>
+</li>
+<li>停止 <code>data_timer</code> 和 <code>_progress_timer</code>，进度条归零。</li>
+<li>两个指示灯重置为"未知"。</li>
+<li>调用 <code>_record_quality_check_result()</code> 将本次均值/标准差写入历史。</li>
+</ul>
+<p>生成的 G-code 序列（<code>gcode.py:13-34</code>）：</p>
+<div class="highlight"><pre><span></span><code><span class="nb">M118 </span>STATUS 正在加热
+<span class="nb">M109 </span>S&lt;temperature&gt;        ; 等待加热完成
+<span class="nb">M118 </span>STATUS 正在归零传感器
+<span class="nb">G91</span>
+<span class="nb">G1 </span><span class="k">E</span><span class="m">-10</span><span class="w"> </span><span class="k">F</span><span class="m">600</span><span class="w">               </span><span class="c">; 退料 10 mm</span>
+<span class="nb">M400</span>
+<span class="nb">G4 </span><span class="k">P</span><span class="m">2000</span>
+<span class="nb">M118 </span>ZERO_SENSORS          ; 触发传感器归零软件动作
+<span class="nb">G4 </span><span class="k">P</span><span class="m">500</span>
+<span class="nb">G1 </span><span class="k">E</span><span class="m">10</span><span class="w"> </span><span class="k">F</span><span class="m">100</span><span class="w">                </span><span class="c">; 预压 10 mm（低速）</span>
+<span class="nb">M400</span>
+<span class="nb">M118 </span>START_QUALITY_CHECK   ; 触发进度条启动
+<span class="nb">M118 </span>STATUS 正在挤出
+<span class="nb">M83</span>
+<span class="nb">G1 </span>E&lt;length&gt; F&lt;feedrate&gt;   ; 正式挤出
+<span class="nb">M400</span>
+<span class="nb">M118 </span>STOP_QUALITY_CHECK    ; 触发停止质检软件动作
+<span class="nb">M118 </span>STATUS 质检完毕，请记录数据
+FIRMWARE_RESTART
+</code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">注意</p>
+<p><code>FIRMWARE_RESTART</code> 位于 G-code 末尾，Klipper 执行到此处会重启固件。<code>STOP_QUALITY_CHECK</code> 软件动作触发后，<code>__main__.py</code> 会调用 <code>on_quality_check_clicked()</code> 自动停止质检（<code>__main__.py:410-414</code>），效果与手动点击"停止质检"相同。</p>
+</div>
+<hr />
+<h3 id="force_expectation_indicator">力值指示灯（<code>force_expectation_indicator</code>）<a class="headerlink" href="#force_expectation_indicator" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：圆形指示灯，显示当前挤出力均值是否落在材料档案规定的范围内。绿色表示均值在优秀范围内；黄色表示在合格范围内但不够优秀；红色表示超出合格范围；灰色表示数据不足（少于 10 个采样点）或质检未激活。</p>
+<table>
+<thead>
+<tr>
+<th>颜色</th>
+<th>状态值</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>灰色 <code>#888888</code></td>
+<td><code>unknown</code></td>
+<td>数据不足或未质检</td>
+</tr>
+<tr>
+<td>绿色 <code>#27ae60</code></td>
+<td><code>stable</code></td>
+<td>均值在优秀范围内（<code>excellent_min ≤ mean ≤ excellent_max</code>）</td>
+</tr>
+<tr>
+<td>黄色 <code>#f39c12</code></td>
+<td><code>warning</code></td>
+<td>均值在合格范围内但在优秀范围外（<code>force_min ≤ mean ≤ force_max</code>）</td>
+</tr>
+<tr>
+<td>红色 <code>#e74c3c</code></td>
+<td><code>unstable</code></td>
+<td>均值超出合格范围</td>
+</tr>
+</tbody>
+</table>
+<p><strong>技术说明</strong>：<code>StatusIndicator</code>（64×64 px，<code>quality_check_widget.py:41-68</code>）。颜色由 <code>update_status(status)</code> 设置（CSS <code>border-radius: 32px</code> 实现圆形外观）。<code>force_status</code> 字段来自 <code>ForceEvaluation</code>（<code>evaluator.py:60-65</code>）：<code>mean</code> 在 <code>excellent_force_range</code> 内为 <code>"stable"</code>，在 <code>force_range</code> 内为 <code>"warning"</code>，否则为 <code>"unstable"</code>。</p>
+<hr />
+<h3 id="status_indicator">稳定性指示灯（<code>status_indicator</code>）<a class="headerlink" href="#status_indicator" title="Permanent link">&para;</a></h3>
+<p><strong>白话</strong>：宽条形指示灯，显示当前力值的波动是否稳定。绿色表示波动很小（优秀）；黄色表示轻微波动（可接受）；红色表示波动过大；灰色表示数据不足或未质检。</p>
+<table>
+<thead>
+<tr>
+<th>颜色</th>
+<th>状态值</th>
+<th>稳定性标准</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>灰色 <code>#888888</code></td>
+<td><code>unknown</code></td>
+<td>数据不足或未质检</td>
+</tr>
+<tr>
+<td>绿色 <code>#27ae60</code></td>
+<td><code>stable</code></td>
+<td>标准差 &lt; 稳定阈值（<code>std &lt; threshold</code>）</td>
+</tr>
+<tr>
+<td>黄色 <code>#f39c12</code></td>
+<td><code>warning</code></td>
+<td>标准差在一倍到两倍阈值之间（<code>threshold ≤ std &lt; 2×threshold</code>）</td>
+</tr>
+<tr>
+<td>红色 <code>#e74c3c</code></td>
+<td><code>unstable</code></td>
+<td>标准差 ≥ 两倍阈值（<code>std ≥ 2×threshold</code>）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>技术说明</strong>：<code>StabilityBarIndicator</code>（80×52 px，<code>quality_check_widget.py:71-99</code>）。<code>stability_status</code> 字段来自 <code>ForceEvaluation</code>（<code>evaluator.py:52-58</code>）。默认阈值 <code>DEFAULT_STABILITY_THRESHOLD = 0.1 N</code>（<code>evaluator.py:9</code>）；材料档案中可通过 <code>stability_threshold</code> 字段覆盖此默认值。两个阈值边界：第一档（稳定→警告）为 <code>threshold</code>，第二档（警告→不稳定）为 <code>2 × threshold</code>。</p>
+<hr />
+<h2 id="plot_widget">实时挤出力曲线图（<code>plot_widget</code>）<a class="headerlink" href="#plot_widget" title="Permanent link">&para;</a></h2>
+<p><img alt="力值曲线图截图" src="../../images/quality-check-force-plot.png" /></p>
+<p><strong>白话</strong>：页面下半部分是实时挤出力折线图，横轴为时间（s），纵轴为挤出力（N）。图上叠加了两个彩色区间带，帮助直观判断力值是否合格。质检期间数据滚动更新；质检停止后曲线保留，方便截图存档。</p>
+<p><strong>区间带说明</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>区间带</th>
+<th>颜色</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>优秀区间带（<code>excellent_band</code>）</td>
+<td>绿色半透明（<code>#27ae60</code>，透明度约 18%）</td>
+<td>挤出力的优秀范围</td>
+</tr>
+<tr>
+<td>合格区间带（<code>qualified_band</code>）</td>
+<td>黄色半透明（<code>#f1c40f</code>，透明度约 14%）</td>
+<td>挤出力的合格范围</td>
+</tr>
+<tr>
+<td>优秀上/下界线（<code>excellent_upper</code> / <code>excellent_lower</code>）</td>
+<td>绿色虚线</td>
+<td>优秀范围的精确边界</td>
+</tr>
+<tr>
+<td>合格上/下界线（<code>qualified_upper</code> / <code>qualified_lower</code>）</td>
+<td>黄色虚线</td>
+<td>合格范围的精确边界</td>
+</tr>
+</tbody>
+</table>
+<p><strong>技术说明</strong>：<code>pg.PlotWidget</code>（<code>quality_check_widget.py:350-401</code>）。实时力值曲线 <code>force_curve</code>（蓝色，<code>#2980b9</code>，宽度 2）由 <code>update_plot()</code> 刷新（<code>quality_check_widget.py:555-557</code>）。区间带使用两个 <code>pg.LinearRegionItem</code>（水平方向，不可拖动）和四条 <code>pg.InfiniteLine</code>（水平，虚线）实现，区间值在每次切换材料时由 <code>update_material_properties_display()</code> 同步更新。数据缓存为 <code>deque(maxlen=300)</code>，存储最近 300 个采样点；评估窗口取最近 200 个点（<code>evaluator.py:46</code>）。</p>
+<hr />
+<h2 id="history_text">质检历史（<code>history_text</code>）<a class="headerlink" href="#history_text" title="Permanent link">&para;</a></h2>
+<p><img alt="质检历史截图" src="../../images/quality-check-history.png" /></p>
+<p><strong>白话</strong>：页面左侧面板是质检历史记录，每次点击"停止质检"后自动追加一条记录，最新的在最上方。每条记录包含时间戳和本次质检的均值 ± 标准差结果（及对应的 PI Code）。若数据不足（少于 10 个采样点），记录为"数据不足（PI Code）"。</p>
+<p><strong>技术说明</strong>：<code>QTextEdit</code>（<code>history_text</code>，只读，最大宽度 350 px，<code>quality_check_widget.py:167-173</code>）。历史列表 <code>_quality_check_history</code> 为 <code>list[tuple[str, str]]</code>，新记录插入到索引 0（最前）。<code>_render_history()</code> 使用 <code>QTextCharFormat</code> 将时间戳染成灰色（<code>#999999</code>），正文保持默认颜色（<code>quality_check_widget.py:189-200</code>）。时间戳格式为 <code>HH:MM</code>（<code>datetime.now().strftime("%H:%M")</code>）。</p>
+<hr />
+<h2 id="_6">典型工作流程<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h2>
+<ol>
+<li>在 <strong>Family</strong> 和 <strong>PI Code</strong> 下拉框中选择待检材料。</li>
+<li>核认材料信息面板中的温度、速度、力范围参数是否与实物批次一致。</li>
+<li>确保 Klipper 已连接（见<a href="../connection/">连接页</a>）。</li>
+<li>点击<strong>开始质检</strong>——软件自动生成并下发 G-code，Klipper 开始加热。</li>
+<li>等待<strong>状态消息</strong>依次显示"正在加热"→"正在归零传感器"→"正在挤出"。</li>
+<li>挤出过程中观察：</li>
+<li><strong>实时挤出力</strong>英雄数字及曲线是否落在目标区间带内。</li>
+<li><strong>力值指示灯</strong>是否为绿色（优秀）或黄色（合格）。</li>
+<li><strong>稳定性指示灯</strong>是否为绿色（稳定）。</li>
+<li>Klipper 挤出完成后自动触发 <code>STOP_QUALITY_CHECK</code>，质检停止，结果写入历史。</li>
+<li>在<strong>质检历史</strong>中查看本次均值 ± 标准差，判断该批次材料是否合格。</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  回到页面顶部
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "search.suggest", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
