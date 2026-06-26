@@ -111,9 +111,8 @@
 - **启动流程**（`is_checking == False` → `True`）：
   1. 清空力值缓存和历史评估。
   2. 两个指示灯重置为"未知"（灰色）。
-  3. 发出 `quality_check_started` 信号（携带 PI Code）。
-  4. 调用 `build_quality_check_gcode(material_properties)`（`gcode.py:4-35`）生成 G-code，通过 `quality_check_gcode_requested` 信号传递给 `__main__.py`，后者经 `on_quality_check_gcode_requested` 异步调用 `klipper_worker.send_gcode(gcode)`（`__main__.py:333-339`）。
-  5. 以 100 ms 间隔启动 `data_timer`（驱动 `on_data_update_timeout`，当前该槽为空函数）。
+  3. 调用 `build_quality_check_gcode(material_properties)`（`gcode.py:4-35`）生成 G-code，通过 `quality_check_gcode_requested` 信号传递给 `__main__.py`，后者经 `on_quality_check_gcode_requested` 异步调用 `klipper_worker.send_gcode(gcode)`（`__main__.py:333-339`）。
+  4. 以 100 ms 间隔启动 `data_timer`（驱动 `on_data_update_timeout`，当前该槽为空函数）。
 
 - **停止流程**（`is_checking == True` → `False`）：
   1. 停止 `data_timer` 和 `_progress_timer`，进度条归零。

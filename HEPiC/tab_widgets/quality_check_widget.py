@@ -102,7 +102,6 @@ class StabilityBarIndicator(QFrame):
 class QualityCheckWidget(QWidget):
     """Quality check page."""
 
-    quality_check_started = Signal(str)
     quality_check_gcode_requested = Signal(str)
 
     def __init__(self, parent=None):
@@ -472,7 +471,6 @@ class QualityCheckWidget(QWidget):
             self.update_material_properties_display()
 
             pi_code = self.get_current_pi_code()
-            self.quality_check_started.emit(pi_code)
             self.quality_check_gcode_requested.emit(
                 build_quality_check_gcode(self.get_current_material_properties(pi_code))
             )
