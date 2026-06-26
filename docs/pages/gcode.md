@@ -6,7 +6,7 @@ G-code 页（`JobSequenceWidget`）是向 Klipper 发送打印任务的核心界
 
 ---
 
-## G-code 文本显示区
+## 文本显示区
 
 ### G-code 文本显示区（`gcode_display`）
 
@@ -66,7 +66,7 @@ G-code 页（`JobSequenceWidget`）是向 Klipper 发送打印任务的核心界
 
 **白话**：每次加载或生成 G-code 后，页面右侧会立刻出现两张折线图，分别显示整个任务序列中进线速度（mm/s）和热端温度（℃）随时间的变化预览。这些曲线是静态预测，并非实时测量值——仅供确认任务参数是否正确。
 
-**技术说明**：`JobSequenceWidget` 中包含两个 `pg.PlotWidget`（`job_sequence_widget.py:27-32`），分别绘制 `filament_velocity_mms` 和 `hotend_temperature_C`。`GcodeWidget.sigGcode` 信号连接到 `JobSequenceWidget.show_plots(gcode)`（`job_sequence_widget.py:49`），该方法调用 `parse_gcode_time_series(gcode)` 解析 G-code 获取时间序列 `(t, ve, temp)`，再通过 `curves[item].setData(t, ve/temp)` 更新曲线。
+**技术说明**：`JobSequenceWidget` 中包含两个 `pg.PlotWidget`（`job_sequence_widget.py:27-32`），分别绘制 `filament_velocity_mms` 和 `hotend_temperature_C`。`GcodeWidget.sigGcode` 信号连接到 `JobSequenceWidget.show_plots(gcode)`（`job_sequence_widget.py:49`），该方法调用 `parse_gcode_time_series(gcode)` 解析 G-code 获取时间序列 `(t, ve, temp)`。进线速度与喷头温度是两条相互独立的曲线，分别通过各自的 `setData` 调用更新——`curves["filament_velocity_mms"].setData(t, ve)` 与 `curves["hotend_temperature_C"].setData(t, temp)`（`job_sequence_widget.py:56-57`）。
 
 ---
 
