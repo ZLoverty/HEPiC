@@ -1,0 +1,45 @@
+site_name: HEPiC 使用手册
+site_description: Hotend Extrusion Platform 控制软件 — 用户 wiki
+docs_dir: docs
+theme:
+  name: material
+  language: zh
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - content.code.copy
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/weather-night
+        name: 切换到深色模式
+    - scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: 切换到浅色模式
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+nav:
+  - 首页: index.md
+  - 快速开始: getting-started.md
+  - 核心概念:
+      - 软件架构: concepts/architecture.md
+      - 数据记录: concepts/data-recording.md
+  - 界面说明:
+      - 连接页: pages/connection.md
+      - 主页: pages/home.md
+      - 视觉页: pages/vision.md
+      - 红外页: pages/ir.md
+      - G-code 页: pages/gcode.md
+      - 数据处理页: pages/data-processor.md
+      - 质检模式: pages/quality-check.md
+not_in_nav: |
+  superpowers/**
+  images/README.md

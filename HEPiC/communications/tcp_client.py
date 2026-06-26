@@ -42,6 +42,10 @@ class SensorData:
     value: float = np.nan
 
     def update(self, raw_value):
+        if raw_value is None:
+            self.raw_value = np.nan
+            self.value = np.nan
+            return
         self.raw_value = float(raw_value)
         self.value = self.raw_value - self.offset
 
@@ -70,11 +74,20 @@ class TCPClient(QObject):
         rotary_encoder_steps_total: int = 1000,
         rotary_encoder_wheel_diameter: float = 28.6,
         meter_count_cache_size: int = 100,
+        read_timeout: float = 3.0,
+        send_timeout: float = 5.0,
+        reconnect_base_delay: float = 1.0,
+        reconnect_max_delay: float = 30.0,
     ):
         super().__init__()
         self.host = host
         self.port = port
         self.is_running = True
+
+        self.send_timeout = send_timeout
+        self.reconnect_base_delay = reconnect_base_delay
+        self.reconnect_max_delay = reconnect_max_delay
+        self._reconnect_attempts = 0
 
         self.queue: asyncio.Queue = asyncio.Queue()
 
@@ -93,6 +106,7 @@ class TCPClient(QObject):
         self.meter_count_cache = deque(maxlen=self.cache_size)
         self.time_cache = deque(maxlen=self.cache_size)
         self.filament_velocity = 0.0
+        self.read_timeout = read_timeout
 
         self.latest_sensor_data: dict[str, float] = {}
         self.sensor_columns: list[str] = []
@@ -107,11 +121,15 @@ class TCPClient(QObject):
     async def run(self):
         while self.is_running:
             try:
+                while not self.queue.empty():
+                    self.queue.get_nowait()
+
                 self.reader, self.writer = await asyncio.wait_for(
                     asyncio.open_connection(self.host, self.port), timeout=2.0
                 )
                 self.logger.info(f"HEPiC server connected: {self.host}:{self.port}")
                 self.connection_status.emit(f"HEPiC server 已连接 ({self.host}:{self.port})")
+                self._reset_reconnect_backoff()
 
                 await self.request_sensor_config()
                 self.receive_task = asyncio.create_task(self.receive_data())
@@ -133,46 +151,54 @@ class TCPClient(QObject):
                 self.logger.error(f"TCP client error: {e}")
             finally:
                 self.logger.info("Closing HEPiC server connection...")
+                self._invalidate_sensor_data()
                 if self.writer:
                     self.writer.close()
-                    await self.writer.wait_closed()
+                    try:
+                        await asyncio.wait_for(self.writer.wait_closed(), timeout=5.0)
+                    except Exception:
+                        pass
                     self.writer = None
                 self.reader = None
 
             if self.is_running:
-                self.connection_status.emit("hepic_server disconnected, reconnecting in 3s...")
-                await asyncio.sleep(1)
-                self.connection_status.emit("hepic_server disconnected, reconnecting in 2s...")
-                await asyncio.sleep(1)
-                self.connection_status.emit("hepic_server disconnected, reconnecting in 1s...")
-                await asyncio.sleep(1)
+                delay = self._next_reconnect_delay()
+                self.connection_status.emit(
+                    f"hepic_server disconnected, reconnecting in {delay:.0f}s..."
+                )
+                # Sleep in short chunks so stop()/is_running is honoured promptly.
+                remaining = delay
+                while remaining > 0 and self.is_running:
+                    step = min(1.0, remaining)
+                    await asyncio.sleep(step)
+                    remaining -= step
 
     async def send_data(self, message: str):
-        if not self.is_running or not self.writer:
+        if not self.writer:
             self.logger.info("Connection not established; cannot send message.")
             return
 
         try:
             data_to_send = (message + "\n").encode("utf-8")
             self.writer.write(data_to_send)
-            await self.writer.drain()
+            await asyncio.wait_for(self.writer.drain(), timeout=self.send_timeout)
             self.logger.info(f"Sent -> {message}")
         except Exception as e:
-            self.logger.error(f"Error sending message: {e}")
-            self.is_running = False
+            self.logger.warning(f"Send failed, dropping connection to reconnect: {e}")
+            self._close_writer_safely()
 
     async def send_json(self, message: dict):
-        if not self.is_running or not self.writer:
+        if not self.writer:
             self.logger.info("Connection not established; cannot send json.")
             return
 
         try:
             data_to_send = json.dumps(message, ensure_ascii=False).encode("utf-8") + b"\n"
             self.writer.write(data_to_send)
-            await self.writer.drain()
+            await asyncio.wait_for(self.writer.drain(), timeout=self.send_timeout)
         except Exception as e:
-            self.logger.error(f"Error sending json: {e}")
-            self.is_running = False
+            self.logger.warning(f"Send failed, dropping connection to reconnect: {e}")
+            self._close_writer_safely()
 
     async def request_sensor_config(self):
         await self.send_json({"message_type": "get_sensor_config"})
@@ -235,22 +261,64 @@ class TCPClient(QObject):
             return payload
         return {k: payload[k] for k in self.sensor_columns if k in payload}
 
+    def _invalidate_sensor_data(self) -> None:
+        """Set all sensor values to nan while disconnected to prevent stale readings."""
+        for sensor in self.sensor_data_map.values():
+            sensor.raw_value = np.nan
+            sensor.value = np.nan
+        if self.sensor_data_map:
+            self.latest_sensor_data = {name: np.nan for name in self.sensor_data_map}
+        self.filament_velocity = 0.0
+
+    def _close_writer_safely(self) -> None:
+        """Close the writer so the read side gets EOF and the run() loop reconnects."""
+        if self.writer is not None:
+            try:
+                self.writer.close()
+            except Exception as e:
+                self.logger.debug(f"Error while closing writer: {e}")
+
+    def _next_reconnect_delay(self) -> float:
+        """Exponential backoff delay (seconds), capped at reconnect_max_delay."""
+        delay = min(
+            self.reconnect_base_delay * (2 ** self._reconnect_attempts),
+            self.reconnect_max_delay,
+        )
+        self._reconnect_attempts += 1
+        return delay
+
+    def _reset_reconnect_backoff(self) -> None:
+        """Reset backoff after a successful connection."""
+        self._reconnect_attempts = 0
+
     async def receive_data(self):
         try:
             while self.is_running:
                 if self.reader is None:
                     break
-                data = await self.reader.readline()
+                try:
+                    data = await asyncio.wait_for(self.reader.readline(), timeout=self.read_timeout)
+                except asyncio.TimeoutError:
+                    self.logger.warning(f"No data received for {self.read_timeout}s, reconnecting.")
+                    self.connection_status.emit("Data timeout, reconnecting...")
+                    break
                 if not data:
                     raise ConnectionResetError("Socket closed by server")
 
-                message_str = data.decode("utf-8").strip()
-                if not message_str:
+                # A single malformed message must NOT tear down a healthy
+                # connection: decode/parse per message and skip bad ones.
+                try:
+                    message_str = data.decode("utf-8").strip()
+                    if not message_str:
+                        continue
+                    message_dict = json.loads(message_str)
+                except (UnicodeDecodeError, json.JSONDecodeError) as e:
+                    self.logger.warning(f"Skipping malformed message: {e}")
                     continue
-                message_dict = json.loads(message_str)
+
                 await self.queue.put(self._normalize_message(message_dict))
         except (ConnectionResetError, ConnectionAbortedError):
-            self.logger.error("Connection reset/aborted.")
+            self.logger.warning("Connection reset/aborted.")
             self.connection_status.emit("Connection lost")
         except Exception as e:
             self.logger.error(f"Receive error: {e}")
