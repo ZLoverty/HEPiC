@@ -2,118 +2,160 @@
   import { api } from '../lib/api.js';
   import { sensorData } from '../lib/stores.js';
 
+  // Fixed extrusion speed: 3 mm/s, 5 mm per batch ≈ 1.67 s per batch.
+  // Interval is 100 ms shorter than execution time so batches chain without gaps.
+  const SPEED_MMS   = 3;
+  const BATCH_MM    = 5;
+  const BATCH_MS    = Math.floor(BATCH_MM / SPEED_MMS * 1000) - 100; // 1567 ms
+
   let targetTemp = 200;
-  let feedrate   = 30;
-  let busy       = false;
+  let stopped    = false;
+  let holdTimer  = null;
 
-  async function adjustTemp(delta) {
-    targetTemp = Math.max(20, Math.min(320, targetTemp + delta));
-    api.klipper.setTemp(targetTemp).catch(console.error);
+  // ── Numpad state ──────────────────────────────────────────────────
+  let numpadOpen  = false;
+  let numpadInput = '';
+
+  function openNumpad() {
+    numpadInput = String(targetTemp);
+    numpadOpen  = true;
   }
 
-  async function adjustFeedrate(delta) {
-    feedrate = Math.max(1, Math.min(150, feedrate + delta));
+  function numpadKey(k) {
+    if (k === '⌫') {
+      numpadInput = numpadInput.slice(0, -1);
+    } else if (numpadInput.length < 3) {
+      numpadInput += k;
+    }
   }
 
-  async function extrude() {
-    if (busy) return;
-    busy = true;
-    const f = (feedrate * 60).toFixed(0);
-    await api.klipper.gcode(`M83\nG1 E50 F${f}\nM82`).catch(console.error);
-    busy = false;
+  function confirmTemp() {
+    const v = parseInt(numpadInput, 10);
+    if (!isNaN(v) && v >= 20 && v <= 320) {
+      targetTemp = v;
+      api.klipper.setTemp(targetTemp).catch(console.error);
+    }
+    numpadOpen = false;
   }
 
-  async function retract() {
-    if (busy) return;
-    busy = true;
-    const f = (feedrate * 60).toFixed(0);
-    await api.klipper.gcode(`M83\nG1 E-50 F${f}\nM82`).catch(console.error);
-    busy = false;
+  // ── Long-press extrude / retract ──────────────────────────────────
+  function startHold(dir) {
+    if (stopped) return;
+    const f    = (SPEED_MMS * 60).toFixed(0);
+    const send = () =>
+      api.klipper.gcode(`M83\nG1 E${dir * BATCH_MM} F${f}\nM82`).catch(console.error);
+    send();
+    holdTimer = setInterval(send, BATCH_MS);
   }
 
+  function endHold() {
+    if (holdTimer !== null) {
+      clearInterval(holdTimer);
+      holdTimer = null;
+    }
+  }
+
+  // ── Emergency stop / restart ──────────────────────────────────────
   async function estop() {
+    endHold();
     await api.klipper.emergencyStop().catch(console.error);
+    stopped = true;
+  }
+
+  async function restart() {
+    await api.klipper.restart().catch(console.error);
+    stopped = false;
   }
 </script>
 
 <div class="layout">
-  <!-- Controls row -->
-  <div class="controls">
 
-    <!-- Temperature -->
-    <div class="panel">
-      <div class="panel-label">目标温度</div>
-      <div class="big-num">{targetTemp}<span class="unit">°C</span></div>
-      <div class="steps">
-        {#each [-10, -1, 1, 10] as d}
-          <button class="step-btn" on:click={() => adjustTemp(d)}>
-            {d > 0 ? `+${d}` : d}
-          </button>
-        {/each}
-      </div>
-      <div class="actual">
-        实测&nbsp;{$sensorData.hotend_temperature !== null
-          ? Number($sensorData.hotend_temperature).toFixed(1) + ' °C'
-          : '---'}
-      </div>
+  <!-- Temperature panel (full width, tap to set) -->
+  <button class="panel" on:click={openNumpad}>
+    <div class="panel-label">目标温度&nbsp;·&nbsp;点击设置</div>
+    <div class="big-num">{targetTemp}<span class="unit">°C</span></div>
+    <div class="actual">
+      实测&nbsp;{$sensorData.hotend_temperature !== null
+        ? Number($sensorData.hotend_temperature).toFixed(1) + ' °C'
+        : '---'}
     </div>
-
-    <div class="vdiv" />
-
-    <!-- Feedrate -->
-    <div class="panel">
-      <div class="panel-label">挤出速度</div>
-      <div class="big-num">{feedrate}<span class="unit">mm/s</span></div>
-      <div class="steps">
-        {#each [-5, -1, 1, 5] as d}
-          <button class="step-btn" on:click={() => adjustFeedrate(d)}>
-            {d > 0 ? `+${d}` : d}
-          </button>
-        {/each}
-      </div>
-      <div class="actual">
-        实测&nbsp;{$sensorData.measured_feedrate_mms !== null
-          ? Number($sensorData.measured_feedrate_mms).toFixed(1) + ' mm/s'
-          : '---'}
-      </div>
-    </div>
-  </div>
+  </button>
 
   <!-- Actions row -->
   <div class="actions">
-    <button class="act extrude" on:click={extrude} disabled={busy}>挤出 50mm</button>
-    <button class="act retract" on:click={retract} disabled={busy}>退料 50mm</button>
-    <button class="act estop"   on:click={estop}>急&nbsp;停</button>
+    {#if stopped}
+      <button class="act restart" on:click={restart}>固件重启</button>
+    {:else}
+      <button class="act extrude"
+        on:pointerdown={() => startHold(1)}
+        on:pointerup={endHold}
+        on:pointercancel={endHold}>
+        按住挤出
+      </button>
+      <button class="act retract"
+        on:pointerdown={() => startHold(-1)}
+        on:pointerup={endHold}
+        on:pointercancel={endHold}>
+        按住回抽
+      </button>
+    {/if}
+    <button class="act estop" on:click={estop}>急&nbsp;停</button>
   </div>
+
+  <!-- Numpad overlay -->
+  {#if numpadOpen}
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div class="overlay" on:click|self={() => (numpadOpen = false)}>
+      <div class="numpad">
+        <div class="np-display">
+          {numpadInput || '0'}<span class="np-unit">°C</span>
+        </div>
+        <div class="np-grid">
+          {#each ['7','8','9','4','5','6','1','2','3','⌫','0','✓'] as k}
+            <button
+              class="np-key {k === '✓' ? 'np-confirm' : k === '⌫' ? 'np-back' : ''}"
+              on:click={() => k === '✓' ? confirmTemp() : numpadKey(k)}>
+              {k}
+            </button>
+          {/each}
+        </div>
+      </div>
+    </div>
+  {/if}
+
 </div>
 
 <style>
   .layout {
+    position: relative;
     width: 100%;
     height: 100%;
     display: flex;
     flex-direction: column;
   }
-  .controls {
-    flex: 1;
-    display: flex;
-    min-height: 0;
-  }
+
+  /* ── Temperature panel ── */
   .panel {
     flex: 1;
-    padding: 18px 28px;
+    min-height: 0;
+    width: 100%;
+    padding: 24px 36px;
     display: flex;
     flex-direction: column;
     gap: 10px;
     justify-content: center;
+    align-items: flex-start;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    transition: background .12s;
   }
-  .vdiv {
-    width: 1px;
-    background: #1e2235;
-    margin: 16px 0;
-  }
+  .panel:active { background: rgba(91,141,238,.06); }
+
   .panel-label {
-    font-size: 10px;
+    font-size: 11px;
     letter-spacing: .14em;
     text-transform: uppercase;
     color: #5a6380;
@@ -121,44 +163,24 @@
   }
   .big-num {
     font-family: 'Courier New', Courier, monospace;
-    font-size: 62px;
+    font-size: 72px;
     font-weight: 700;
     color: #dce4f5;
     line-height: 1;
   }
   .unit {
-    font-size: 18px;
+    font-size: 20px;
     color: #5a6380;
-    margin-left: 6px;
+    margin-left: 8px;
     font-family: system-ui, sans-serif;
   }
-  .steps {
-    display: flex;
-    gap: 8px;
-  }
-  .step-btn {
-    flex: 1;
-    height: 58px;
-    background: #131623;
-    border: 1px solid #1e2235;
-    color: #dce4f5;
-    font-size: 17px;
-    font-family: 'Courier New', Courier, monospace;
-    border-radius: 2px;
-    cursor: pointer;
-    transition: background .1s, border-color .1s;
-  }
-  .step-btn:active {
-    background: #1e2235;
-    border-color: #5b8dee;
-  }
   .actual {
-    font-size: 12px;
+    font-size: 13px;
     color: #5a6380;
     font-family: 'Courier New', Courier, monospace;
   }
 
-  /* action row */
+  /* ── Actions row ── */
   .actions {
     height: 82px;
     border-top: 1px solid #1e2235;
@@ -182,10 +204,18 @@
   .act:disabled { opacity: .35; cursor: not-allowed; }
 
   .extrude { background: #0e2218; border-color: #26bf6e55; color: #26bf6e; }
-  .extrude:not(:disabled):active { background: #1a3a28; }
+  .extrude:active { background: #1a3a28; }
 
   .retract { background: #0e1528; border-color: #5b8dee55; color: #5b8dee; }
-  .retract:not(:disabled):active { background: #1a2442; }
+  .retract:active { background: #1a2442; }
+
+  .restart {
+    background: #1a1408;
+    border-color: #f0a82555;
+    color: #f0a825;
+    font-size: 18px;
+  }
+  .restart:active { background: #2c2010; }
 
   .estop {
     flex: .6;
@@ -196,4 +226,66 @@
     letter-spacing: .08em;
   }
   .estop:active { background: #e5484d !important; color: #fff; opacity: 1 !important; }
+
+  /* ── Numpad overlay ── */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(7, 9, 16, .72);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+  .numpad {
+    background: #10131f;
+    border: 1px solid #1e2235;
+    border-radius: 4px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 290px;
+  }
+  .np-display {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 52px;
+    font-weight: 700;
+    color: #dce4f5;
+    text-align: right;
+    padding: 0 6px;
+    line-height: 1;
+    border-bottom: 1px solid #1e2235;
+    padding-bottom: 12px;
+  }
+  .np-unit {
+    font-size: 16px;
+    color: #5a6380;
+    margin-left: 4px;
+  }
+  .np-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .np-key {
+    height: 56px;
+    background: #131623;
+    border: 1px solid #1e2235;
+    color: #dce4f5;
+    font-size: 22px;
+    font-family: 'Courier New', Courier, monospace;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background .1s;
+  }
+  .np-key:active  { background: #1e2235; }
+  .np-back  { color: #e5484d; font-size: 18px; }
+  .np-confirm {
+    background: #0e2218;
+    border-color: #26bf6e55;
+    color: #26bf6e;
+    font-size: 20px;
+  }
+  .np-confirm:active { background: #1a3a28; }
 </style>

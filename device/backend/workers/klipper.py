@@ -99,10 +99,15 @@ class DeviceKlipperWorker:
                         }},
                         "id": self._next_id(),
                     }))
-                    await asyncio.gather(
-                        self._listen(ws),
-                        self._send_loop(ws),
-                    )
+                    send_task = asyncio.create_task(self._send_loop(ws))
+                    try:
+                        await self._listen(ws)
+                    finally:
+                        send_task.cancel()
+                        try:
+                            await send_task
+                        except asyncio.CancelledError:
+                            pass
             except Exception as e:
                 logger.warning("Moonraker connection error: %s", e)
                 self.hotend_temperature = _nan
