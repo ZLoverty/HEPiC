@@ -74,10 +74,18 @@
   <button class="panel" on:click={openNumpad}>
     <div class="panel-label">目标温度&nbsp;·&nbsp;点击设置</div>
     <div class="big-num">{targetTemp}<span class="unit">°C</span></div>
-    <div class="actual">
-      实测&nbsp;{$sensorData.hotend_temperature !== null
-        ? Number($sensorData.hotend_temperature).toFixed(1) + ' °C'
-        : '---'}
+    <div class="actual-row">
+      <span class="actual-item">
+        热端&nbsp;{$sensorData.hotend_temperature !== null
+          ? Number($sensorData.hotend_temperature).toFixed(1) + ' °C'
+          : '---'}
+      </span>
+      <span class="actual-sep">·</span>
+      <span class="actual-item">
+        速度&nbsp;{$sensorData.measured_feedrate_mms !== null && isFinite($sensorData.measured_feedrate_mms)
+          ? Number($sensorData.measured_feedrate_mms).toFixed(1) + ' mm/s'
+          : '---'}
+      </span>
     </div>
   </button>
 
@@ -155,39 +163,43 @@
   .panel:active { background: rgba(91,141,238,.06); }
 
   .panel-label {
-    font-size: 11px;
-    letter-spacing: .14em;
+    font-size: 12px;
+    letter-spacing: .12em;
     text-transform: uppercase;
-    color: #5a6380;
+    color: #7888b0;
     font-family: system-ui, sans-serif;
   }
   .big-num {
     font-family: 'Courier New', Courier, monospace;
     font-size: 72px;
     font-weight: 700;
-    color: #dce4f5;
+    color: #eef2ff;
     line-height: 1;
   }
   .unit {
     font-size: 20px;
-    color: #5a6380;
+    color: #7888b0;
     margin-left: 8px;
     font-family: system-ui, sans-serif;
   }
-  .actual {
-    font-size: 13px;
-    color: #5a6380;
+  .actual-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: #7888b0;
     font-family: 'Courier New', Courier, monospace;
   }
+  .actual-sep { color: #3a4460; }
 
   /* ── Actions row ── */
   .actions {
     height: 82px;
-    border-top: 1px solid #1e2235;
+    border-top: 1px solid #252d48;
     display: flex;
     gap: 10px;
     padding: 12px 16px;
-    background: #0a0c14;
+    background: #0f1220;
   }
   .act {
     flex: 1;
@@ -238,8 +250,8 @@
     z-index: 10;
   }
   .numpad {
-    background: #10131f;
-    border: 1px solid #1e2235;
+    background: #151b2e;
+    border: 1px solid #252d48;
     border-radius: 4px;
     padding: 18px;
     display: flex;
@@ -251,11 +263,11 @@
     font-family: 'Courier New', Courier, monospace;
     font-size: 52px;
     font-weight: 700;
-    color: #dce4f5;
+    color: #eef2ff;
     text-align: right;
     padding: 0 6px;
     line-height: 1;
-    border-bottom: 1px solid #1e2235;
+    border-bottom: 1px solid #252d48;
     padding-bottom: 12px;
   }
   .np-unit {
@@ -270,16 +282,16 @@
   }
   .np-key {
     height: 56px;
-    background: #131623;
-    border: 1px solid #1e2235;
-    color: #dce4f5;
+    background: #1a1f35;
+    border: 1px solid #252d48;
+    color: #eef2ff;
     font-size: 22px;
     font-family: 'Courier New', Courier, monospace;
     border-radius: 2px;
     cursor: pointer;
     transition: background .1s;
   }
-  .np-key:active  { background: #1e2235; }
+  .np-key:active  { background: #252d48; }
   .np-back  { color: #e5484d; font-size: 18px; }
   .np-confirm {
     background: #0e2218;

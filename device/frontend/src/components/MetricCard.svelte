@@ -30,27 +30,26 @@
     flex-direction: column;
     justify-content: center;
     gap: 2px;
-    border-bottom: 1px solid #2e3352;
-    background: #131623;
+    border-bottom: 1px solid #2e3a58;
+    background: #1a1f35;
     position: relative;
     overflow: hidden;
   }
-  /* subtle scanline texture */
   .card::after {
     content: '';
     position: absolute;
     inset: 0;
     background: repeating-linear-gradient(
       0deg, transparent, transparent 3px,
-      rgba(0,0,0,0.045) 3px, rgba(0,0,0,0.045) 4px
+      rgba(0,0,0,0.03) 3px, rgba(0,0,0,0.03) 4px
     );
     pointer-events: none;
   }
   .label {
-    font-size: 10px;
-    letter-spacing: .14em;
+    font-size: 12px;
+    letter-spacing: .12em;
     text-transform: uppercase;
-    color: #5a6380;
+    color: #7888b0;
     font-family: system-ui, sans-serif;
   }
   .row {
@@ -61,20 +60,20 @@
   }
   .num {
     font-family: 'Courier New', Courier, monospace;
-    font-size: 46px;
+    font-size: 48px;
     font-weight: 700;
     letter-spacing: -.02em;
     transition: color .3s;
   }
   .unit {
-    font-size: 13px;
-    color: #5a6380;
+    font-size: 15px;
+    color: #7888b0;
     font-family: system-ui, sans-serif;
     padding-bottom: 3px;
   }
   .secondary {
-    font-size: 11px;
-    color: #5a6380;
+    font-size: 13px;
+    color: #7888b0;
     font-family: 'Courier New', Courier, monospace;
     margin-top: 2px;
   }

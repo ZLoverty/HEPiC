@@ -64,13 +64,13 @@
 </nav>
 
 <style>
-  :root { --bg-nav: #0a0c14; }
+  :root { --bg-nav: #0f1220; }
 
   nav {
     height: 64px;
     flex-shrink: 0;
-    background: #0a0c14;
-    border-top: 1px solid #1e2235;
+    background: #0f1220;
+    border-top: 1px solid #252d48;
     display: flex;
     position: relative;
   }
@@ -81,7 +81,7 @@
     align-items: center;
     justify-content: center;
     gap: 4px;
-    color: #3d4560;
+    color: #5a6888;
     background: none;
     border: none;
     border-top: 2px solid transparent;
@@ -90,17 +90,17 @@
     padding: 0;
   }
   .tab:active  { opacity: .65; }
-  .tab.active  { color: #5b8dee; border-top-color: #5b8dee; }
+  .tab.active  { color: #7aa5f4; border-top-color: #7aa5f4; }
   .icon {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     display: flex;
     align-items: center;
     justify-content: center;
   }
   .icon svg { width: 100%; height: 100%; }
   .label {
-    font-size: 11px;
+    font-size: 13px;
     font-family: system-ui, sans-serif;
     letter-spacing: .02em;
   }

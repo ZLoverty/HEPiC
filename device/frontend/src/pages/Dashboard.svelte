@@ -35,7 +35,7 @@
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    border-right: 1px solid #1e2235;
+    border-right: 1px solid #252d48;
   }
   /* remove bottom border on last card */
   .metrics :global(.card:last-child) { border-bottom: none; }

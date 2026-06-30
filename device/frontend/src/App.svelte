@@ -36,11 +36,11 @@
     const up   = text.toUpperCase();
 
     if (up.includes('STOP_QUALITY_CHECK')) {
-      qcState.update(s => ({ ...s, phase: 'done', statusMsg: '质检完毕' }));
+      qcState.update(s => ({ ...s, phase: 'done', statusMsg: '质检完毕', extrudeStartedAt: null }));
       return;
     }
     if (up.includes('START_QUALITY_CHECK')) {
-      qcState.update(s => ({ ...s, statusMsg: '正在挤出' }));
+      qcState.update(s => ({ ...s, statusMsg: '正在挤出', extrudeStartedAt: Date.now() }));
       return;
     }
     const m = text.match(/STATUS\s+(.+)/i);
@@ -67,7 +67,7 @@
           if (get(qcState).phase === 'running') {
             qcForceHistory.update(h => {
               const n = [...h, f];
-              return n.length > MAX_HISTORY ? n.slice(-MAX_HISTORY) : n;
+              return n.length > 300 ? n.slice(-300) : n;  // 30 s window at 10 Hz
             });
           }
         }
@@ -93,8 +93,8 @@
   :global(html, body) {
     width: 800px; height: 480px;
     overflow: hidden;
-    background: #0b0d14;
-    color: #dce4f5;
+    background: #141824;
+    color: #eef2ff;
     font-family: system-ui, -apple-system, sans-serif;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
@@ -105,11 +105,7 @@
     width: 800px; height: 480px;
     display: flex;
     flex-direction: column;
-    background-color: #0b0d14;
-    background-image:
-      linear-gradient(rgba(30, 34, 53, 0.55) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(30, 34, 53, 0.55) 1px, transparent 1px);
-    background-size: 24px 24px;
+    background-color: #141824;
   }
   .content { flex: 1; min-height: 0; overflow: hidden; }
 </style>
