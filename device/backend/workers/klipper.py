@@ -89,22 +89,25 @@ class DeviceKlipperWorker:
         except asyncio.QueueFull:
             logger.warning("Klipper send queue full, dropping message")
 
+    def _subscribe_msg(self) -> dict:
+        return {
+            "jsonrpc": "2.0",
+            "method": "printer.objects.subscribe",
+            "params": {"objects": {
+                "extruder": None,
+                "motion_report": None,
+                "print_stats": None,
+                "webhooks": None,
+            }},
+            "id": self._next_id(),
+        }
+
     async def run(self):
         while self._running:
             try:
                 async with websockets.connect(self.uri, open_timeout=2.0) as ws:
                     logger.info("Connected to Moonraker at %s", self.uri)
-                    await ws.send(json.dumps({
-                        "jsonrpc": "2.0",
-                        "method": "printer.objects.subscribe",
-                        "params": {"objects": {
-                            "extruder": None,
-                            "motion_report": None,
-                            "print_stats": None,
-                            "webhooks": None,
-                        }},
-                        "id": self._next_id(),
-                    }))
+                    await ws.send(json.dumps(self._subscribe_msg()))
                     send_task = asyncio.create_task(self._send_loop(ws))
                     try:
                         await self._listen(ws)
@@ -149,6 +152,15 @@ class DeviceKlipperWorker:
         # firmware just entered (or left) shutdown.
         if method == "notify_klippy_ready":
             self.klippy_state = "ready"
+            # Klippy just (re)started (e.g. after FIRMWARE_RESTART). The
+            # Moonraker websocket itself never dropped, so run()'s reconnect
+            # path never re-fires — without this, our object subscription
+            # stays registered against the dead pre-restart Klippy instance
+            # and status updates (temperature, feedrate, ...) never resume.
+            try:
+                self._send_queue.put_nowait(self._subscribe_msg())
+            except asyncio.QueueFull:
+                logger.warning("Klipper send queue full, dropping re-subscribe")
         elif method == "notify_klippy_shutdown":
             self.klippy_state = "shutdown"
         elif method == "notify_klippy_disconnected":
