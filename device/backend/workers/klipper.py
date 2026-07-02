@@ -99,7 +99,7 @@ class DeviceKlipperWorker:
                         "method": "printer.objects.subscribe",
                         "params": {"objects": {
                             "extruder": None,
-                            "gcode_move": None,
+                            "motion_report": None,
                             "print_stats": None,
                             "webhooks": None,
                         }},
@@ -170,9 +170,9 @@ class DeviceKlipperWorker:
             self.hotend_temperature = float(extruder["temperature"])
         if "target" in extruder:
             self.target_hotend_temperature = float(extruder["target"])
-        gcode_move = status.get("gcode_move", {})
-        if "speed" in gcode_move:
-            self.active_feedrate_mms = float(gcode_move["speed"]) / 60.0
+        motion_report = status.get("motion_report", {})
+        if "live_extruder_velocity" in motion_report:
+            self.active_feedrate_mms = float(motion_report["live_extruder_velocity"])
         print_stats = status.get("print_stats", {})
         if "progress" in print_stats:
             self.progress = float(print_stats["progress"])

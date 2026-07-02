@@ -15,7 +15,7 @@
   $: fMin       = $qcState.material?.force_range?.[0] ?? null;
   $: fMax       = $qcState.material?.force_range?.[1] ?? null;
   $: liveTemp   = $sensorData.hotend_temperature;
-  $: liveFeed   = $sensorData.measured_feedrate_mms;
+  $: liveFeed   = $sensorData.feedrate_mms;
 
   // Freeze the reading the instant the run finishes, so the inspector has
   // time to record it instead of watching it keep drifting toward zero.
