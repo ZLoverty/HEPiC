@@ -14,7 +14,19 @@
   // ── Derived display values ────────────────────────────────────────
   $: fMin       = $qcState.material?.force_range?.[0] ?? null;
   $: fMax       = $qcState.material?.force_range?.[1] ?? null;
-  $: curForce   = $sensorData.extrusion_force_N;
+  $: liveTemp   = $sensorData.hotend_temperature;
+  $: liveFeed   = $sensorData.measured_feedrate_mms;
+
+  // Freeze the reading the instant the run finishes, so the inspector has
+  // time to record it instead of watching it keep drifting toward zero.
+  let frozenForce = null;
+  $: if ($qcState.phase === 'done' && frozenForce === null) {
+    frozenForce = $sensorData.extrusion_force_N;
+  }
+  $: if ($qcState.phase !== 'done') {
+    frozenForce = null;
+  }
+  $: curForce   = $qcState.phase === 'done' ? frozenForce : $sensorData.extrusion_force_N;
   $: forceColor = (() => {
     if (curForce === null || !isFinite(curForce) || fMin === null) return '#f5a623';
     if (curForce < fMin || curForce > fMax) return '#e5484d';
@@ -210,6 +222,11 @@
     </div>
     <div class="status-text">{$qcState.statusMsg}</div>
 
+    <div class="live-meta">
+      <span class="lm-item"><span class="lm-dot temp"></span>{liveTemp !== null && isFinite(liveTemp) ? Number(liveTemp).toFixed(1) : '--'}&nbsp;°C</span>
+      <span class="lm-item"><span class="lm-dot spd"></span>{liveFeed !== null && isFinite(liveFeed) ? Number(liveFeed).toFixed(1) : '--'}&nbsp;mm/s</span>
+    </div>
+
     <!-- Progress bar -->
     <div class="prog-wrap">
       <div
@@ -331,6 +348,16 @@
     font-size: 13px; color: #7888b0;
     font-family: system-ui, sans-serif; min-height: 18px;
   }
+
+  .live-meta {
+    display: flex; gap: 14px; margin-bottom: 2px;
+    font-size: 11px; color: #9aa8cc;
+    font-family: 'Courier New', Courier, monospace;
+  }
+  .lm-item { display: flex; align-items: center; gap: 5px; }
+  .lm-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .lm-dot.temp { background: #f97316; }
+  .lm-dot.spd  { background: #7aa5f4; }
 
   /* ── Progress bar ─────────────────────────────────────── */
   .prog-wrap {
