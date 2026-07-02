@@ -48,6 +48,7 @@ class SensorBroadcaster:
                 "hotend_temperature": _clean(self._klipper.hotend_temperature),
                 "target_temperature": _clean(self._klipper.target_hotend_temperature),
                 "feedrate_mms": _clean(self._klipper.active_feedrate_mms),
+                "klippy_state": self._klipper.klippy_state,
             }
             payload = json.dumps(snapshot)
             dead: set[asyncio.Queue] = set()

@@ -23,6 +23,11 @@ class DeviceKlipperWorker:
         self.target_hotend_temperature: float = _nan
         self.active_feedrate_mms: float = 0.0
         self.progress: float = 0.0
+        # "ready" | "shutdown" | "error" | "disconnected" | "unknown"
+        # Tracked so the UI can offer a FIRMWARE_RESTART affordance the
+        # instant Klipper enters shutdown (e.g. after an emergency stop),
+        # no matter which page is on screen.
+        self.klippy_state: str = "unknown"
 
         self._running = True
         self._send_queue: asyncio.Queue = asyncio.Queue(maxsize=64)
@@ -96,6 +101,7 @@ class DeviceKlipperWorker:
                             "extruder": None,
                             "gcode_move": None,
                             "print_stats": None,
+                            "webhooks": None,
                         }},
                         "id": self._next_id(),
                     }))
@@ -112,6 +118,7 @@ class DeviceKlipperWorker:
                 logger.warning("Moonraker connection error: %s", e)
                 self.hotend_temperature = _nan
                 self.target_hotend_temperature = _nan
+                self.klippy_state = "disconnected"
             if self._running:
                 await asyncio.sleep(3)
 
@@ -128,14 +135,26 @@ class DeviceKlipperWorker:
             await ws.send(json.dumps(msg))
 
     def _handle(self, msg: dict):
-        if msg.get("method") == "notify_status_update":
+        method = msg.get("method")
+
+        if method == "notify_status_update":
             status = (msg.get("params") or [{}])[0]
             self._apply_status(status)
 
         if "result" in msg and isinstance(msg["result"], dict):
             self._apply_status(msg["result"].get("status", {}))
 
-        if msg.get("method") == "notify_gcode_response":
+        # Klippy state notifications fire independently of the subscribed
+        # status stream, so they're the most reliable signal that the
+        # firmware just entered (or left) shutdown.
+        if method == "notify_klippy_ready":
+            self.klippy_state = "ready"
+        elif method == "notify_klippy_shutdown":
+            self.klippy_state = "shutdown"
+        elif method == "notify_klippy_disconnected":
+            self.klippy_state = "disconnected"
+
+        if method == "notify_gcode_response":
             params = msg.get("params") or []
             if params:
                 text = params[0] if isinstance(params[0], str) else str(params[0])
@@ -157,3 +176,6 @@ class DeviceKlipperWorker:
         print_stats = status.get("print_stats", {})
         if "progress" in print_stats:
             self.progress = float(print_stats["progress"])
+        webhooks = status.get("webhooks", {})
+        if "state" in webhooks:
+            self.klippy_state = webhooks["state"]

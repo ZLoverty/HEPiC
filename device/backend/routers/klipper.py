@@ -30,6 +30,7 @@ async def get_status(request: Request):
         "target_temperature": _clean(k.target_hotend_temperature),
         "feedrate_mms": k.active_feedrate_mms,
         "progress": k.progress,
+        "klippy_state": k.klippy_state,
     }
 
 
