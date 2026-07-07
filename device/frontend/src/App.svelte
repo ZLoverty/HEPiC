@@ -6,12 +6,11 @@
   import { api } from './lib/api.js';
   import NavBar        from './components/NavBar.svelte';
   import Dashboard     from './pages/Dashboard.svelte';
-  import ManualControl from './pages/ManualControl.svelte';
   import QualityCheck  from './pages/QualityCheck.svelte';
   import Settings      from './pages/Settings.svelte';
 
   const MAX_HISTORY = 200;
-  const pages = [Dashboard, ManualControl, QualityCheck, Settings];
+  const pages = [Dashboard, QualityCheck, Settings];
   let activePage = 0;
   let sensorWs = null;
   let qcWs = null;

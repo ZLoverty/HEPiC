@@ -7,7 +7,6 @@
 
   const tabs = [
     { label: '仪表盘' },
-    { label: '手动控制' },
     { label: '质检模式' },
     { label: '设置' },
   ];
@@ -30,14 +29,6 @@
             <rect x="3" y="14" width="7" height="7" rx="1"/>
           </svg>
         {:else if i === 1}
-          <!-- manual: sliders -->
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-            <line x1="4" y1="8" x2="20" y2="8"/>
-            <circle cx="15" cy="8" r="3" fill="var(--bg-nav)"/>
-            <line x1="4" y1="16" x2="20" y2="16"/>
-            <circle cx="9" cy="16" r="3" fill="var(--bg-nav)"/>
-          </svg>
-        {:else if i === 2}
           <!-- qc: circle + checkmark -->
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="9"/>
