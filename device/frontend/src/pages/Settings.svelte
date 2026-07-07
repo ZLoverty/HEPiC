@@ -63,7 +63,7 @@
     gap: 8px;
   }
   .section {
-    font-size: 9px;
+    font-size: 10px;
     letter-spacing: .16em;
     text-transform: uppercase;
     color: #5a6380;
@@ -90,7 +90,7 @@
   .dot.red   { background: #e5484d; }
   .dot.amber { background: #f5a623; box-shadow: 0 0 8px #f5a62388; }
   .name { flex: 1; font-size: 14px; }
-  .val  { font-size: 12px; font-family: 'Courier New', Courier, monospace; }
+  .val  { font-size: 13px; font-family: 'Courier New', Courier, monospace; }
   .ok   { color: #26bf6e; }
   .bad  { color: #e5484d; }
   .muted{ color: #5a6380; }
@@ -98,7 +98,7 @@
     background: #1e2235;
     border: 1px solid #2e3352;
     color: #dce4f5;
-    font-size: 12px;
+    font-size: 13px;
     padding: 4px 12px;
     border-radius: 2px;
     cursor: pointer;
@@ -117,7 +117,7 @@
     justify-content: space-between;
     padding: 10px 0;
     border-bottom: 1px solid #1a1e30;
-    font-size: 13px;
+    font-size: 14px;
     color: #5a6380;
   }
   .info-row:last-child { border-bottom: none; }

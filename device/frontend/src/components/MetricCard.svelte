@@ -67,7 +67,7 @@
     pointer-events: none;
   }
   .label {
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: .12em;
     text-transform: uppercase;
     color: #7888b0;
@@ -93,7 +93,7 @@
     padding-bottom: 3px;
   }
   .secondary {
-    font-size: 13px;
+    font-size: 14px;
     color: #7888b0;
     font-family: 'Courier New', Courier, monospace;
     margin-top: 2px;

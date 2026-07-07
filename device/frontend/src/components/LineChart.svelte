@@ -107,7 +107,7 @@
       <line x1={P.l} y1={y} x2={VW - P.r} y2={y}
             stroke="#2d3655" stroke-width="1" stroke-dasharray="3 5"/>
       <text x={P.l - 4} y={y + 4} text-anchor="end"
-            fill="#6a7590" font-size="13" font-family="monospace">{v}</text>
+            fill="#6a7590" font-size="14" font-family="monospace">{v}</text>
     {/each}
 
     <!-- y-axis rule -->
@@ -123,7 +123,7 @@
       <line x1={x} y1={P.t + IH} x2={x} y2={P.t + IH + 4}
             stroke="#2d3655" stroke-width="1"/>
       <text x={x} y={VH - 2} text-anchor="middle"
-            fill="#6a7590" font-size="12" font-family="monospace">{label}</text>
+            fill="#6a7590" font-size="13" font-family="monospace">{label}</text>
     {/each}
 
     <!-- filled area -->
@@ -160,7 +160,7 @@
     min-height: 0;
   }
   .title {
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: .12em;
     text-transform: uppercase;
     color: #6a7590;

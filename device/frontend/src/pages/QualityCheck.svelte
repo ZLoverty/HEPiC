@@ -280,7 +280,7 @@
   }
   .divv { width: 1px; background: #252d48; margin: 12px 0; }
   .col-title {
-    font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+    font-size: 13px; letter-spacing: .12em; text-transform: uppercase;
     color: #7888b0; font-family: system-ui, sans-serif;
   }
   .chip-grid { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -294,7 +294,7 @@
   }
   .chip:active { background: #252d48; }
   .chip.sel { background: #0f1a38; border-color: #7aa5f4; color: #7aa5f4; }
-  .muted { color: #5a6888; font-size: 13px; font-family: system-ui, sans-serif; }
+  .muted { color: #5a6888; font-size: 14px; font-family: system-ui, sans-serif; }
 
   .mat-card {
     background: #131828; border: 1px solid #252d48;
@@ -302,7 +302,7 @@
   }
   .mat-row {
     display: flex; justify-content: space-between;
-    align-items: baseline; font-size: 13px;
+    align-items: baseline; font-size: 14px;
   }
   .mk { color: #7888b0; font-family: system-ui, sans-serif; }
   .mv { color: #eef2ff; font-family: system-ui, sans-serif; }
@@ -330,7 +330,7 @@
   }
   .phase-badge {
     display: inline-flex; align-items: center;
-    font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+    font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
     color: #7aa5f4; font-family: system-ui, sans-serif; gap: 6px;
   }
   .phase-badge::before {
@@ -341,13 +341,13 @@
   .phase-badge.done::before { background: #26bf6e; box-shadow: 0 0 7px #26bf6eaa; }
 
   .status-text {
-    font-size: 13px; color: #7888b0;
+    font-size: 14px; color: #7888b0;
     font-family: system-ui, sans-serif; min-height: 18px;
   }
 
   .live-meta {
     display: flex; gap: 14px; margin-bottom: 2px;
-    font-size: 11px; color: #9aa8cc;
+    font-size: 12px; color: #9aa8cc;
     font-family: 'Courier New', Courier, monospace;
   }
   .lm-item { display: flex; align-items: center; gap: 5px; }
@@ -386,7 +386,7 @@
     position: absolute;
     right: 0;
     top: -20px;
-    font-size: 12px;
+    font-size: 13px;
     color: #7aa5f4;
     font-family: 'Courier New', Courier, monospace;
   }
@@ -402,7 +402,7 @@
     padding-left: 12px; flex-shrink: 0;
   }
   .force-label {
-    font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+    font-size: 13px; letter-spacing: .14em; text-transform: uppercase;
     color: #7888b0; font-family: system-ui, sans-serif;
   }
   .force-num {
@@ -416,7 +416,7 @@
     color: #eef2ff;
   }
   .ref-range {
-    font-size: 12px; color: #7888b0;
+    font-size: 13px; color: #7888b0;
     font-family: 'Courier New', Courier, monospace; margin-top: 4px;
   }
   .run-actions { margin-top: auto; }

@@ -27,18 +27,26 @@
   // ── Numpad state ──────────────────────────────────────────────────
   let numpadOpen  = false;
   let numpadInput = '';
+  // True until the first keypress after opening: lets a digit overwrite the
+  // prefilled default instead of appending to it, without touching normal
+  // append/backspace behavior on every keypress after that.
+  let numpadFresh = false;
 
   function openNumpad() {
     numpadInput = (target !== null && target !== undefined) ? String(Math.round(target)) : '200';
+    numpadFresh = true;
     numpadOpen  = true;
   }
 
   function numpadKey(k) {
     if (k === '⌫') {
       numpadInput = numpadInput.slice(0, -1);
+    } else if (numpadFresh) {
+      numpadInput = k;
     } else if (numpadInput.length < 3) {
       numpadInput += k;
     }
+    numpadFresh = false;
   }
 
   function confirmTemp() {
@@ -166,7 +174,7 @@
   }
   .metrics :global(.card) { padding: 6px 18px; }
   .metrics :global(.card .num) { font-size: 34px; }
-  .metrics :global(.card .secondary) { font-size: 12px; }
+  .metrics :global(.card .secondary) { font-size: 13px; }
   .metrics :global(.card:last-child) { border-bottom: none; }
 
   /* ── Action buttons (extrude / retract / estop) ── */

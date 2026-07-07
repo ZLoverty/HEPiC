@@ -146,7 +146,7 @@
     border-bottom: 1px solid #e5484d;
   }
   .fw-msg {
-    font-size: 12px;
+    font-size: 13px;
     color: #ff9d9d;
     font-family: system-ui, sans-serif;
   }
@@ -158,7 +158,7 @@
     border: none;
     border-radius: 2px;
     color: #fff;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
     font-family: system-ui, sans-serif;
     letter-spacing: .04em;

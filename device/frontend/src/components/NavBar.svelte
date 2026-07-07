@@ -91,7 +91,7 @@
   }
   .icon svg { width: 100%; height: 100%; }
   .label {
-    font-size: 13px;
+    font-size: 14px;
     font-family: system-ui, sans-serif;
     letter-spacing: .02em;
   }
