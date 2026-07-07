@@ -17,16 +17,12 @@
   $: liveTemp   = $sensorData.hotend_temperature;
   $: liveFeed   = $sensorData.feedrate_mms;
 
-  // Freeze the reading the instant the run finishes, so the inspector has
-  // time to record it instead of watching it keep drifting toward zero.
-  let frozenForce = null;
-  $: if ($qcState.phase === 'done' && frozenForce === null) {
-    frozenForce = $sensorData.extrusion_force_N;
-  }
-  $: if ($qcState.phase !== 'done') {
-    frozenForce = null;
-  }
-  $: curForce   = $qcState.phase === 'done' ? frozenForce : $sensorData.extrusion_force_N;
+  // The reading is frozen in the qcState store the instant the run finishes
+  // (see App.svelte's STOP_QUALITY_CHECK handler), so the inspector has time
+  // to record it instead of watching it keep drifting toward zero. Keeping
+  // the snapshot in the store (rather than component-local state) means it
+  // survives navigating away from this page and back before hitting "完成".
+  $: curForce   = $qcState.phase === 'done' ? $qcState.frozenForce : $sensorData.extrusion_force_N;
   $: forceColor = (() => {
     if (curForce === null || !isFinite(curForce) || fMin === null) return '#f5a623';
     if (curForce < fMin || curForce > fMax) return '#e5484d';
@@ -126,19 +122,19 @@
   async function startQC() {
     if (!$qcState.family || !$qcState.piCode) return;
     qcForceHistory.set([]);
-    qcState.update(s => ({ ...s, phase: 'running', statusMsg: '正在启动...', extrudeStartedAt: null }));
+    qcState.update(s => ({ ...s, phase: 'running', statusMsg: '正在启动...', extrudeStartedAt: null, frozenForce: null }));
     await api.qc.start($qcState.family, $qcState.piCode).catch(console.error);
   }
 
   async function abort() {
     clearInterval(extrudeTimer);
     extrudeTimer = null;
-    qcState.update(s => ({ ...s, phase: 'idle', statusMsg: '', extrudeStartedAt: null }));
+    qcState.update(s => ({ ...s, phase: 'idle', statusMsg: '', extrudeStartedAt: null, frozenForce: null }));
     await api.klipper.emergencyStop().catch(console.error);
   }
 
   function finish() {
-    qcState.update(s => ({ ...s, phase: 'idle', statusMsg: '', extrudeStartedAt: null }));
+    qcState.update(s => ({ ...s, phase: 'idle', statusMsg: '', extrudeStartedAt: null, frozenForce: null }));
   }
 </script>
 

@@ -53,7 +53,8 @@
     const up   = text.toUpperCase();
 
     if (up.includes('STOP_QUALITY_CHECK')) {
-      qcState.update(s => ({ ...s, phase: 'done', statusMsg: '质检完毕', extrudeStartedAt: null }));
+      const frozenForce = get(sensorData).extrusion_force_N;
+      qcState.update(s => ({ ...s, phase: 'done', statusMsg: '质检完毕', extrudeStartedAt: null, frozenForce }));
       return;
     }
     if (up.includes('START_QUALITY_CHECK')) {
