@@ -24,4 +24,7 @@ export const api = {
   qc: {
     start: (family, pi_code) => req('POST', '/api/qc/start', { family, pi_code }),
   },
+  system: {
+    info: () => req('GET', '/api/system/info'),
+  },
 };

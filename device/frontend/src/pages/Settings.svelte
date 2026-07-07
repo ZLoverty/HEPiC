@@ -4,6 +4,7 @@
 
   let klipperOk  = null;   // null=checking, true=ok, false=error
   let klipperMsg = '';
+  let ipAddress  = '检测中...';
 
   async function checkKlipper() {
     klipperOk = null;
@@ -17,7 +18,17 @@
     }
   }
 
+  async function loadSystemInfo() {
+    try {
+      const s = await api.system.info();
+      ipAddress = s.ip_address ?? '未知';
+    } catch (e) {
+      ipAddress = '获取失败';
+    }
+  }
+
   checkKlipper();
+  loadSystemInfo();
 </script>
 
 <div class="layout">
@@ -50,6 +61,7 @@
     <div class="info-row"><span>版本</span><span class="mono">v0.1.0</span></div>
     <div class="info-row"><span>系统</span><span class="mono">HEPiC Embedded</span></div>
     <div class="info-row"><span>后端</span><span class="mono">FastAPI + Klipper</span></div>
+    <div class="info-row"><span>WiFi IP 地址</span><span class="mono">{ipAddress}</span></div>
   </div>
 </div>
 
