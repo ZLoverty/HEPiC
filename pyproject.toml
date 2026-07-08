@@ -49,3 +49,6 @@ where = ["."]  # 代码在当前目录
 include = ["HEPiC*"]  # 只包含 HEPiC 文件夹
 exclude = ["notebooks*", "test*", "tests*", "docs*"]  # 明确排除实验、测试和文档目录
 namespaces = false
+
+[tool.setuptools.package-data]
+HEPiC = ["database/materials/*.yaml"]
