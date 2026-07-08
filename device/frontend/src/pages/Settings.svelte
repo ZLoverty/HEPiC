@@ -4,6 +4,7 @@
 
   let klipperOk  = null;   // null=checking, true=ok, false=error
   let klipperMsg = '';
+  let ipAddress  = '检测中...';
 
   async function checkKlipper() {
     klipperOk = null;
@@ -17,7 +18,17 @@
     }
   }
 
+  async function loadSystemInfo() {
+    try {
+      const s = await api.system.info();
+      ipAddress = s.ip_address ?? '未知';
+    } catch (e) {
+      ipAddress = '获取失败';
+    }
+  }
+
   checkKlipper();
+  loadSystemInfo();
 </script>
 
 <div class="layout">
@@ -50,6 +61,7 @@
     <div class="info-row"><span>版本</span><span class="mono">v0.1.0</span></div>
     <div class="info-row"><span>系统</span><span class="mono">HEPiC Embedded</span></div>
     <div class="info-row"><span>后端</span><span class="mono">FastAPI + Klipper</span></div>
+    <div class="info-row"><span>WiFi IP 地址</span><span class="mono">{ipAddress}</span></div>
   </div>
 </div>
 
@@ -63,7 +75,7 @@
     gap: 8px;
   }
   .section {
-    font-size: 9px;
+    font-size: 10px;
     letter-spacing: .16em;
     text-transform: uppercase;
     color: #5a6380;
@@ -90,7 +102,7 @@
   .dot.red   { background: #e5484d; }
   .dot.amber { background: #f5a623; box-shadow: 0 0 8px #f5a62388; }
   .name { flex: 1; font-size: 14px; }
-  .val  { font-size: 12px; font-family: 'Courier New', Courier, monospace; }
+  .val  { font-size: 13px; font-family: 'Courier New', Courier, monospace; }
   .ok   { color: #26bf6e; }
   .bad  { color: #e5484d; }
   .muted{ color: #5a6380; }
@@ -98,7 +110,7 @@
     background: #1e2235;
     border: 1px solid #2e3352;
     color: #dce4f5;
-    font-size: 12px;
+    font-size: 13px;
     padding: 4px 12px;
     border-radius: 2px;
     cursor: pointer;
@@ -117,7 +129,7 @@
     justify-content: space-between;
     padding: 10px 0;
     border-bottom: 1px solid #1a1e30;
-    font-size: 13px;
+    font-size: 14px;
     color: #5a6380;
   }
   .info-row:last-child { border-bottom: none; }

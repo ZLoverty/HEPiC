@@ -1,10 +1,10 @@
 <script>
+  import { onDestroy } from 'svelte';
   import LineChart from '../components/LineChart.svelte';
   import { api } from '../lib/api.js';
   import { sensorData, qcState, qcForceHistory } from '../lib/stores.js';
 
   // ── Ephemeral UI state: material picker lists ─────────────────────
-  // These are fetch results for the dropdowns, not session state.
   let families  = [];
   let piCodes   = [];
   let loadFam   = true;
@@ -14,14 +14,78 @@
   // ── Derived display values ────────────────────────────────────────
   $: fMin       = $qcState.material?.force_range?.[0] ?? null;
   $: fMax       = $qcState.material?.force_range?.[1] ?? null;
-  $: curForce   = $sensorData.extrusion_force_N;
+  $: liveTemp   = $sensorData.hotend_temperature;
+  $: liveFeed   = $sensorData.feedrate_mms;
+
+  // The reading is frozen in the qcState store the instant the run finishes
+  // (see App.svelte's STOP_QUALITY_CHECK handler), so the inspector has time
+  // to record it instead of watching it keep drifting toward zero. Keeping
+  // the snapshot in the store (rather than component-local state) means it
+  // survives navigating away from this page and back before hitting "完成".
+  $: curForce   = $qcState.phase === 'done' ? $qcState.frozenForce : $sensorData.extrusion_force_N;
   $: forceColor = (() => {
     if (curForce === null || !isFinite(curForce) || fMin === null) return '#f5a623';
     if (curForce < fMin || curForce > fMax) return '#e5484d';
     return '#26bf6e';
   })();
 
-  // ── Init: load family list; restore pi codes if family was already set ──
+  // ── Progress tracking ─────────────────────────────────────────────
+  // Extrude duration comes from material data (mirrors the gcode builder logic).
+  $: extrudeDurationMs = (() => {
+    const mat = $qcState.material;
+    if (!mat?.speed) return 60000;
+    const len = mat.quality_check_extrude_length_mm ?? (mat.speed * 60);
+    return (len / mat.speed) * 1000;
+  })();
+
+  let tickProgress = 0;   // 0-1, updated by interval during extrusion
+  let extrudeTimer = null;
+
+  // Start/stop timer based on whether extrusion has begun.
+  $: {
+    if ($qcState.extrudeStartedAt && $qcState.phase === 'running') {
+      if (!extrudeTimer) {
+        extrudeTimer = setInterval(() => {
+          const elapsed = Date.now() - $qcState.extrudeStartedAt;
+          tickProgress  = Math.min(elapsed / extrudeDurationMs, 1);
+        }, 250);
+      }
+    } else {
+      clearInterval(extrudeTimer);
+      extrudeTimer  = null;
+      tickProgress  = 0;
+    }
+  }
+
+  // Unified 0-1 progress value across all phases.
+  $: qcProgress = (() => {
+    if ($qcState.phase === 'idle') return 0;
+    if ($qcState.phase === 'done') return 1;
+    if ($qcState.extrudeStartedAt)
+      return 0.30 + tickProgress * 0.68;   // 30 %→98 % during extrusion
+    // Pre-extrusion: rough estimate from status message
+    const msg = $qcState.statusMsg;
+    if (msg.includes('归零')) return 0.18;
+    if (msg.includes('加热')) return 0.05;
+    return 0.02;
+  })();
+
+  $: qcPct          = Math.round(qcProgress * 100);
+  $: isIndeterminate = $qcState.phase === 'running' && !$qcState.extrudeStartedAt
+                       && $qcState.statusMsg.includes('加热');
+
+  // Standard deviation over the 30 s rolling window stored in qcForceHistory.
+  $: stdDev30s = (() => {
+    const pts = $qcForceHistory.filter(v => v !== null && isFinite(v));
+    if (pts.length < 2) return null;
+    const mean = pts.reduce((a, b) => a + b, 0) / pts.length;
+    const variance = pts.reduce((s, v) => s + (v - mean) ** 2, 0) / pts.length;
+    return Math.sqrt(variance);
+  })();
+
+  onDestroy(() => { clearInterval(extrudeTimer); });
+
+  // ── Init: load family list ────────────────────────────────────────
   api.materials.families()
     .then(d => { families = d.families ?? []; })
     .catch(console.error)
@@ -55,23 +119,22 @@
   }
 
   // ── QC session actions ────────────────────────────────────────────
-  // No WebSocket management here. App.svelte opens /api/qc/stream
-  // when phase === 'running' and closes it when phase leaves 'running'.
-
   async function startQC() {
     if (!$qcState.family || !$qcState.piCode) return;
     qcForceHistory.set([]);
-    qcState.update(s => ({ ...s, phase: 'running', statusMsg: '正在启动...' }));
+    qcState.update(s => ({ ...s, phase: 'running', statusMsg: '正在启动...', extrudeStartedAt: null, frozenForce: null }));
     await api.qc.start($qcState.family, $qcState.piCode).catch(console.error);
   }
 
   async function abort() {
-    qcState.update(s => ({ ...s, phase: 'idle', statusMsg: '' }));
+    clearInterval(extrudeTimer);
+    extrudeTimer = null;
+    qcState.update(s => ({ ...s, phase: 'idle', statusMsg: '', extrudeStartedAt: null, frozenForce: null }));
     await api.klipper.emergencyStop().catch(console.error);
   }
 
   function finish() {
-    qcState.update(s => ({ ...s, phase: 'idle', statusMsg: '' }));
+    qcState.update(s => ({ ...s, phase: 'idle', statusMsg: '', extrudeStartedAt: null, frozenForce: null }));
   }
 </script>
 
@@ -155,12 +218,34 @@
     </div>
     <div class="status-text">{$qcState.statusMsg}</div>
 
+    <div class="live-meta">
+      <span class="lm-item"><span class="lm-dot temp"></span>{liveTemp !== null && isFinite(liveTemp) ? Number(liveTemp).toFixed(1) : '--'}&nbsp;°C</span>
+      <span class="lm-item"><span class="lm-dot spd"></span>{liveFeed !== null && isFinite(liveFeed) ? Number(liveFeed).toFixed(1) : '--'}&nbsp;mm/s</span>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="prog-wrap">
+      <div
+        class="prog-bar"
+        class:indeterminate={isIndeterminate}
+        class:done={$qcState.phase === 'done'}
+        style="width:{isIndeterminate ? 100 : qcPct}%"
+      ></div>
+      <span class="prog-pct" class:done={$qcState.phase === 'done'}>{qcPct}%</span>
+    </div>
+
     <div class="force-block">
-      <div class="force-label">挤出力</div>
-      <div class="force-num" style="color:{forceColor}; text-shadow:0 0 32px {forceColor}55">
-        {curForce !== null && isFinite(curForce) ? Number(curForce).toFixed(2) : '---'}
+      <div class="force-main">
+        <div class="force-label">挤出力</div>
+        <div class="force-num" style="color:{forceColor}; text-shadow:0 0 32px {forceColor}55">
+          {curForce !== null && isFinite(curForce) ? Number(curForce).toFixed(2) : '---'}
+        </div>
       </div>
-      <div class="force-unit">N</div>
+      <div class="force-std">
+        <div class="std-num">
+          ±{stdDev30s !== null ? stdDev30s.toFixed(3) : '---'}
+        </div>
+      </div>
     </div>
 
     {#if fMin !== null}
@@ -193,37 +278,37 @@
     flex: 1.15; padding: 14px 16px;
     display: flex; flex-direction: column; gap: 10px;
   }
-  .divv { width: 1px; background: #1e2235; margin: 12px 0; }
+  .divv { width: 1px; background: #252d48; margin: 12px 0; }
   .col-title {
-    font-size: 9px; letter-spacing: .14em; text-transform: uppercase;
-    color: #5a6380; font-family: system-ui, sans-serif;
+    font-size: 13px; letter-spacing: .12em; text-transform: uppercase;
+    color: #7888b0; font-family: system-ui, sans-serif;
   }
   .chip-grid { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip {
     height: 52px; min-width: 72px; padding: 0 14px;
-    background: #131623; border: 1px solid #1e2235;
-    color: #dce4f5; font-size: 14px;
+    background: #1a1f35; border: 1px solid #252d48;
+    color: #eef2ff; font-size: 14px;
     font-family: 'Courier New', Courier, monospace;
     border-radius: 2px; cursor: pointer;
     transition: background .1s, border-color .1s, color .1s;
   }
-  .chip:active { background: #1a1e30; }
-  .chip.sel { background: #0f1a38; border-color: #5b8dee; color: #5b8dee; }
-  .muted { color: #3d4560; font-size: 13px; font-family: system-ui, sans-serif; }
+  .chip:active { background: #252d48; }
+  .chip.sel { background: #0f1a38; border-color: #7aa5f4; color: #7aa5f4; }
+  .muted { color: #5a6888; font-size: 14px; font-family: system-ui, sans-serif; }
 
   .mat-card {
-    background: #0e1020; border: 1px solid #1e2235;
+    background: #131828; border: 1px solid #252d48;
     padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;
   }
   .mat-row {
     display: flex; justify-content: space-between;
-    align-items: baseline; font-size: 12px;
+    align-items: baseline; font-size: 14px;
   }
-  .mk { color: #5a6380; font-family: system-ui, sans-serif; }
-  .mv { color: #dce4f5; font-family: system-ui, sans-serif; }
+  .mk { color: #7888b0; font-family: system-ui, sans-serif; }
+  .mv { color: #eef2ff; font-family: system-ui, sans-serif; }
   .mono   { font-family: 'Courier New', Courier, monospace !important; }
   .orange { color: #f97316 !important; }
-  .blue   { color: #5b8dee  !important; }
+  .blue   { color: #7aa5f4  !important; }
   .amber  { color: #f5a623  !important; }
 
   .start-btn {
@@ -233,44 +318,105 @@
     font-family: system-ui, sans-serif; letter-spacing: .04em;
     border-radius: 2px; cursor: pointer; transition: background .12s;
   }
-  .start-btn:active { background: #26bf6e; color: #0b0d14; }
+  .start-btn:active { background: #26bf6e; color: #141824; }
 
   /* ── Running / Done ──────────────────────────────────────── */
   .running { width: 100%; height: 100%; display: flex; }
   .force-col {
     width: 272px; flex-shrink: 0;
-    border-right: 1px solid #1e2235;
+    border-right: 1px solid #252d48;
     padding: 14px 16px;
     display: flex; flex-direction: column; gap: 4px;
   }
   .phase-badge {
     display: inline-flex; align-items: center;
-    font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
-    color: #5b8dee; font-family: system-ui, sans-serif; gap: 6px;
+    font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+    color: #7aa5f4; font-family: system-ui, sans-serif; gap: 6px;
   }
   .phase-badge::before {
     content: ''; display: inline-block; width: 7px; height: 7px;
-    border-radius: 50%; background: #5b8dee; box-shadow: 0 0 7px #5b8deeaa;
+    border-radius: 50%; background: #7aa5f4; box-shadow: 0 0 7px #7aa5f4aa;
   }
   .phase-badge.done { color: #26bf6e; }
   .phase-badge.done::before { background: #26bf6e; box-shadow: 0 0 7px #26bf6eaa; }
+
   .status-text {
-    font-size: 12px; color: #5a6380;
-    font-family: system-ui, sans-serif; min-height: 18px; margin-bottom: 4px;
+    font-size: 14px; color: #7888b0;
+    font-family: system-ui, sans-serif; min-height: 18px;
   }
-  .force-block { display: flex; flex-direction: column; gap: 0; margin: auto 0; }
+
+  .live-meta {
+    display: flex; gap: 14px; margin-bottom: 2px;
+    font-size: 12px; color: #9aa8cc;
+    font-family: 'Courier New', Courier, monospace;
+  }
+  .lm-item { display: flex; align-items: center; gap: 5px; }
+  .lm-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .lm-dot.temp { background: #f97316; }
+  .lm-dot.spd  { background: #7aa5f4; }
+
+  /* ── Progress bar ─────────────────────────────────────── */
+  .prog-wrap {
+    position: relative;
+    height: 5px;
+    background: #1a1f35;
+    border-radius: 3px;
+    margin: 6px 0 14px;
+    overflow: hidden;
+  }
+  .prog-bar {
+    height: 100%;
+    background: #7aa5f4;
+    border-radius: 3px;
+    transition: width .4s ease;
+  }
+  .prog-bar.done { background: #26bf6e; }
+
+  @keyframes sweep {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(100%);  }
+  }
+  .prog-bar.indeterminate {
+    background: linear-gradient(90deg, #1a2a50 30%, #7aa5f4 50%, #1a2a50 70%);
+    background-size: 200% 100%;
+    animation: sweep 1.6s ease-in-out infinite;
+    width: 100% !important;
+  }
+  .prog-pct {
+    position: absolute;
+    right: 0;
+    top: -20px;
+    font-size: 13px;
+    color: #7aa5f4;
+    font-family: 'Courier New', Courier, monospace;
+  }
+  .prog-pct.done { color: #26bf6e; }
+
+  .force-block {
+    display: flex; flex-direction: row; gap: 0; margin: auto 0;
+    align-items: flex-end;
+  }
+  .force-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+  .force-std  {
+    display: flex; flex-direction: column; align-items: flex-end;
+    padding-left: 12px; flex-shrink: 0;
+  }
   .force-label {
-    font-size: 9px; letter-spacing: .16em; text-transform: uppercase;
-    color: #5a6380; font-family: system-ui, sans-serif;
+    font-size: 13px; letter-spacing: .14em; text-transform: uppercase;
+    color: #7888b0; font-family: system-ui, sans-serif;
   }
   .force-num {
     font-family: 'Courier New', Courier, monospace;
-    font-size: 76px; font-weight: 700; line-height: 1;
+    font-size: 60px; font-weight: 700; line-height: 1;
     transition: color .3s, text-shadow .3s;
   }
-  .force-unit { font-size: 22px; color: #5a6380; font-family: system-ui, sans-serif; }
+  .std-num {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 20px; font-weight: 700; line-height: 1;
+    color: #eef2ff;
+  }
   .ref-range {
-    font-size: 11px; color: #5a6380;
+    font-size: 13px; color: #7888b0;
     font-family: 'Courier New', Courier, monospace; margin-top: 4px;
   }
   .run-actions { margin-top: auto; }
@@ -282,6 +428,6 @@
   .abort-btn { background: #220e0e; border: 1px solid #e5484d; color: #e5484d; }
   .abort-btn:active { background: #e5484d; color: #fff; }
   .done-btn  { background: #0b2016; border: 1px solid #26bf6e; color: #26bf6e; }
-  .done-btn:active  { background: #26bf6e; color: #0b0d14; }
+  .done-btn:active  { background: #26bf6e; color: #141824; }
   .run-chart { flex: 1; min-width: 0; padding: 6px 6px 6px 2px; }
 </style>

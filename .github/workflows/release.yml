@@ -40,7 +40,7 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: pip install -e . pyinstaller pyinstaller-hooks-contrib
+        run: pip install -e ".[ui]" pyinstaller pyinstaller-hooks-contrib
 
       # The git tag is the single source of truth for a release.
       # We derive the version from it and fail fast if the packaged

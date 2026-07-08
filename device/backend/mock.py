@@ -46,6 +46,7 @@ class MockKlipperWorker:
         self.target_hotend_temperature: float = 0.0
         self.active_feedrate_mms: float = 0.0
         self.progress: float = 0.0
+        self.klippy_state: str = "ready"
         self._running = False
 
     async def run(self):
@@ -75,9 +76,11 @@ class MockKlipperWorker:
     async def emergency_stop(self):
         logger.warning("[MOCK] Emergency stop!")
         self.target_hotend_temperature = 0.0
+        self.klippy_state = "shutdown"
 
     async def restart_firmware(self):
         logger.info("[MOCK] Firmware restart")
+        self.klippy_state = "ready"
 
     def subscribe_responses(self) -> asyncio.Queue:
         return asyncio.Queue()

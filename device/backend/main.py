@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import load_config
 from .state import AppState
-from .routers import klipper, materials, quality_check, sensors
+from .routers import klipper, materials, quality_check, sensors, system
 
 
 @asynccontextmanager
@@ -32,6 +32,7 @@ def create_app() -> FastAPI:
     app.include_router(materials.router,      prefix="/api/materials", tags=["materials"])
     app.include_router(quality_check.router,  prefix="/api/qc",        tags=["quality_check"])
     app.include_router(sensors.router,        prefix="/ws",            tags=["sensors"])
+    app.include_router(system.router,         prefix="/api/system",    tags=["system"])
 
     # Serve the built frontend. Must come last so API routes take priority.
     static_dir = Path(__file__).parent / "static"

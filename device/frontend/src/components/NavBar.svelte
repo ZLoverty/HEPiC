@@ -7,7 +7,6 @@
 
   const tabs = [
     { label: '仪表盘' },
-    { label: '手动控制' },
     { label: '质检模式' },
     { label: '设置' },
   ];
@@ -30,14 +29,6 @@
             <rect x="3" y="14" width="7" height="7" rx="1"/>
           </svg>
         {:else if i === 1}
-          <!-- manual: sliders -->
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-            <line x1="4" y1="8" x2="20" y2="8"/>
-            <circle cx="15" cy="8" r="3" fill="var(--bg-nav)"/>
-            <line x1="4" y1="16" x2="20" y2="16"/>
-            <circle cx="9" cy="16" r="3" fill="var(--bg-nav)"/>
-          </svg>
-        {:else if i === 2}
           <!-- qc: circle + checkmark -->
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="9"/>
@@ -64,13 +55,13 @@
 </nav>
 
 <style>
-  :root { --bg-nav: #0a0c14; }
+  :root { --bg-nav: #0f1220; }
 
   nav {
     height: 64px;
     flex-shrink: 0;
-    background: #0a0c14;
-    border-top: 1px solid #1e2235;
+    background: #0f1220;
+    border-top: 1px solid #252d48;
     display: flex;
     position: relative;
   }
@@ -81,7 +72,7 @@
     align-items: center;
     justify-content: center;
     gap: 4px;
-    color: #3d4560;
+    color: #5a6888;
     background: none;
     border: none;
     border-top: 2px solid transparent;
@@ -90,17 +81,17 @@
     padding: 0;
   }
   .tab:active  { opacity: .65; }
-  .tab.active  { color: #5b8dee; border-top-color: #5b8dee; }
+  .tab.active  { color: #7aa5f4; border-top-color: #7aa5f4; }
   .icon {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     display: flex;
     align-items: center;
     justify-content: center;
   }
   .icon svg { width: 100%; height: 100%; }
   .label {
-    font-size: 11px;
+    font-size: 14px;
     font-family: system-ui, sans-serif;
     letter-spacing: .02em;
   }
