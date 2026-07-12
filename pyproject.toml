@@ -57,4 +57,4 @@ exclude = ["notebooks*", "test*", "tests*", "docs*"]  # 明确排除实验、测
 namespaces = false
 
 [tool.setuptools.package-data]
-HEPiC = ["database/materials/*.yaml"]
+HEPiC = ["database/materials/*.yaml", "database/materials/*.json"]
