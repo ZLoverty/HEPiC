@@ -144,7 +144,10 @@ class QualityCheckWidget(QWidget):
 
             material_db = get_material_database()
             self.set_material_families(material_db.get_material_families())
-            self.logger.info("Material properties initialized from database")
+            self.logger.info(
+                "Material properties initialized from database (version=%s)",
+                material_db.get_version(),
+            )
         except Exception as exc:
             self.logger.error(f"Failed to initialize material properties: {exc}")
 

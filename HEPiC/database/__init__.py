@@ -5,5 +5,6 @@
 """
 
 from .material_database import MaterialDatabase, get_material_database
+from .materials_sync import sync_materials
 
-__all__ = ["MaterialDatabase", "get_material_database"]
+__all__ = ["MaterialDatabase", "get_material_database", "sync_materials"]

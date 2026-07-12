@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import logging
 from pathlib import Path
 from typing import Any, Optional
@@ -19,17 +20,36 @@ class MaterialDatabase:
     def __init__(self, materials_dir: Optional[Path] = None):
         self.logger = logging.getLogger(__name__)
         if materials_dir is None:
-            materials_dir = Path(__file__).parent / "materials"
+            from .materials_sync import get_cache_dir
+
+            materials_dir = get_cache_dir()
 
         self.materials_dir = materials_dir
         self.material_families: dict[str, dict[str, dict[str, Any]]] = {}
         self.materials: dict[str, dict[str, Any]] = {}
+        self.version: Optional[str] = None
         self.load()
 
     def load(self):
         """Load all material definitions from YAML files."""
         self.material_families = {}
         self.materials = {}
+
+        # Fall back to the bundled snapshot if the synced cache is missing or
+        # empty (e.g. sync_materials() was never called, or has no network yet).
+        from .materials_sync import BUNDLED_MATERIALS_DIR
+
+        if self.materials_dir != BUNDLED_MATERIALS_DIR:
+            has_synced_data = self.materials_dir.exists() and any(self.materials_dir.glob("*.yaml"))
+            if not has_synced_data and BUNDLED_MATERIALS_DIR.exists():
+                self.logger.warning(
+                    "No synced material data in %s; falling back to bundled snapshot at %s",
+                    self.materials_dir,
+                    BUNDLED_MATERIALS_DIR,
+                )
+                self.materials_dir = BUNDLED_MATERIALS_DIR
+
+        self.version = self._load_manifest_version()
 
         if not self.materials_dir.exists():
             self.logger.warning(f"Material database directory not found: {self.materials_dir}")
@@ -44,11 +64,31 @@ class MaterialDatabase:
             self._load_yaml_file(yaml_file)
 
         self.logger.info(
-            "Loaded %s material families and %s materials from %s",
+            "Loaded %s material families and %s materials from %s (version=%s)",
             len(self.material_families),
             len(self.materials),
             self.materials_dir,
+            self.version or "unknown",
         )
+
+    def _load_manifest_version(self) -> Optional[str]:
+        """Read the data version out of manifest.json, if one is present."""
+        manifest_file = self.materials_dir / "manifest.json"
+        if not manifest_file.exists():
+            return None
+
+        try:
+            with open(manifest_file, "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+            version = manifest.get("version")
+            return str(version) if version else None
+        except Exception as exc:
+            self.logger.warning(f"Failed to read material manifest {manifest_file}: {exc}")
+            return None
+
+    def get_version(self) -> str:
+        """Get the loaded material database's data version, for diagnostics."""
+        return self.version or "unknown"
 
     def _load_yaml_file(self, yaml_file: Path):
         try:

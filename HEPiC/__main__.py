@@ -12,7 +12,7 @@ if __name__ == "__main__" and not __package__ and "__compiled__" not in globals(
     __package__ = package_dir.name
 
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QTabWidget, QStackedWidget
+    QApplication, QMainWindow, QTabWidget, QStackedWidget, QLabel
 )
 from PySide6.QtCore import Signal, Slot, QThread, QTimer
 import pyqtgraph as pg
@@ -203,6 +203,7 @@ class MainWindow(QMainWindow):
 
         # 设置状态栏
         self.statusBar().showMessage("准备就绪")
+        self._init_material_db_status_label()
 
         # --- 连接信号与槽 ---
         self.connection_widget.host.connect(self.update_host_and_connect)
@@ -217,7 +218,20 @@ class MainWindow(QMainWindow):
         self.job_sequence_widget.gcode_widget.sigFilePath.connect(lambda _: self.tabs.setCurrentIndex(0))
         
         # --- 质检模式的材料属性会在第一次显示时自动初始化 ---
-        
+
+    def _init_material_db_status_label(self):
+        """Show the loaded material database's data version in the status bar for quick troubleshooting."""
+        try:
+            from .database import get_material_database
+
+            version = get_material_database().get_version()
+        except Exception as exc:
+            self.logger.error(f"Failed to read material database version: {exc}")
+            version = "unknown"
+
+        self.material_db_label = QLabel(f"材料库 v{version}")
+        self.statusBar().addPermanentWidget(self.material_db_label)
+
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
         self._session_start = time.monotonic()
@@ -720,6 +734,9 @@ def start_app():
     ############################
 
     # Request 1ms timer resolution on Windows so QTimer fires accurately at high frequencies.
+
+    from .database import sync_materials
+    sync_materials()
 
     app = QApplication(sys.argv)
     window = MainWindow(test_mode=args.test)
