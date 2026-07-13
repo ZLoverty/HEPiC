@@ -23,15 +23,15 @@ keywords = ["tools", "automation", "sdk"]
 # ========================================================
 dependencies = [
     "PyYAML",
-    "numpy==1.26",
+    "numpy>=2.0", # Optris SDK bindings >=10.0.1 require numpy>=2.0.0
 ]
 
 [project.optional-dependencies]
 ui = [
-    "pandas>=2.2,<3.0",
+    "pandas>=2.2.2,<3.0", # 2.2.2 is the first release with real numpy 2.0 support
     "pyside6",
     "pyqtgraph",
-    "opencv-python==4.8.1.78", # for compatibility with Optris camera SDK
+    "opencv-python>=4.10", # first opencv-python builds with numpy 2.0 support
     "qasync",
     "websockets",
     "aiohttp",
