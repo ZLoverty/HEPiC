@@ -83,17 +83,24 @@ def _fetch_latest_release() -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
-def _verify_checksums(extracted_dir: Path, manifest: dict) -> bool:
-    for filename, expected in manifest.get("families", {}).items():
-        expected_hash = expected.split(":", 1)[-1]
-        family_file = extracted_dir / "families" / filename
-        if not family_file.exists():
-            logger.warning("Downloaded material archive is missing %s", filename)
-            return False
-        actual_hash = hashlib.sha256(family_file.read_bytes()).hexdigest()
-        if actual_hash != expected_hash:
-            logger.warning("Checksum mismatch for %s in downloaded material archive", filename)
-            return False
+def _verify_zip_digest(zip_path: Path, expected_digest: Optional[str]) -> bool:
+    """Verify zip_path against the sha256 digest GitHub reports for the release asset.
+
+    GitHub computes and serves this digest itself (Releases API `digest` field),
+    so there is no need to separately maintain per-file checksums in manifest.json.
+    """
+    if not expected_digest:
+        logger.warning("Release asset has no digest to verify against; skipping integrity check")
+        return True
+    if not expected_digest.startswith("sha256:"):
+        logger.warning("Unsupported digest algorithm in %s; skipping integrity check", expected_digest)
+        return True
+
+    actual = hashlib.sha256(zip_path.read_bytes()).hexdigest()
+    expected = expected_digest.split(":", 1)[1]
+    if actual != expected:
+        logger.warning("materials.zip digest mismatch: expected %s, got %s", expected, actual)
+        return False
     return True
 
 
@@ -134,32 +141,27 @@ def sync_materials() -> Path:
             logger.info("Material database already up to date (version=%s)", local_version)
             return cache_dir
 
-        asset_url = next(
-            (
-                asset["browser_download_url"]
-                for asset in release.get("assets", [])
-                if asset.get("name") == "materials.zip"
-            ),
+        asset = next(
+            (a for a in release.get("assets", []) if a.get("name") == "materials.zip"),
             None,
         )
-        if not asset_url:
+        if not asset:
             logger.warning("hepic_database release %s has no materials.zip asset", remote_tag)
             return cache_dir
 
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             zip_path = tmp_path / "materials.zip"
-            with urllib.request.urlopen(asset_url, timeout=REQUEST_TIMEOUT) as response, open(zip_path, "wb") as f:
+            with urllib.request.urlopen(asset["browser_download_url"], timeout=REQUEST_TIMEOUT) as response, open(zip_path, "wb") as f:
                 shutil.copyfileobj(response, f)
+
+            if not _verify_zip_digest(zip_path, asset.get("digest")):
+                logger.error("Downloaded materials.zip failed integrity check; keeping local cache")
+                return cache_dir
 
             extract_dir = tmp_path / "extracted"
             with zipfile.ZipFile(zip_path) as zf:
                 zf.extractall(extract_dir)
-
-            manifest = json.loads((extract_dir / "manifest.json").read_text(encoding="utf-8"))
-            if not _verify_checksums(extract_dir, manifest):
-                logger.error("Downloaded material database failed checksum verification; keeping local cache")
-                return cache_dir
 
             # hepic_database repo layout nests family files under families/;
             # MaterialDatabase expects them flat alongside manifest.json.
