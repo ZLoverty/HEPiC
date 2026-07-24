@@ -24,6 +24,7 @@ class MaterialDatabase:
 
             materials_dir = get_cache_dir()
 
+        self._configured_dir = materials_dir
         self.materials_dir = materials_dir
         self.material_families: dict[str, dict[str, dict[str, Any]]] = {}
         self.materials: dict[str, dict[str, Any]] = {}
@@ -31,9 +32,16 @@ class MaterialDatabase:
         self.load()
 
     def load(self):
-        """Load all material definitions from YAML files."""
+        """Load all material definitions from YAML files.
+
+        Re-resolves from self._configured_dir (not the possibly-fallen-back
+        self.materials_dir from a prior load()) so that calling load() again
+        after sync_materials() populates the cache picks up the synced data
+        instead of being stuck on the bundled snapshot forever.
+        """
         self.material_families = {}
         self.materials = {}
+        self.materials_dir = self._configured_dir
 
         # Fall back to the bundled snapshot if the synced cache is missing or
         # empty (e.g. sync_materials() was never called, or has no network yet).

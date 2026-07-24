@@ -1,1 +1,1 @@
-rsync -avz --delete ../backend/static/ etpi@192.168.112.79:/home/etpi/HEPiC/device/backend/static/
+rsync -avz --delete ../backend/static/ etpi@192.168.112.79:/home/etpi/hepic_device/backend/static/

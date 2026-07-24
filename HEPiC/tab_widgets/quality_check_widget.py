@@ -6,6 +6,7 @@ from datetime import datetime
 import numpy as np
 import pyqtgraph as pg
 
+from ..database import QcHistoryRecord, get_qc_history_store
 from ..quality_check import (
     DEFAULT_MATERIAL_FAMILIES,
     build_quality_check_gcode,
@@ -30,7 +31,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from PySide6.QtGui import QColor, QTextCharFormat, QTextCursor
+from PySide6.QtGui import QColor, QFont, QTextCharFormat, QTextCursor
 
 _LABEL_STYLE = "font-size: 9pt; color: #888888;"
 _VALUE_STYLE = "font-size: 12pt;"
@@ -120,9 +121,11 @@ class QualityCheckWidget(QWidget):
         self._progress_elapsed_ms = 0
 
         self._last_evaluation = None
-        self._quality_check_history: list[tuple[str, str]] = []
+        self._qc_history_store = get_qc_history_store()
+        self._quality_check_history: list[QcHistoryRecord] = []
 
         self.init_ui()
+        self._load_quality_check_history()
 
         self.data_timer = QTimer(self)
         self.data_timer.timeout.connect(self.on_data_update_timeout)
@@ -175,21 +178,36 @@ class QualityCheckWidget(QWidget):
         panel.setMaximumWidth(350)
         return panel
 
-    def _record_quality_check_result(self):
-        """Append one row to the quality-check history (newest first)."""
-        timestamp = datetime.now().strftime("%H:%M")
-        pi_code = self.get_current_pi_code()
+    def _load_quality_check_history(self):
+        """Load persisted history from disk on startup."""
+        try:
+            self._quality_check_history = self._qc_history_store.list_recent()
+        except Exception as exc:
+            self.logger.error(f"Failed to load QC history: {exc}")
+            self._quality_check_history = []
+        self._render_history()
 
-        if self._last_evaluation is not None:
-            ev = self._last_evaluation
-            body = f"{ev.mean:.2f} ± {ev.std:.2f} N ({pi_code})"
-        else:
-            body = f"数据不足 ({pi_code})"
-        self._quality_check_history.insert(0, (timestamp, body))
+    def _record_quality_check_result(self):
+        """Persist one finished QC run to disk and refresh the history panel."""
+        pi_code = self.get_current_pi_code()
+        family = self.get_current_family()
+        ev = self._last_evaluation
+        mean_force = ev.mean if ev is not None else None
+        std_force = ev.std if ev is not None else None
+
+        try:
+            record = self._qc_history_store.add(
+                family=family, pi_code=pi_code, mean_force=mean_force, std_force=std_force,
+            )
+            self._quality_check_history.insert(0, record)
+        except Exception as exc:
+            self.logger.error(f"Failed to persist QC history: {exc}")
         self._render_history()
 
     def _render_history(self):
-        """Render the history with grey timestamps, matching CommandWidget."""
+        """Render history grouped under bold date headers, newest first."""
+        date_tf = QTextCharFormat()
+        date_tf.setFontWeight(QFont.Weight.Bold)
         timestamp_tf = QTextCharFormat()
         timestamp_tf.setForeground(QColor("#999999"))
         body_tf = QTextCharFormat()
@@ -197,8 +215,23 @@ class QualityCheckWidget(QWidget):
         self.history_text.clear()
         cursor = self.history_text.textCursor()
         cursor.movePosition(QTextCursor.End)
-        for timestamp, body in self._quality_check_history:
-            cursor.insertText(f"{timestamp}  ", timestamp_tf)
+
+        last_date = None
+        for rec in self._quality_check_history:
+            dt = datetime.fromisoformat(rec.timestamp)
+            date_str = dt.strftime("%Y-%m-%d")
+            if date_str != last_date:
+                if last_date is not None:
+                    cursor.insertText("\n")
+                cursor.insertText(f"{date_str}\n", date_tf)
+                last_date = date_str
+
+            time_str = dt.strftime("%H:%M")
+            if rec.mean_force is not None and rec.std_force is not None:
+                body = f"{rec.mean_force:.2f} ± {rec.std_force:.2f} N ({rec.pi_code or '--'})"
+            else:
+                body = f"数据不足 ({rec.pi_code or '--'})"
+            cursor.insertText(f"  {time_str}  ", timestamp_tf)
             cursor.insertText(f"{body}\n", body_tf)
 
     def _make_info_block(self, title: str) -> tuple[QFrame, QVBoxLayout]:
