@@ -9,13 +9,18 @@ import numpy as np
 from vision_utils import ImageStreamer
 import logging
 
+logger = logging.getLogger(__name__)
+
+# 这里特意捕获导入失败：test_mode 下 IRWorker 本来就不需要 OptrisCamera，
+# 所以由 IRWorker（知道 test_mode 上下文的调用方）决定是否需要这个依赖，
+# 而不是让 optris_camera.py 自己吞掉错误。非 test_mode 时是否可用见 __init__ 里的检查。
 OPTRIS_LIB_LOADED = False
 try:
     from .optris_camera import OptrisCamera
     OPTRIS_LIB_LOADED = True
-except Exception as e:
-    print(f"Fail to load Optris camera lib.")
-        
+except Exception:
+    logger.exception("Failed to load Optris camera lib; IRWorker will only work in test_mode.")
+
 class IRWorker(QObject):
 
     sigNewFrame = Signal(np.ndarray)
@@ -36,10 +41,14 @@ class IRWorker(QObject):
         self._latest_frame: np.ndarray | None = None
         self._latest_roi_frame: np.ndarray | None = None
 
-        # logging 
-        self.logger = logging.getLogger(__name__)
+        # logging
+        self.logger = logger
 
         if not self.test_mode:
+            if not OPTRIS_LIB_LOADED:
+                raise RuntimeError(
+                    "Optris camera SDK is not available; IRWorker requires test_mode=True without it."
+                )
             self.ranges = OptrisCamera.list_available_ranges(0)
             self.logger.debug(f"Available Optris ranges: {self.ranges}")
         
