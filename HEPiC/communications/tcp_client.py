@@ -35,10 +35,13 @@ except ImportError:
 
 @dataclass
 class SensorData:
+    """Zeroing happens at the instrument (hepic_server sends a zero/tare command to
+    the sensor hardware), so the value broadcast to clients is already tared —
+    no client-side offset is tracked here."""
+
     name: str
     can_zero: bool = False
     raw_value: float = np.nan
-    offset: float = 0.0
     value: float = np.nan
 
     def update(self, raw_value):
@@ -47,17 +50,7 @@ class SensorData:
             self.value = np.nan
             return
         self.raw_value = float(raw_value)
-        self.value = self.raw_value - self.offset
-
-    def zero(self) -> bool:
-        if not self.can_zero:
-            print(f"Sensor {self.name} is not zeroable.")
-            return False
-        if np.isnan(self.raw_value):
-            return False
-        self.offset = self.raw_value
-        self.value = 0.0
-        return True
+        self.value = self.raw_value
 
 
 class TCPClient(QObject):
@@ -66,6 +59,7 @@ class TCPClient(QObject):
     extrusion_force_signal = Signal(float)
     meter_count_signal = Signal(float)
     sensor_config_received = Signal(list)
+    zero_result_signal = Signal(dict)
 
     def __init__(
         self,
@@ -341,7 +335,16 @@ class TCPClient(QObject):
                             self._ensure_sensor(sensor_name)
                         
                         self.sensor_config_received.emit(self.sensor_columns)
-                        
+
+
+                    if message_type == "zero_result" and isinstance(payload, dict):
+                        results = payload.get("results", {})
+                        failed = [name for name, ok in results.items() if not ok]
+                        if failed:
+                            self.logger.warning(f"Zero command failed for: {failed}")
+                        else:
+                            self.logger.info(f"Zero command succeeded: {list(results)}")
+                        self.zero_result_signal.emit(results)
 
                     if message_type == "sensor_data" and isinstance(payload, dict):
                         filtered_payload = self._filter_payload_by_sensor_columns(payload)
@@ -372,14 +375,14 @@ class TCPClient(QObject):
 
     def zero_sensor(self, sensor_name: str):
         sensor = self.sensor_data_map.get(sensor_name)
-        if not sensor:
-            self.logger.warning(f"Cannot set zero offset for {sensor_name}: sensor not found.")
+        if not sensor or not sensor.can_zero:
+            self.logger.warning(f"Cannot zero {sensor_name}: sensor not found or not zeroable.")
             return
-        if not sensor.zero():
-            self.logger.warning(f"Cannot set zero offset for {sensor_name}: no data or not zeroable.")
-            return
+        asyncio.create_task(self._send_zero_request(sensor_name))
 
-        self.logger.info(f"{sensor.name} offset set to {sensor.offset}")
+    async def _send_zero_request(self, sensor_name: str):
+        await self.send_json({"action": "zero", "sensor": sensor_name})
+        self.logger.info(f"Sent zero request for {sensor_name} to hepic_server.")
 
     def get_zeroable_sensor_names(self) -> list[str]:
         return [name for name, sensor in self.sensor_data_map.items() if sensor.can_zero]
