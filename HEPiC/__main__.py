@@ -13,15 +13,15 @@ if __name__ == "__main__" and not __package__ and "__compiled__" not in globals(
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QStackedWidget, QLabel, QFileDialog,
-    QWidget, QHBoxLayout, QPushButton, QGraphicsOpacityEffect,
+    QWidget, QHBoxLayout, QPushButton, QGraphicsOpacityEffect, QMenu, QDialog,
 )
-from PySide6.QtCore import Signal, Slot, QThread, QTimer, QUrl, Qt, QPropertyAnimation, QEasingCurve
+from PySide6.QtCore import Signal, Slot, QThread, QTimer, QUrl, Qt, QPropertyAnimation, QEasingCurve, QEvent
 from PySide6.QtGui import QDesktopServices, QCursor
 import pyqtgraph as pg
 from collections import deque
 from .communications import TCPClient, KlipperWorker, ConnectionTester
 from .vision import VideoWorker, ProcessingWorker, IRWorker, VideoRecorder
-from .tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget, JobSequenceWidget, DataProcessorWidget, QualityCheckWidget
+from .tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget, JobSequenceWidget, DataProcessorWidget, QualityCheckWidget, SettingsDialog
 from .app_config import (
     build_main_window_stylesheet,
     find_app_file,
@@ -168,8 +168,8 @@ class MainWindow(QMainWindow):
         # color scheme
         self.background_color = self.config.get("background_color", "black")
         self.foreground_color = self.config.get("foreground_color", "white")
-        self.secondary_background_color = self.config.get("gcode_highlight_background", "#435663")
-        self.secondary_foreground_color = self.config.get("hover_color", "#A3B087")
+        self.secondary_background_color = self.config.get("secondary_background", "#435663")
+        self.secondary_foreground_color = self.config.get("secondary_foreground_color", "#A3B087")
 
         self.save_directory = Path(self.config.get("save_directory", "~/Desktop")).expanduser()
 
@@ -205,6 +205,7 @@ class MainWindow(QMainWindow):
         self.tabs.setTabVisible(self.tabs.indexOf(self.vision_page_widget), False)
         self.tabs.setTabVisible(self.tabs.indexOf(self.ir_page_widget), False)
         self.setCentralWidget(self.stacked_widget)
+        self._init_settings_button()
 
         # 设置状态栏
         self.statusBar().showMessage("准备就绪")
@@ -408,6 +409,85 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"默认保存路径已更改为：{self.save_directory}")
         if self._save_banner.isVisible():
             self._show_save_banner()
+
+    def _init_settings_button(self):
+        """Gear icon pinned to the bottom of the vertical tab bar column, flush with the tabs above it."""
+        self.settings_button = QPushButton("⚙", self.tabs)
+        self.settings_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.settings_button.setToolTip("设置")
+        self.settings_button.setFlat(True)
+        self._style_settings_button()
+        self.settings_button.clicked.connect(self._open_settings_menu)
+        self.tabs.installEventFilter(self)
+        QTimer.singleShot(0, self._position_settings_button)
+
+    def _style_settings_button(self):
+        self.settings_button.setStyleSheet(
+            f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {self.foreground_color};
+                border: none;
+                font-size: 22pt;
+            }}
+            QPushButton:hover {{
+                background-color: #88888855;
+            }}
+            """
+        )
+
+    def eventFilter(self, obj, event):
+        if obj is self.tabs and event.type() == QEvent.Type.Resize:
+            self._position_settings_button()
+        return super().eventFilter(obj, event)
+
+    def _position_settings_button(self):
+        # tabBar().width() includes reserved layout space beyond what's actually
+        # drawn for a West-oriented bar; the first tab's rect is the true visible
+        # column width, so the square button matches the tabs above it.
+        side = self.tabs.tabBar().tabRect(0).width()
+        if side <= 0:
+            return
+        self.settings_button.setFixedSize(side, side)
+        y = max(self.tabs.height() - side, 0)
+        self.settings_button.move(0, y)
+        self.settings_button.raise_()
+
+    @Slot()
+    def _open_settings_menu(self):
+        menu = QMenu(self)
+        settings_action = menu.addAction("设置")
+        settings_action.triggered.connect(self._open_settings_dialog)
+        menu.exec(self.settings_button.mapToGlobal(self.settings_button.rect().topRight()))
+
+    @Slot()
+    def _open_settings_dialog(self):
+        dialog = SettingsDialog(self.config, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        self.config.update(dialog.get_values())
+        try:
+            with open(self.config_file, "w", encoding="utf-8") as f:
+                json.dump(self.config, f, indent=4, ensure_ascii=False)
+        except OSError as exc:
+            self.logger.error(f"Failed to persist settings to config: {exc}")
+            return
+
+        self.load_config()
+        self.setStyleSheet(
+            build_main_window_stylesheet(
+                self.background_color,
+                self.foreground_color,
+                self.secondary_background_color,
+                self.secondary_foreground_color,
+            )
+        )
+        pg.setConfigOption("background", self.background_color)
+        pg.setConfigOption("foreground", self.foreground_color)
+        self._style_settings_button()
+        self._position_settings_button()
+        self.statusBar().showMessage("设置已保存，部分设置需重启后生效")
 
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
