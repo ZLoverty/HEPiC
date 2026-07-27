@@ -12,9 +12,11 @@ if __name__ == "__main__" and not __package__ and "__compiled__" not in globals(
     __package__ = package_dir.name
 
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QTabWidget, QStackedWidget, QLabel
+    QApplication, QMainWindow, QTabWidget, QStackedWidget, QLabel, QFileDialog,
+    QWidget, QHBoxLayout, QPushButton, QGraphicsOpacityEffect,
 )
-from PySide6.QtCore import Signal, Slot, QThread, QTimer
+from PySide6.QtCore import Signal, Slot, QThread, QTimer, QUrl, Qt, QPropertyAnimation, QEasingCurve
+from PySide6.QtGui import QDesktopServices, QCursor
 import pyqtgraph as pg
 from collections import deque
 from .communications import TCPClient, KlipperWorker, ConnectionTester
@@ -28,6 +30,7 @@ from .app_config import (
 from . import __app_name__, __version__
 import asyncio
 import csv
+import json
 import threading
 import time
 from qasync import asyncSlot, QEventLoop
@@ -168,6 +171,8 @@ class MainWindow(QMainWindow):
         self.secondary_background_color = self.config.get("gcode_highlight_background", "#435663")
         self.secondary_foreground_color = self.config.get("hover_color", "#A3B087")
 
+        self.save_directory = Path(self.config.get("save_directory", "~/Desktop")).expanduser()
+
     def initUI(self):
         # --- 创建控件 ---
         # 标签栏
@@ -204,6 +209,7 @@ class MainWindow(QMainWindow):
         # 设置状态栏
         self.statusBar().showMessage("准备就绪")
         self._init_material_db_status_label()
+        self._init_save_banner()
 
         # --- 连接信号与槽 ---
         self.connection_widget.host.connect(self.update_host_and_connect)
@@ -231,6 +237,177 @@ class MainWindow(QMainWindow):
 
         self.material_db_label = QLabel(f"材料库 v{version}")
         self.statusBar().addPermanentWidget(self.material_db_label)
+
+    def _init_save_banner(self):
+        """Transient top banner announcing the default save path each time recording starts.
+
+        Auto-dismisses after a few seconds so it never becomes a permanent
+        fixture, but still gives new users a chance to see (and change) the
+        default path without a blocking dialog on every recording.
+        """
+        # A single widget carrying the opacity effect for the fade animation.
+        # Qt's nested-QGraphicsEffect rendering (e.g. a drop shadow on a child
+        # of a widget that itself has an opacity effect) is unreliable and
+        # spams "Painter not active" warnings, so this deliberately avoids a
+        # second effect — a border stands in for the shadow's elevation cue.
+        self._save_banner = QWidget(self)
+        self._save_banner.setObjectName("saveBanner")
+
+        # Light banner on the app's dark theme, so it pops instead of blending in.
+        banner_bg = self.foreground_color
+        banner_text = self.background_color
+        action_hover = self.secondary_foreground_color
+        self._save_banner.setStyleSheet(
+            f"""
+            QWidget#saveBanner {{
+                background-color: {banner_bg};
+                border: 1px solid {self.secondary_foreground_color};
+                border-radius: 10px;
+            }}
+            QLabel#saveBannerText {{
+                color: {banner_text};
+                font-size: 12pt;
+                font-weight: 500;
+                background: transparent;
+            }}
+            QPushButton#saveBannerAction {{
+                background-color: {banner_text};
+                color: {banner_bg};
+                border: none;
+                border-radius: 6px;
+                padding: 6px 14px;
+                font-size: 11pt;
+                font-weight: 600;
+            }}
+            QPushButton#saveBannerAction:hover {{
+                background-color: {action_hover};
+                color: {banner_text};
+            }}
+            QPushButton#saveBannerClose {{
+                background: transparent;
+                color: {banner_text};
+                border: none;
+                font-size: 15pt;
+                font-weight: bold;
+                padding: 0px 6px;
+            }}
+            QPushButton#saveBannerClose:hover {{
+                color: {self.secondary_background_color};
+            }}
+            """
+        )
+        layout = QHBoxLayout(self._save_banner)
+        layout.setContentsMargins(16, 10, 10, 10)
+        layout.setSpacing(10)
+
+        self._save_banner_label = QLabel()
+        self._save_banner_label.setObjectName("saveBannerText")
+        layout.addWidget(self._save_banner_label)
+        layout.addStretch()
+
+        open_btn = QPushButton("打开文件夹")
+        open_btn.setObjectName("saveBannerAction")
+        open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        open_btn.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.save_directory)))
+        )
+        layout.addWidget(open_btn)
+
+        change_btn = QPushButton("修改路径")
+        change_btn.setObjectName("saveBannerAction")
+        change_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        change_btn.clicked.connect(self._choose_save_directory)
+        layout.addWidget(change_btn)
+
+        close_btn = QPushButton("×")
+        close_btn.setObjectName("saveBannerClose")
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.clicked.connect(self._hide_save_banner)
+        layout.addWidget(close_btn)
+
+        self._save_banner_opacity = QGraphicsOpacityEffect(self._save_banner)
+        self._save_banner_opacity.setOpacity(1.0)
+        self._save_banner.setGraphicsEffect(self._save_banner_opacity)
+        self._save_banner_fade_anim = QPropertyAnimation(self._save_banner_opacity, b"opacity", self)
+        self._save_banner_fade_anim.setDuration(300)
+        self._save_banner_fade_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self._save_banner_fade_anim.finished.connect(self._on_save_banner_fade_out_finished)
+
+        self._save_banner.hide()
+        self._save_banner_hide_delay_ms = 2000
+        self._save_banner_timer = QTimer(self)
+        self._save_banner_timer.setSingleShot(True)
+        self._save_banner_timer.timeout.connect(self._start_save_banner_fade_out)
+
+        # Polling the cursor position (rather than relying on Enter/Leave
+        # events) sidesteps Qt delivering Leave to the banner whenever the
+        # cursor moves onto one of its own buttons.
+        self._save_banner_hover_timer = QTimer(self)
+        self._save_banner_hover_timer.setInterval(150)
+        self._save_banner_hover_timer.timeout.connect(self._check_save_banner_hover)
+
+    def _show_save_banner(self):
+        self._save_banner_fade_anim.stop()
+        self._save_banner_opacity.setOpacity(1.0)
+        self._save_banner_label.setText(f"默认保存路径：{self.save_directory}")
+        self._position_save_banner()
+        self._save_banner.show()
+        self._save_banner.raise_()
+        self._save_banner_timer.start(self._save_banner_hide_delay_ms)
+        self._save_banner_hover_timer.start()
+
+    def _start_save_banner_fade_out(self):
+        self._save_banner_hover_timer.stop()
+        self._save_banner_fade_anim.stop()
+        self._save_banner_fade_anim.setStartValue(self._save_banner_opacity.opacity())
+        self._save_banner_fade_anim.setEndValue(0.0)
+        self._save_banner_fade_anim.start()
+
+    def _on_save_banner_fade_out_finished(self):
+        if self._save_banner_opacity.opacity() <= 0.0:
+            self._save_banner.hide()
+
+    def _hide_save_banner(self):
+        """Dismiss immediately (used for the manual close button)."""
+        self._save_banner_timer.stop()
+        self._save_banner_hover_timer.stop()
+        self._save_banner_fade_anim.stop()
+        self._save_banner.hide()
+
+    def _check_save_banner_hover(self):
+        local_pos = self._save_banner.mapFromGlobal(QCursor.pos())
+        hovering = self._save_banner.rect().contains(local_pos)
+        if hovering:
+            self._save_banner_timer.stop()
+        elif not self._save_banner_timer.isActive():
+            self._save_banner_timer.start(self._save_banner_hide_delay_ms)
+
+    def _position_save_banner(self):
+        self._save_banner.adjustSize()
+        x = (self.width() - self._save_banner.width()) // 2
+        self._save_banner.move(max(x, 0), 12)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "_save_banner") and self._save_banner.isVisible():
+            self._position_save_banner()
+
+    def _choose_save_directory(self):
+        chosen = QFileDialog.getExistingDirectory(
+            self, "选择默认保存路径", str(self.save_directory)
+        )
+        if not chosen:
+            return
+        self.save_directory = Path(chosen)
+        self.config["save_directory"] = str(self.save_directory)
+        try:
+            with open(self.config_file, "w", encoding="utf-8") as f:
+                json.dump(self.config, f, indent=4, ensure_ascii=False)
+        except OSError as exc:
+            self.logger.error(f"Failed to persist save_directory to config: {exc}")
+        self.statusBar().showMessage(f"默认保存路径已更改为：{self.save_directory}")
+        if self._save_banner.isVisible():
+            self._show_save_banner()
 
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
@@ -571,10 +748,11 @@ class MainWindow(QMainWindow):
         if checked: 
             self.home_widget.play_pause_button.setIcon(self.home_widget.pause_icon)
             self.autosave_prefix = datetime.now().strftime("%Y%m%d_%H%M%S")
-            self.autosave_filename = Path(f"~/Desktop/{self.autosave_prefix}_autosave.csv").expanduser()
-            
+            self.autosave_filename = self.save_directory / f"{self.autosave_prefix}_autosave.csv"
+
             self.logger.info("开始记录数据 ...")
             self.statusBar().showMessage(f"文件路径：{self.autosave_filename}")
+            self._show_save_banner()
             with self._csv_lock:
                 self._csv_columns = list(self.data_status.keys())
                 self._csv_file = open(self.autosave_filename, "w", newline="", encoding="utf-8")
@@ -583,7 +761,7 @@ class MainWindow(QMainWindow):
             self.is_recording = True
             if self.record_timelapse and self.video_worker:
                 # init video recorder
-                self.autosave_video_filename = Path(f"~/Desktop/{self.autosave_prefix}_video.mkv").expanduser()
+                self.autosave_video_filename = self.save_directory / f"{self.autosave_prefix}_video.mkv"
                 self.video_recorder_thread = VideoRecorder(self.autosave_video_filename, *self.frame_size, fps=self.video_worker.get_fps())
                 self.processing_worker.proc_frame_signal.connect(self.video_recorder_thread.add_frame)
                 self.video_recorder_thread.start()
