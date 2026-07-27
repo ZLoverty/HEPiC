@@ -329,6 +329,7 @@ class MainWindow(QMainWindow):
         self.home_widget.command_widget.command.connect(self.klipper_worker.send_gcode)
 
         self.sigEmergencyStop.connect(self.klipper_worker.emergency_stop)
+        self.quality_check_widget.quality_check_abort_requested.connect(self.klipper_worker.abort_and_recover)
         self.sigProgress.connect(self.status_widget.update_progress)
         self.job_sequence_widget.gcode_widget.sigFilePath.connect(self.klipper_worker.upload_gcode_to_klipper)
         self.job_sequence_widget.gcode_widget.sigActiveGcode.connect(self.klipper_worker.set_active_gcode)
