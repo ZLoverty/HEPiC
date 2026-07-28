@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QProxyStyle, QStyle, QTextBrowser,
 )
 from PySide6.QtCore import Signal, Slot, QThread, QTimer, QUrl, Qt, QPropertyAnimation, QEasingCurve, QEvent
-from PySide6.QtGui import QDesktopServices, QCursor
+from PySide6.QtGui import QDesktopServices, QCursor, QPixmap
 import pyqtgraph as pg
 from collections import deque
 from .communications import TCPClient, KlipperWorker, ConnectionTester
@@ -42,6 +42,8 @@ import logging
 import argparse
 
 
+# TODO(user): 替换为许愿池表单的真实链接
+WISHLIST_FORM_URL = "https://jfpolymers.feishu.cn/share/base/form/shrcndv6WDQz66gzih5Zh9vGu3f"
 
 
 def _show_startup_error(exc):
@@ -120,6 +122,7 @@ class MainWindow(QMainWindow):
         self.logger = logging.getLogger(__name__)
         self.config_file = find_app_file("config.json", Path(__file__), "__compiled__" in globals())
         self.changelog_file = find_bundled_file("CHANGELOG.md", Path(__file__), "__compiled__" in globals())
+        self.wishlist_qrcode_file = find_bundled_file("assets/wishlist_qrcode.png", Path(__file__), "__compiled__" in globals())
         self.load_config()
         self.setWindowTitle(f"{__app_name__} v{__version__}")
         self.setGeometry(0, 0, 1024, 768)
@@ -505,6 +508,10 @@ class MainWindow(QMainWindow):
         save_video_action.toggled.connect(self._on_toggle_record_timelapse)
 
         menu.addSeparator()
+        wishlist_action = menu.addAction("许愿池")
+        wishlist_action.triggered.connect(self._open_wishlist_dialog)
+
+        menu.addSeparator()
         # A drawn QIcon dot gets silently dropped by macOS's native menu rendering,
         # so the "new" marker here is a small plain-text glyph instead.
         changelog_text = "更新日志  ●" if self.settings_update_dot.isVisible() else "更新日志"
@@ -512,6 +519,49 @@ class MainWindow(QMainWindow):
         changelog_action.triggered.connect(self._open_changelog_dialog)
 
         menu.exec(self.settings_button.mapToGlobal(self.settings_button.rect().topRight()))
+
+    @Slot()
+    def _open_wishlist_dialog(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("许愿池")
+        dialog.setModal(True)
+        layout = QVBoxLayout(dialog)
+
+        intro_label = QLabel("扫描二维码或点击下方链接，填写你的许愿/反馈：", dialog)
+        intro_label.setWordWrap(True)
+        layout.addWidget(intro_label)
+
+        qr_label = QLabel(dialog)
+        qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        pixmap = QPixmap(str(self.wishlist_qrcode_file))
+        if pixmap.isNull():
+            qr_label.setText(f"（二维码图片未找到，请放置于：\n{self.wishlist_qrcode_file}）")
+            qr_label.setWordWrap(True)
+        else:
+            # Scale at the screen's actual device-pixel-ratio and tag the pixmap with it,
+            # otherwise it renders soft on Retina/HiDPI displays regardless of source resolution.
+            target_size = 600
+            dpr = self.devicePixelRatioF()
+            scaled = pixmap.scaled(
+                int(target_size * dpr), int(target_size * dpr),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            scaled.setDevicePixelRatio(dpr)
+            qr_label.setPixmap(scaled)
+        layout.addWidget(qr_label)
+
+        link_label = QLabel(f'<a href="{WISHLIST_FORM_URL}">{WISHLIST_FORM_URL}</a>', dialog)
+        link_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        link_label.setOpenExternalLinks(True)
+        link_label.setWordWrap(True)
+        layout.addWidget(link_label)
+
+        close_button = QPushButton("关闭", dialog)
+        close_button.clicked.connect(dialog.accept)
+        layout.addWidget(close_button)
+
+        dialog.exec()
 
     @Slot()
     def _open_changelog_dialog(self):
