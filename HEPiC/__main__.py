@@ -14,6 +14,7 @@ if __name__ == "__main__" and not __package__ and "__compiled__" not in globals(
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QStackedWidget, QLabel, QFileDialog,
     QWidget, QHBoxLayout, QPushButton, QGraphicsOpacityEffect, QMenu, QDialog,
+    QProxyStyle, QStyle,
 )
 from PySide6.QtCore import Signal, Slot, QThread, QTimer, QUrl, Qt, QPropertyAnimation, QEasingCurve, QEvent
 from PySide6.QtGui import QDesktopServices, QCursor
@@ -84,6 +85,21 @@ class _DataCollectorThread(threading.Thread):
 
     def stop(self):
         self._stop_event.set()
+
+
+class _TopAlignedTabBarStyle(QProxyStyle):
+    """Forces the tab bar to start flush with the top-left corner.
+
+    The base style's SH_TabBar_Alignment hint otherwise decides this: macOS
+    styles center the tabs vertically (for a West-positioned bar), while
+    Windows/Fusion styles already left/top-align them. Overriding the hint
+    makes the layout consistent across platforms.
+    """
+
+    def styleHint(self, hint, option=None, widget=None, returnData=None):
+        if hint == QStyle.StyleHint.SH_TabBar_Alignment:
+            return int(Qt.AlignmentFlag.AlignLeft)
+        return super().styleHint(hint, option, widget, returnData)
 
 
 # ====================================================================
@@ -182,6 +198,9 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.setTabPosition(QTabWidget.TabPosition.West) # 关键！把标签放到左边
         self.tabs.setMovable(True) # 让标签页可以拖动排序
+        # 强制标签栏从左上角开始排列，不受操作系统默认对齐方式影响（如 macOS 默认居中）
+        self._tab_bar_style = _TopAlignedTabBarStyle(self.tabs.tabBar().style())
+        self.tabs.tabBar().setStyle(self._tab_bar_style)
         # 标签页们
         self.connection_widget = ConnectionWidget(host=self.host)  
         self.home_widget = HomeWidget(time_window_s=self.plot_time_window_s)
@@ -458,7 +477,17 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         settings_action = menu.addAction("设置")
         settings_action.triggered.connect(self._open_settings_dialog)
+
+        save_video_action = menu.addAction("保存视频")
+        save_video_action.setCheckable(True)
+        save_video_action.setChecked(self.record_timelapse)
+        save_video_action.toggled.connect(self._on_toggle_record_timelapse)
+
         menu.exec(self.settings_button.mapToGlobal(self.settings_button.rect().topRight()))
+
+    @Slot(bool)
+    def _on_toggle_record_timelapse(self, checked):
+        self.record_timelapse = checked
 
     @Slot()
     def _open_settings_dialog(self):
