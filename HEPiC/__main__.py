@@ -13,8 +13,8 @@ if __name__ == "__main__" and not __package__ and "__compiled__" not in globals(
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QStackedWidget, QLabel, QFileDialog,
-    QWidget, QHBoxLayout, QPushButton, QGraphicsOpacityEffect, QMenu, QDialog,
-    QProxyStyle, QStyle,
+    QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QGraphicsOpacityEffect, QMenu, QDialog,
+    QProxyStyle, QStyle, QTextBrowser,
 )
 from PySide6.QtCore import Signal, Slot, QThread, QTimer, QUrl, Qt, QPropertyAnimation, QEasingCurve, QEvent
 from PySide6.QtGui import QDesktopServices, QCursor
@@ -26,6 +26,7 @@ from .tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWi
 from .app_config import (
     build_main_window_stylesheet,
     find_app_file,
+    find_bundled_file,
     load_config as load_app_config,
 )
 from . import __app_name__, __version__
@@ -118,6 +119,7 @@ class MainWindow(QMainWindow):
         self.test_mode = test_mode
         self.logger = logging.getLogger(__name__)
         self.config_file = find_app_file("config.json", Path(__file__), "__compiled__" in globals())
+        self.changelog_file = find_bundled_file("CHANGELOG.md", Path(__file__), "__compiled__" in globals())
         self.load_config()
         self.setWindowTitle(f"{__app_name__} v{__version__}")
         self.setGeometry(0, 0, 1024, 768)
@@ -437,6 +439,16 @@ class MainWindow(QMainWindow):
         self.settings_button.setFlat(True)
         self._style_settings_button()
         self.settings_button.clicked.connect(self._open_settings_menu)
+
+        # Small red dot overlaid on the gear icon when a changelog hasn't been seen yet.
+        self.settings_update_dot = QLabel("", self.tabs)
+        self.settings_update_dot.setStyleSheet(
+            "background-color: #e74c3c; border-radius: 5px;"
+        )
+        self.settings_update_dot.setFixedSize(10, 10)
+        self.settings_update_dot.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._update_changelog_badge()
+
         self.tabs.installEventFilter(self)
         QTimer.singleShot(0, self._position_settings_button)
 
@@ -447,7 +459,7 @@ class MainWindow(QMainWindow):
                 background-color: transparent;
                 color: {self.foreground_color};
                 border: none;
-                font-size: 22pt;
+                font-size: 32pt;
             }}
             QPushButton:hover {{
                 background-color: #88888855;
@@ -472,6 +484,15 @@ class MainWindow(QMainWindow):
         self.settings_button.move(0, y)
         self.settings_button.raise_()
 
+        dot_size = self.settings_update_dot.width()
+        self.settings_update_dot.move(side - dot_size, y)
+        self.settings_update_dot.raise_()
+
+    def _update_changelog_badge(self):
+        """Show the red dot iff the changelog for the running version hasn't been opened yet."""
+        has_update = self.config.get("last_seen_changelog_version") != __version__
+        self.settings_update_dot.setVisible(has_update)
+
     @Slot()
     def _open_settings_menu(self):
         menu = QMenu(self)
@@ -483,7 +504,46 @@ class MainWindow(QMainWindow):
         save_video_action.setChecked(self.record_timelapse)
         save_video_action.toggled.connect(self._on_toggle_record_timelapse)
 
+        menu.addSeparator()
+        # A drawn QIcon dot gets silently dropped by macOS's native menu rendering,
+        # so the "new" marker here is a small plain-text glyph instead.
+        changelog_text = "更新日志  ●" if self.settings_update_dot.isVisible() else "更新日志"
+        changelog_action = menu.addAction(changelog_text)
+        changelog_action.triggered.connect(self._open_changelog_dialog)
+
         menu.exec(self.settings_button.mapToGlobal(self.settings_button.rect().topRight()))
+
+    @Slot()
+    def _open_changelog_dialog(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"更新日志 - {__app_name__} v{__version__}")
+        dialog.resize(480, 520)
+        layout = QVBoxLayout(dialog)
+
+        browser = QTextBrowser(dialog)
+        browser.setOpenExternalLinks(True)
+        try:
+            text = self.changelog_file.read_text(encoding="utf-8")
+        except OSError as exc:
+            self.logger.error(f"Failed to read changelog: {exc}")
+            text = "暂无更新日志。"
+        browser.setMarkdown(text)
+        layout.addWidget(browser)
+
+        close_button = QPushButton("关闭", dialog)
+        close_button.clicked.connect(dialog.accept)
+        layout.addWidget(close_button)
+
+        dialog.exec()
+
+        if self.config.get("last_seen_changelog_version") != __version__:
+            self.config["last_seen_changelog_version"] = __version__
+            try:
+                with open(self.config_file, "w", encoding="utf-8") as f:
+                    json.dump(self.config, f, indent=4, ensure_ascii=False)
+            except OSError as exc:
+                self.logger.error(f"Failed to persist last_seen_changelog_version: {exc}")
+            self._update_changelog_badge()
 
     @Slot(bool)
     def _on_toggle_record_timelapse(self, checked):
