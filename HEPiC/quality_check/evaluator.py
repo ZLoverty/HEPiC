@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from statistics import fmean, pstdev
 from typing import Sequence
@@ -43,7 +44,12 @@ def evaluate_force_window(force_values: Sequence[float], material_properties: di
     if len(force_values) < 10:
         return None
 
-    recent_values = [float(value) for value in force_values[-200:]]
+    recent_values = [
+        float(value) for value in force_values[-200:] if math.isfinite(value)
+    ]
+    if len(recent_values) < 10:
+        return None
+
     mean = fmean(recent_values)
     std = pstdev(recent_values)
     stability_threshold = get_stability_threshold(material_properties)
