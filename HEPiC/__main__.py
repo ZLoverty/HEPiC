@@ -675,6 +675,7 @@ class MainWindow(QMainWindow):
         self._register_sensor_items(sensor_items, sensor_labels)
         self.status_widget.configure_tcp_sensors(sensor_items, zeroable_sensor_names, sensor_labels)
         self.logger.info(f"Configured sensor recording columns: {sensor_columns}")
+        self.logger.info(f"Zeroable sensors: {zeroable_sensor_names}")
 
     @Slot(int)
     def show_UI(self, UI_index):

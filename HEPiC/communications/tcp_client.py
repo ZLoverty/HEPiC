@@ -333,7 +333,10 @@ class TCPClient(QObject):
                         self.sensor_config = payload
                         for sensor_name in self.sensor_columns:
                             self._ensure_sensor(sensor_name)
-                        
+
+                        self.logger.info(f"Configured sensors: {self.sensor_columns}")
+                        self.logger.info(f"Zeroable sensors: {self.get_zeroable_sensor_names()}")
+
                         self.sensor_config_received.emit(self.sensor_columns)
 
 
