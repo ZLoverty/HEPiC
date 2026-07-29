@@ -104,6 +104,7 @@ class QualityCheckWidget(QWidget):
     """Quality check page."""
 
     quality_check_gcode_requested = Signal(str)
+    quality_check_abort_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -527,7 +528,10 @@ class QualityCheckWidget(QWidget):
             self.status_indicator.update_status("unknown")
             self.force_expectation_indicator.update_status("unknown")
             self._record_quality_check_result()
-            self.logger.info("Quality check stopped")
+            # 质检的 gcode 是一次性发送给 Klipper 的原始脚本，没有取消/暂停机制，
+            # 只有急停能立刻清空运动队列、停止执行，随后需固件重启恢复到 ready。
+            self.quality_check_abort_requested.emit()
+            self.logger.info("Quality check stopped, requested Klipper emergency stop + firmware restart")
 
     def set_status_message(self, msg: str):
         self.status_message_label.setText(msg)

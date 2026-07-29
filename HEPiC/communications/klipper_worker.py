@@ -456,6 +456,16 @@ class KlipperWorker(QObject):
         self.logger.warning("!!! SENDING EMERGENCY STOP !!!")
         await self.message_queue.put(payload)
 
+    @asyncSlot()
+    async def abort_and_recover(self):
+        """
+        急停立即清空运动队列、终止正在执行的 gcode，随后固件重启使 Klipper 从
+        shutdown 恢复到 ready。用于中途中止一次性发送的 gcode 脚本（如质检），
+        因为这类脚本没有取消/暂停机制。
+        """
+        await self.emergency_stop()
+        await self.restart_firmware()
+
     @Slot()
     def set_active_gcode(self, gcode):
         self.active_gcode = gcode

@@ -12,22 +12,27 @@ if __name__ == "__main__" and not __package__ and "__compiled__" not in globals(
     __package__ = package_dir.name
 
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QTabWidget, QStackedWidget, QLabel
+    QApplication, QMainWindow, QTabWidget, QStackedWidget, QLabel, QFileDialog,
+    QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QGraphicsOpacityEffect, QMenu, QDialog,
+    QProxyStyle, QStyle, QTextBrowser,
 )
-from PySide6.QtCore import Signal, Slot, QThread, QTimer
+from PySide6.QtCore import Signal, Slot, QThread, QTimer, QUrl, Qt, QPropertyAnimation, QEasingCurve, QEvent
+from PySide6.QtGui import QDesktopServices, QCursor, QPixmap
 import pyqtgraph as pg
 from collections import deque
 from .communications import TCPClient, KlipperWorker, ConnectionTester
 from .vision import VideoWorker, ProcessingWorker, IRWorker, VideoRecorder
-from .tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget, JobSequenceWidget, DataProcessorWidget, QualityCheckWidget
+from .tab_widgets import ConnectionWidget, VisionPageWidget, GcodeWidget, HomeWidget, IRPageWidget, JobSequenceWidget, DataProcessorWidget, QualityCheckWidget, SettingsDialog
 from .app_config import (
     build_main_window_stylesheet,
     find_app_file,
+    find_bundled_file,
     load_config as load_app_config,
 )
 from . import __app_name__, __version__
 import asyncio
 import csv
+import json
 import threading
 import time
 from qasync import asyncSlot, QEventLoop
@@ -37,6 +42,8 @@ import logging
 import argparse
 
 
+# TODO(user): 替换为许愿池表单的真实链接
+WISHLIST_FORM_URL = "https://jfpolymers.feishu.cn/share/base/form/shrcndv6WDQz66gzih5Zh9vGu3f"
 
 
 def _show_startup_error(exc):
@@ -83,6 +90,21 @@ class _DataCollectorThread(threading.Thread):
         self._stop_event.set()
 
 
+class _TopAlignedTabBarStyle(QProxyStyle):
+    """Forces the tab bar to start flush with the top-left corner.
+
+    The base style's SH_TabBar_Alignment hint otherwise decides this: macOS
+    styles center the tabs vertically (for a West-positioned bar), while
+    Windows/Fusion styles already left/top-align them. Overriding the hint
+    makes the layout consistent across platforms.
+    """
+
+    def styleHint(self, hint, option=None, widget=None, returnData=None):
+        if hint == QStyle.StyleHint.SH_TabBar_Alignment:
+            return int(Qt.AlignmentFlag.AlignLeft)
+        return super().styleHint(hint, option, widget, returnData)
+
+
 # ====================================================================
 # 2. 创建主窗口类
 # ====================================================================
@@ -99,6 +121,8 @@ class MainWindow(QMainWindow):
         self.test_mode = test_mode
         self.logger = logging.getLogger(__name__)
         self.config_file = find_app_file("config.json", Path(__file__), "__compiled__" in globals())
+        self.changelog_file = find_bundled_file("CHANGELOG.md", Path(__file__), "__compiled__" in globals())
+        self.wishlist_qrcode_file = find_bundled_file("assets/wishlist_qrcode.png", Path(__file__), "__compiled__" in globals())
         self.load_config()
         self.setWindowTitle(f"{__app_name__} v{__version__}")
         self.setGeometry(0, 0, 1024, 768)
@@ -165,8 +189,10 @@ class MainWindow(QMainWindow):
         # color scheme
         self.background_color = self.config.get("background_color", "black")
         self.foreground_color = self.config.get("foreground_color", "white")
-        self.secondary_background_color = self.config.get("gcode_highlight_background", "#435663")
-        self.secondary_foreground_color = self.config.get("hover_color", "#A3B087")
+        self.secondary_background_color = self.config.get("secondary_background", "#435663")
+        self.secondary_foreground_color = self.config.get("secondary_foreground_color", "#A3B087")
+
+        self.save_directory = Path(self.config.get("save_directory", "~/Desktop")).expanduser()
 
     def initUI(self):
         # --- 创建控件 ---
@@ -177,6 +203,9 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.setTabPosition(QTabWidget.TabPosition.West) # 关键！把标签放到左边
         self.tabs.setMovable(True) # 让标签页可以拖动排序
+        # 强制标签栏从左上角开始排列，不受操作系统默认对齐方式影响（如 macOS 默认居中）
+        self._tab_bar_style = _TopAlignedTabBarStyle(self.tabs.tabBar().style())
+        self.tabs.tabBar().setStyle(self._tab_bar_style)
         # 标签页们
         self.connection_widget = ConnectionWidget(host=self.host)  
         self.home_widget = HomeWidget(time_window_s=self.plot_time_window_s)
@@ -200,10 +229,12 @@ class MainWindow(QMainWindow):
         self.tabs.setTabVisible(self.tabs.indexOf(self.vision_page_widget), False)
         self.tabs.setTabVisible(self.tabs.indexOf(self.ir_page_widget), False)
         self.setCentralWidget(self.stacked_widget)
+        self._init_settings_button()
 
         # 设置状态栏
         self.statusBar().showMessage("准备就绪")
         self._init_material_db_status_label()
+        self._init_save_banner()
 
         # --- 连接信号与槽 ---
         self.connection_widget.host.connect(self.update_host_and_connect)
@@ -231,6 +262,371 @@ class MainWindow(QMainWindow):
 
         self.material_db_label = QLabel(f"材料库 v{version}")
         self.statusBar().addPermanentWidget(self.material_db_label)
+
+    def _init_save_banner(self):
+        """Transient top banner announcing the default save path each time recording starts.
+
+        Auto-dismisses after a few seconds so it never becomes a permanent
+        fixture, but still gives new users a chance to see (and change) the
+        default path without a blocking dialog on every recording.
+        """
+        # A single widget carrying the opacity effect for the fade animation.
+        # Qt's nested-QGraphicsEffect rendering (e.g. a drop shadow on a child
+        # of a widget that itself has an opacity effect) is unreliable and
+        # spams "Painter not active" warnings, so this deliberately avoids a
+        # second effect — a border stands in for the shadow's elevation cue.
+        self._save_banner = QWidget(self)
+        self._save_banner.setObjectName("saveBanner")
+
+        # Light banner on the app's dark theme, so it pops instead of blending in.
+        banner_bg = self.foreground_color
+        banner_text = self.background_color
+        action_hover = self.secondary_foreground_color
+        self._save_banner.setStyleSheet(
+            f"""
+            QWidget#saveBanner {{
+                background-color: {banner_bg};
+                border: 1px solid {self.secondary_foreground_color};
+                border-radius: 10px;
+            }}
+            QLabel#saveBannerText {{
+                color: {banner_text};
+                font-size: 12pt;
+                font-weight: 500;
+                background: transparent;
+            }}
+            QPushButton#saveBannerAction {{
+                background-color: {banner_text};
+                color: {banner_bg};
+                border: none;
+                border-radius: 6px;
+                padding: 6px 14px;
+                font-size: 11pt;
+                font-weight: 600;
+            }}
+            QPushButton#saveBannerAction:hover {{
+                background-color: {action_hover};
+                color: {banner_text};
+            }}
+            QPushButton#saveBannerClose {{
+                background: transparent;
+                color: {banner_text};
+                border: none;
+                font-size: 15pt;
+                font-weight: bold;
+                padding: 0px 6px;
+            }}
+            QPushButton#saveBannerClose:hover {{
+                color: {self.secondary_background_color};
+            }}
+            """
+        )
+        layout = QHBoxLayout(self._save_banner)
+        layout.setContentsMargins(16, 10, 10, 10)
+        layout.setSpacing(10)
+
+        self._save_banner_label = QLabel()
+        self._save_banner_label.setObjectName("saveBannerText")
+        layout.addWidget(self._save_banner_label)
+        layout.addStretch()
+
+        open_btn = QPushButton("打开文件夹")
+        open_btn.setObjectName("saveBannerAction")
+        open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        open_btn.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.save_directory)))
+        )
+        layout.addWidget(open_btn)
+
+        change_btn = QPushButton("修改路径")
+        change_btn.setObjectName("saveBannerAction")
+        change_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        change_btn.clicked.connect(self._choose_save_directory)
+        layout.addWidget(change_btn)
+
+        close_btn = QPushButton("×")
+        close_btn.setObjectName("saveBannerClose")
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.clicked.connect(self._hide_save_banner)
+        layout.addWidget(close_btn)
+
+        self._save_banner_opacity = QGraphicsOpacityEffect(self._save_banner)
+        self._save_banner_opacity.setOpacity(1.0)
+        self._save_banner.setGraphicsEffect(self._save_banner_opacity)
+        self._save_banner_fade_anim = QPropertyAnimation(self._save_banner_opacity, b"opacity", self)
+        self._save_banner_fade_anim.setDuration(300)
+        self._save_banner_fade_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self._save_banner_fade_anim.finished.connect(self._on_save_banner_fade_out_finished)
+
+        self._save_banner.hide()
+        self._save_banner_hide_delay_ms = 2000
+        self._save_banner_timer = QTimer(self)
+        self._save_banner_timer.setSingleShot(True)
+        self._save_banner_timer.timeout.connect(self._start_save_banner_fade_out)
+
+        # Polling the cursor position (rather than relying on Enter/Leave
+        # events) sidesteps Qt delivering Leave to the banner whenever the
+        # cursor moves onto one of its own buttons.
+        self._save_banner_hover_timer = QTimer(self)
+        self._save_banner_hover_timer.setInterval(150)
+        self._save_banner_hover_timer.timeout.connect(self._check_save_banner_hover)
+
+    def _show_save_banner(self):
+        self._save_banner_fade_anim.stop()
+        self._save_banner_opacity.setOpacity(1.0)
+        self._save_banner_label.setText(f"默认保存路径：{self.save_directory}")
+        self._position_save_banner()
+        self._save_banner.show()
+        self._save_banner.raise_()
+        self._save_banner_timer.start(self._save_banner_hide_delay_ms)
+        self._save_banner_hover_timer.start()
+
+    def _start_save_banner_fade_out(self):
+        self._save_banner_hover_timer.stop()
+        self._save_banner_fade_anim.stop()
+        self._save_banner_fade_anim.setStartValue(self._save_banner_opacity.opacity())
+        self._save_banner_fade_anim.setEndValue(0.0)
+        self._save_banner_fade_anim.start()
+
+    def _on_save_banner_fade_out_finished(self):
+        if self._save_banner_opacity.opacity() <= 0.0:
+            self._save_banner.hide()
+
+    def _hide_save_banner(self):
+        """Dismiss immediately (used for the manual close button)."""
+        self._save_banner_timer.stop()
+        self._save_banner_hover_timer.stop()
+        self._save_banner_fade_anim.stop()
+        self._save_banner.hide()
+
+    def _check_save_banner_hover(self):
+        local_pos = self._save_banner.mapFromGlobal(QCursor.pos())
+        hovering = self._save_banner.rect().contains(local_pos)
+        if hovering:
+            self._save_banner_timer.stop()
+        elif not self._save_banner_timer.isActive():
+            self._save_banner_timer.start(self._save_banner_hide_delay_ms)
+
+    def _position_save_banner(self):
+        self._save_banner.adjustSize()
+        x = (self.width() - self._save_banner.width()) // 2
+        self._save_banner.move(max(x, 0), 12)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "_save_banner") and self._save_banner.isVisible():
+            self._position_save_banner()
+
+    def _choose_save_directory(self):
+        chosen = QFileDialog.getExistingDirectory(
+            self, "选择默认保存路径", str(self.save_directory)
+        )
+        if not chosen:
+            return
+        self.save_directory = Path(chosen)
+        self.config["save_directory"] = str(self.save_directory)
+        try:
+            with open(self.config_file, "w", encoding="utf-8") as f:
+                json.dump(self.config, f, indent=4, ensure_ascii=False)
+        except OSError as exc:
+            self.logger.error(f"Failed to persist save_directory to config: {exc}")
+        self.statusBar().showMessage(f"默认保存路径已更改为：{self.save_directory}")
+        if self._save_banner.isVisible():
+            self._show_save_banner()
+
+    def _init_settings_button(self):
+        """Gear icon pinned to the bottom of the vertical tab bar column, flush with the tabs above it."""
+        self.settings_button = QPushButton("⚙", self.tabs)
+        self.settings_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.settings_button.setToolTip("设置")
+        self.settings_button.setFlat(True)
+        self._style_settings_button()
+        self.settings_button.clicked.connect(self._open_settings_menu)
+
+        # Small red dot overlaid on the gear icon when a changelog hasn't been seen yet.
+        self.settings_update_dot = QLabel("", self.tabs)
+        self.settings_update_dot.setStyleSheet(
+            "background-color: #e74c3c; border-radius: 5px;"
+        )
+        self.settings_update_dot.setFixedSize(10, 10)
+        self.settings_update_dot.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._update_changelog_badge()
+
+        self.tabs.installEventFilter(self)
+        QTimer.singleShot(0, self._position_settings_button)
+
+    def _style_settings_button(self):
+        self.settings_button.setStyleSheet(
+            f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {self.foreground_color};
+                border: none;
+                font-size: 32pt;
+            }}
+            QPushButton:hover {{
+                background-color: #88888855;
+            }}
+            """
+        )
+
+    def eventFilter(self, obj, event):
+        if obj is self.tabs and event.type() == QEvent.Type.Resize:
+            self._position_settings_button()
+        return super().eventFilter(obj, event)
+
+    def _position_settings_button(self):
+        # tabBar().width() includes reserved layout space beyond what's actually
+        # drawn for a West-oriented bar; the first tab's rect is the true visible
+        # column width, so the square button matches the tabs above it.
+        side = self.tabs.tabBar().tabRect(0).width()
+        if side <= 0:
+            return
+        self.settings_button.setFixedSize(side, side)
+        y = max(self.tabs.height() - side, 0)
+        self.settings_button.move(0, y)
+        self.settings_button.raise_()
+
+        dot_size = self.settings_update_dot.width()
+        self.settings_update_dot.move(side - dot_size, y)
+        self.settings_update_dot.raise_()
+
+    def _update_changelog_badge(self):
+        """Show the red dot iff the changelog for the running version hasn't been opened yet."""
+        has_update = self.config.get("last_seen_changelog_version") != __version__
+        self.settings_update_dot.setVisible(has_update)
+
+    @Slot()
+    def _open_settings_menu(self):
+        menu = QMenu(self)
+        settings_action = menu.addAction("设置")
+        settings_action.triggered.connect(self._open_settings_dialog)
+
+        save_video_action = menu.addAction("保存视频")
+        save_video_action.setCheckable(True)
+        save_video_action.setChecked(self.record_timelapse)
+        save_video_action.toggled.connect(self._on_toggle_record_timelapse)
+
+        menu.addSeparator()
+        wishlist_action = menu.addAction("许愿池")
+        wishlist_action.triggered.connect(self._open_wishlist_dialog)
+
+        menu.addSeparator()
+        # A drawn QIcon dot gets silently dropped by macOS's native menu rendering,
+        # so the "new" marker here is a small plain-text glyph instead.
+        changelog_text = "更新日志  ●" if self.settings_update_dot.isVisible() else "更新日志"
+        changelog_action = menu.addAction(changelog_text)
+        changelog_action.triggered.connect(self._open_changelog_dialog)
+
+        menu.exec(self.settings_button.mapToGlobal(self.settings_button.rect().topRight()))
+
+    @Slot()
+    def _open_wishlist_dialog(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("许愿池")
+        dialog.setModal(True)
+        layout = QVBoxLayout(dialog)
+
+        intro_label = QLabel("扫描二维码或点击下方链接，填写你的许愿/反馈：", dialog)
+        intro_label.setWordWrap(True)
+        layout.addWidget(intro_label)
+
+        qr_label = QLabel(dialog)
+        qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        pixmap = QPixmap(str(self.wishlist_qrcode_file))
+        if pixmap.isNull():
+            qr_label.setText(f"（二维码图片未找到，请放置于：\n{self.wishlist_qrcode_file}）")
+            qr_label.setWordWrap(True)
+        else:
+            # Scale at the screen's actual device-pixel-ratio and tag the pixmap with it,
+            # otherwise it renders soft on Retina/HiDPI displays regardless of source resolution.
+            target_size = 600
+            dpr = self.devicePixelRatioF()
+            scaled = pixmap.scaled(
+                int(target_size * dpr), int(target_size * dpr),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            scaled.setDevicePixelRatio(dpr)
+            qr_label.setPixmap(scaled)
+        layout.addWidget(qr_label)
+
+        link_label = QLabel(f'<a href="{WISHLIST_FORM_URL}">{WISHLIST_FORM_URL}</a>', dialog)
+        link_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        link_label.setOpenExternalLinks(True)
+        link_label.setWordWrap(True)
+        layout.addWidget(link_label)
+
+        close_button = QPushButton("关闭", dialog)
+        close_button.clicked.connect(dialog.accept)
+        layout.addWidget(close_button)
+
+        dialog.exec()
+
+    @Slot()
+    def _open_changelog_dialog(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"更新日志 - {__app_name__} v{__version__}")
+        dialog.resize(480, 520)
+        layout = QVBoxLayout(dialog)
+
+        browser = QTextBrowser(dialog)
+        browser.setOpenExternalLinks(True)
+        try:
+            text = self.changelog_file.read_text(encoding="utf-8")
+        except OSError as exc:
+            self.logger.error(f"Failed to read changelog: {exc}")
+            text = "暂无更新日志。"
+        browser.setMarkdown(text)
+        layout.addWidget(browser)
+
+        close_button = QPushButton("关闭", dialog)
+        close_button.clicked.connect(dialog.accept)
+        layout.addWidget(close_button)
+
+        dialog.exec()
+
+        if self.config.get("last_seen_changelog_version") != __version__:
+            self.config["last_seen_changelog_version"] = __version__
+            try:
+                with open(self.config_file, "w", encoding="utf-8") as f:
+                    json.dump(self.config, f, indent=4, ensure_ascii=False)
+            except OSError as exc:
+                self.logger.error(f"Failed to persist last_seen_changelog_version: {exc}")
+            self._update_changelog_badge()
+
+    @Slot(bool)
+    def _on_toggle_record_timelapse(self, checked):
+        self.record_timelapse = checked
+
+    @Slot()
+    def _open_settings_dialog(self):
+        dialog = SettingsDialog(self.config, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        self.config.update(dialog.get_values())
+        try:
+            with open(self.config_file, "w", encoding="utf-8") as f:
+                json.dump(self.config, f, indent=4, ensure_ascii=False)
+        except OSError as exc:
+            self.logger.error(f"Failed to persist settings to config: {exc}")
+            return
+
+        self.load_config()
+        self.setStyleSheet(
+            build_main_window_stylesheet(
+                self.background_color,
+                self.foreground_color,
+                self.secondary_background_color,
+                self.secondary_foreground_color,
+            )
+        )
+        pg.setConfigOption("background", self.background_color)
+        pg.setConfigOption("foreground", self.foreground_color)
+        self._style_settings_button()
+        self._position_settings_button()
+        self.statusBar().showMessage("设置已保存，部分设置需重启后生效")
 
     def init_data(self):
         """Initiate a few temperary queues for the data. This will be the pool for the final data: at each tick of the timer, one number will be taken out of the pool, forming a row of a spread sheet and saved."""
@@ -279,6 +675,7 @@ class MainWindow(QMainWindow):
         self._register_sensor_items(sensor_items, sensor_labels)
         self.status_widget.configure_tcp_sensors(sensor_items, zeroable_sensor_names, sensor_labels)
         self.logger.info(f"Configured sensor recording columns: {sensor_columns}")
+        self.logger.info(f"Zeroable sensors: {zeroable_sensor_names}")
 
     @Slot(int)
     def show_UI(self, UI_index):
@@ -329,6 +726,7 @@ class MainWindow(QMainWindow):
         self.home_widget.command_widget.command.connect(self.klipper_worker.send_gcode)
 
         self.sigEmergencyStop.connect(self.klipper_worker.emergency_stop)
+        self.quality_check_widget.quality_check_abort_requested.connect(self.klipper_worker.abort_and_recover)
         self.sigProgress.connect(self.status_widget.update_progress)
         self.job_sequence_widget.gcode_widget.sigFilePath.connect(self.klipper_worker.upload_gcode_to_klipper)
         self.job_sequence_widget.gcode_widget.sigActiveGcode.connect(self.klipper_worker.set_active_gcode)
@@ -570,10 +968,11 @@ class MainWindow(QMainWindow):
         if checked: 
             self.home_widget.play_pause_button.setIcon(self.home_widget.pause_icon)
             self.autosave_prefix = datetime.now().strftime("%Y%m%d_%H%M%S")
-            self.autosave_filename = Path(f"~/Desktop/{self.autosave_prefix}_autosave.csv").expanduser()
-            
+            self.autosave_filename = self.save_directory / f"{self.autosave_prefix}_autosave.csv"
+
             self.logger.info("开始记录数据 ...")
             self.statusBar().showMessage(f"文件路径：{self.autosave_filename}")
+            self._show_save_banner()
             with self._csv_lock:
                 self._csv_columns = list(self.data_status.keys())
                 self._csv_file = open(self.autosave_filename, "w", newline="", encoding="utf-8")
@@ -582,7 +981,7 @@ class MainWindow(QMainWindow):
             self.is_recording = True
             if self.record_timelapse and self.video_worker:
                 # init video recorder
-                self.autosave_video_filename = Path(f"~/Desktop/{self.autosave_prefix}_video.mkv").expanduser()
+                self.autosave_video_filename = self.save_directory / f"{self.autosave_prefix}_video.mkv"
                 self.video_recorder_thread = VideoRecorder(self.autosave_video_filename, *self.frame_size, fps=self.video_worker.get_fps())
                 self.processing_worker.proc_frame_signal.connect(self.video_recorder_thread.add_frame)
                 self.video_recorder_thread.start()

@@ -1,13 +1,13 @@
 {
     "name": "HEPiC",
     "test_image_folder": "~/Documents/GitHub/HEPiC/test/filament_images_captured",
+    "save_directory": "~/Desktop",
     "hepic_host": "192.168.0.81",
     "hepic_port": 10001,
     "rotary_encoder_steps_total": 1000,
     "rotary_encoder_wheel_diameter": 28.6,
     "meter_count_cache_size": 10,
-    
-    "tmp_data_maxlen": 100, 
+    "tmp_data_maxlen": 100,
     "final_data_maxlen": 10000000,
     "background_color": "#313647",
     "foreground_color": "#FFF8D4",
@@ -16,5 +16,6 @@
     "data_frequency": 50,
     "status_frequency": 5,
     "klipper_query_delay": 0.1,
-    "plot_time_window_s": 30
+    "plot_time_window_s": 30,
+    "last_seen_changelog_version": "1.5.2"
 }

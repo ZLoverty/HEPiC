@@ -1,7 +1,0 @@
-{
-  "hepic_host": "127.0.0.1",
-  "hepic_tcp_port": 10001,
-  "klipper_host": "127.0.0.1",
-  "klipper_port": 7125,
-  "sensor_broadcast_interval": 0.1
-}

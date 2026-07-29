@@ -42,6 +42,24 @@ def find_app_file(filename: str, package_file: Path, compiled: bool = False) -> 
     return bundled
 
 
+def find_bundled_file(filename: str, package_file: Path, compiled: bool = False) -> Path:
+    """Locate a read-only bundled resource, always from the shipped version.
+
+    Unlike find_app_file, this never copies to ~/.HEPiC/, so an installed
+    build always shows the changelog (or similar shipped content) that came
+    with that build rather than a stale copy from a previous version.
+    """
+    candidates = [package_file.resolve().parent / filename]
+    if hasattr(sys, "_MEIPASS"):
+        meipass = Path(sys._MEIPASS)
+        candidates.extend([meipass / "HEPiC" / filename, meipass / filename])
+    if compiled:
+        exe_dir = Path(sys.executable).resolve().parent
+        candidates.extend([exe_dir / "HEPiC" / filename, exe_dir / filename])
+
+    return next((c for c in candidates if c.exists()), candidates[0])
+
+
 def load_config(config_file: Path) -> dict:
     import json
 

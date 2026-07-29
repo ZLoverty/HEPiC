@@ -19,6 +19,8 @@ echo [2/2] Building HEPiC...
   --workpath build\pyinstaller ^
   --distpath dist ^
   --add-data "HEPiC\config.json;HEPiC" ^
+  --add-data "HEPiC\CHANGELOG.md;HEPiC" ^
+  --add-data "HEPiC\assets;HEPiC\assets" ^
   --add-data "HEPiC\tab_widgets\icons;HEPiC\tab_widgets\icons" ^
   --add-data "HEPiC\database;HEPiC\database" ^
   --hidden-import qasync ^
