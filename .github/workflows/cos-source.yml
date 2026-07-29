@@ -1,0 +1,99 @@
+name: Mirror source to Tencent COS
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version tag to mirror (e.g. v1.6.0)"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cos-source-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  mirror-source:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: tag
+        run: echo "tag=${{ inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # HEPiC/__init__.py's __version__ is the single source of truth
+      # (see pyproject.toml's [tool.setuptools.dynamic]). Fail fast if
+      # someone tags a release without bumping it.
+      - name: Verify version matches tag
+        run: |
+          tag="${{ steps.tag.outputs.tag }}"
+          version="${tag#v}"
+          pkg_version=$(python3 -c "from HEPiC import __version__; print(__version__)")
+          if [ "$version" != "$pkg_version" ]; then
+            echo "::error::Tag $tag (version $version) does not match HEPiC.__version__ ($pkg_version)"
+            exit 1
+          fi
+          echo "Version check OK: $version"
+
+      # Plain git archive of the tagged tree (no .git, no .venv/, no
+      # __pycache__ since those are gitignored) -- this is what devices can
+      # fetch instead of `git clone` when GitHub isn't reachable.
+      - name: Package source artifact
+        id: package_src
+        run: |
+          tag="${{ steps.tag.outputs.tag }}"
+          src_asset="hepic-src-${tag}.tar.gz"
+          git archive --format=tar.gz --prefix="HEPiC-${tag}/" -o "$src_asset" HEAD
+          echo "src_asset=$src_asset" >> "$GITHUB_OUTPUT"
+
+      - name: Generate checksums
+        id: checksums
+        run: |
+          sums="SHA256SUMS.txt"
+          sha256sum "${{ steps.package_src.outputs.src_asset }}" > "$sums"
+          echo "sums=$sums" >> "$GITHUB_OUTPUT"
+
+      # Mirrors the source archive to Tencent COS so devices behind the
+      # Great Firewall don't have to reach GitHub at all. Requires repo
+      # secrets COS_SECRET_ID / COS_SECRET_KEY / COS_BUCKET / COS_REGION,
+      # and a bucket with public-read (or a CDN domain in front of it).
+      - name: Install coscmd
+        run: pip install coscmd
+
+      - name: Configure coscmd
+        env:
+          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+          COS_BUCKET: ${{ vars.COS_BUCKET }}
+          COS_REGION: ${{ vars.COS_REGION }}
+        run: coscmd config -a "$COS_SECRET_ID" -s "$COS_SECRET_KEY" -b "$COS_BUCKET" -r "$COS_REGION"
+
+      - name: Upload source artifact to COS
+        run: |
+          tag="${{ steps.tag.outputs.tag }}"
+          prefix="hepic/releases/$tag"
+          coscmd upload "${{ steps.package_src.outputs.src_asset }}" "$prefix/${{ steps.package_src.outputs.src_asset }}"
+          coscmd upload "${{ steps.checksums.outputs.sums }}" "$prefix/${{ steps.checksums.outputs.sums }}"
+
+      # Only stable tags (no "-" suffix) move the "latest" pointer, and only
+      # after the archive is confirmed on COS -- devices resolve "latest" by
+      # reading this pointer rather than us duplicating the archive under a
+      # "latest/" prefix.
+      - name: Update latest.json pointer on COS
+        if: ${{ !contains(steps.tag.outputs.tag, '-') }}
+        run: |
+          echo "{\"tag\": \"${{ steps.tag.outputs.tag }}\"}" > latest.json
+          coscmd upload latest.json hepic/latest.json
