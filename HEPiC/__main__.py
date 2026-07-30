@@ -39,6 +39,7 @@ from qasync import asyncSlot, QEventLoop
 import numpy as np
 from datetime import datetime
 import logging
+import logging.handlers
 import argparse
 
 
@@ -1121,11 +1122,24 @@ def start_app():
     parser.add_argument("-t", "--test", action="store_true", help="Enable test mode")
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)] # 确保输出到 stdout
+    log_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    handlers = []
+
+    # In a --windowed PyInstaller build there is no console, so sys.stdout is
+    # None — a StreamHandler around it would silently drop every record.
+    if sys.stdout is not None:
+        handlers.append(logging.StreamHandler(sys.stdout))
+
+    log_dir = Path.home() / ".HEPiC" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    file_handler = logging.handlers.RotatingFileHandler(
+        log_dir / "hepic.log", maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
     )
+    handlers.append(file_handler)
+
+    for handler in handlers:
+        handler.setFormatter(log_formatter)
+    logging.basicConfig(level=logging.INFO, handlers=handlers)
 
     ### Debug module logging ###
     # logging.getLogger("HEPiC.communications.tcp_client").setLevel(logging.DEBUG)
