@@ -1,4 +1,5 @@
 import subprocess
+import sys
 import numpy as np
 from PySide6.QtCore import QThread, Slot, Signal
 import queue
@@ -33,11 +34,15 @@ class VideoRecorder(QThread):
         
         self.queue = queue.Queue(maxsize=200)
 
+        # Windows 上避免为子进程弹出控制台窗口（打包成 --windowed 后尤其明显）
+        creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+
         # 创建子进程，打开 stdin 管道
         self.pipe = subprocess.Popen(
-            self.command, 
-            stdin=subprocess.PIPE, 
-            stderr=subprocess.PIPE # 或者是 subprocess.PIPE 以捕获错误日志
+            self.command,
+            stdin=subprocess.PIPE,
+            stderr=subprocess.PIPE, # 或者是 subprocess.PIPE 以捕获错误日志
+            creationflags=creationflags,
         )
 
         self.logger = logger or logging.getLogger(__name__)
