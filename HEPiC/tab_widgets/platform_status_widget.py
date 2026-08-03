@@ -14,17 +14,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .. import app_config
+
 
 class PlatformStatusWidget(QWidget):
     set_temperature = Signal(float)
     zero_sensor = Signal(str)
 
-    def __init__(self, placeholder: str = "***", icon_path: str = "icons"):
+    def __init__(self, placeholder: str = "***"):
         super().__init__()
 
-        current_file_path = Path(__file__).resolve()
-        icon_path = current_file_path.parent / icon_path
-        self.zero_icon = QIcon(str(icon_path / "toZero.png"))
+        self.zero_icon = QIcon(str(app_config.find_bundled_file(
+            "assets/icons/toZero.png", Path(app_config.__file__), "__compiled__" in globals()
+        )))
         self.placeholder = placeholder
         self._print_start_time: float | None = None
         self._status_text = ""
