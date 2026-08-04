@@ -17,5 +17,7 @@
     "status_frequency": 5,
     "klipper_query_delay": 0.1,
     "plot_time_window_s": 30,
+    "force_safety_limit_N": 65.0,
+    "force_safety_debounce_samples": 10,
     "last_seen_changelog_version": "1.5.2"
 }
