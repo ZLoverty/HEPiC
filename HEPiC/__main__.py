@@ -16,8 +16,12 @@ from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QGraphicsOpacityEffect, QMenu, QDialog,
     QProxyStyle, QStyle, QTextBrowser, QMessageBox,
 )
-from PySide6.QtCore import Signal, Slot, QThread, QTimer, QUrl, Qt, QPropertyAnimation, QEasingCurve, QEvent
-from PySide6.QtGui import QDesktopServices, QCursor, QPixmap
+from PySide6.QtCore import (
+    Signal, Slot, QThread, QTimer, QUrl, Qt, QPropertyAnimation, QEasingCurve, QEvent,
+    QByteArray, QSize,
+)
+from PySide6.QtGui import QDesktopServices, QCursor, QPixmap, QIcon, QPainter, QTransform
+from PySide6.QtSvg import QSvgRenderer
 import pyqtgraph as pg
 from collections import deque
 from .communications import TCPClient, KlipperWorker, ConnectionTester
@@ -231,16 +235,21 @@ class MainWindow(QMainWindow):
         self.data_processor_widget = DataProcessorWidget()
         self.quality_check_widget = QualityCheckWidget()
 
-        # 添加标签页到标签栏
+        # 添加标签页到标签栏（图标 + hover tooltip，取代原来的文字标签）
         self.stacked_widget.addWidget(self.connection_widget)
         self.stacked_widget.addWidget(self.tabs)
-        self.tabs.addTab(self.home_widget, "主页")
-        # self.tabs.addTab(self.data_widget, "数据")
-        self.tabs.addTab(self.vision_page_widget, "视觉")
-        self.tabs.addTab(self.ir_page_widget, "红外")
-        self.tabs.addTab(self.job_sequence_widget, "G-code")
-        self.tabs.addTab(self.data_processor_widget, "数据处理")
-        self.tabs.addTab(self.quality_check_widget, "质检模式")
+        self.tabs.setIconSize(QSize(28, 28))
+        tab_specs = [
+            (self.home_widget, "主页.svg", "主页"),
+            (self.vision_page_widget, "视频.svg", "视觉"),
+            (self.ir_page_widget, "红外.svg", "红外"),
+            (self.job_sequence_widget, "动作序列.svg", "G-code"),
+            (self.data_processor_widget, "数据处理.svg", "数据处理"),
+            (self.quality_check_widget, "质检模式.svg", "质检模式"),
+        ]
+        for widget, icon_file, tooltip in tab_specs:
+            index = self.tabs.addTab(widget, self._load_tab_icon(icon_file, rotate=90), "")
+            self.tabs.setTabToolTip(index, tooltip)
         self.tabs.setTabVisible(self.tabs.indexOf(self.vision_page_widget), False)
         self.tabs.setTabVisible(self.tabs.indexOf(self.ir_page_widget), False)
         self.setCentralWidget(self.stacked_widget)
@@ -449,9 +458,43 @@ class MainWindow(QMainWindow):
         if self._save_banner.isVisible():
             self._show_save_banner()
 
+    def _load_tab_icon(self, filename: str, size: int = 128, rotate: int = 0) -> QIcon:
+        """Render an assets/tab_icons/*.svg (stroke="currentColor") into a QIcon.
+
+        Qt's SVG renderer doesn't resolve currentColor the way a browser does
+        (no CSS cascade to inherit from), so the substitution happens on the
+        raw markup before rendering — recolored to match the tab bar's
+        foreground color so it stays legible across themes. Rendering at a
+        fixed high resolution rather than the on-screen icon size lets Qt
+        downscale-smooth it for HiDPI displays instead of upscaling a blurry
+        small pixmap. The pixmap background is left transparent (no fill),
+        so it blends into whatever the tab/button background is.
+
+        `rotate` (degrees, clockwise) counters QTabBar's own rotation: once a
+        stylesheet is applied to QTabBar::tab, Qt draws a West-position tab's
+        whole label — icon included — rotated so text reads bottom-to-top.
+        Baking in a +90 rotation here cancels that out so the icon still
+        reads left-to-right. Only tab icons need this; plain QPushButton
+        icons (e.g. the settings gear) are never affected, so they pass 0.
+        """
+        svg_path = find_bundled_file(
+            f"assets/tab_icons/{filename}", Path(__file__), "__compiled__" in globals()
+        )
+        svg_text = svg_path.read_text(encoding="utf-8").replace("currentColor", self.foreground_color)
+        renderer = QSvgRenderer(QByteArray(svg_text.encode("utf-8")))
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        renderer.render(painter)
+        painter.end()
+        if rotate:
+            pixmap = pixmap.transformed(QTransform().rotate(rotate), Qt.TransformationMode.SmoothTransformation)
+        return QIcon(pixmap)
+
     def _init_settings_button(self):
         """Gear icon pinned to the bottom of the vertical tab bar column, flush with the tabs above it."""
-        self.settings_button = QPushButton("⚙", self.tabs)
+        self.settings_button = QPushButton(self.tabs)
+        self.settings_button.setIcon(self._load_tab_icon("设置.svg"))
         self.settings_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.settings_button.setToolTip("设置")
         self.settings_button.setFlat(True)
@@ -472,16 +515,14 @@ class MainWindow(QMainWindow):
 
     def _style_settings_button(self):
         self.settings_button.setStyleSheet(
-            f"""
-            QPushButton {{
+            """
+            QPushButton {
                 background-color: transparent;
-                color: {self.foreground_color};
                 border: none;
-                font-size: 32pt;
-            }}
-            QPushButton:hover {{
+            }
+            QPushButton:hover {
                 background-color: #88888855;
-            }}
+            }
             """
         )
 
@@ -498,6 +539,8 @@ class MainWindow(QMainWindow):
         if side <= 0:
             return
         self.settings_button.setFixedSize(side, side)
+        icon_side = max(int(side * 0.6), 10)
+        self.settings_button.setIconSize(QSize(icon_side, icon_side))
         y = max(self.tabs.height() - side, 0)
         self.settings_button.move(0, y)
         self.settings_button.raise_()

@@ -108,14 +108,12 @@ def build_main_window_stylesheet(
             border: 1px solid {secondary_background_color};
         }}
         QTabBar::tab {{
-            background-color: {secondary_background_color};
-            color: {foreground_color};
+            background-color: transparent;
             padding: 6px 10px;
             margin: 1px;
         }}
-        QTabBar::tab:selected {{
-            background-color: {secondary_foreground_color};
-            color: {background_color};
+        QTabBar::tab:selected, QTabBar::tab:hover {{
+            background-color: #88888855;
         }}
         QProgressBar {{
             background-color: {secondary_background_color};
