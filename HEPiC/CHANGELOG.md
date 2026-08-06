@@ -1,5 +1,33 @@
 # 更新日志
 
+## v1.6.1
+
+### 安全性
+
+- **新增挤出力硬性安全阈值，超限自动急停**：新增 `force_safety_limit_N`（默认 65 N）与 `force_safety_debounce_samples`（默认 10 个采样点）两个配置项，在数据采集线程 `_collect_data()` 中每次采样后调用 `_check_force_safety_limit()`；`extrusion_force_N` 连续超过阈值达到 debounce 次数才触发 `sigForceLimitExceeded`，避免单次传感器毛刺误触发，但该窗口仍远快于人工反应速度。触发后若正处于质检中，会走质检的急停+固件重启流程，否则直接急停并弹窗提示；通过 `_safety_stop_latched` 锁存，避免力值持续超限时重复触发，直到 Klipper 手动重启回到 `ready` 状态才重新武装。这是与质检模块材料 `force_range`（软性、仅用于提示波动过大）完全独立的硬性上限，二者不要混用。（感谢反馈@赵聪）
+- **旧版本升级后自动补全安全阈值配置**：读取 `config.json` 时对新增的两个安全阈值键使用 `setdefault`，即便是升级前没有这两项的旧配置文件，也会在启动后写回默认值并出现在设置对话框中，而不是被静默跳过。
+
+### 质检模式
+
+- **质检按钮仅在 Klipper 处于 ready 状态时可点击**：新增 `quality_check_widget.update_klipper_state` 接收 `KlipperWorker.sigKlipperState`，非 `ready` 状态下禁用"开始质检"按钮，避免在固件未就绪（如刚触发急停、正在重启）时误触发质检 gcode。
+
+### 界面与交互
+
+- **标签栏由文字标题改为图标 + 悬浮提示**：新增 `HEPiC/assets/tab_icons/*.svg` 图标集，`_load_tab_icon()` 在运行时将 SVG 中的 `currentColor` 替换为当前主题前景色后渲染为 `QIcon`，并按固定高分辨率渲染再降采样，避免 HiDPI 下模糊；West 方向的标签栏本身会把整个标签（含图标）旋转显示以让文字竖排，因此额外叠加 90° 反向旋转抵消，保证图标仍然正向显示。标签文字改为 hover tooltip 展示。设置按钮的齿轮 emoji 同步替换为 SVG 图标。
+- **修改温度设置来源不再局限于本地输入框**：`platform_status_widget.py` 新增对 `temperature_C`（目标温度，而非已测量温度）的处理，只要输入框未处于聚焦状态就跟随后台状态刷新，用于同步"其他终端/其他方式修改了目标温度"时本机输入框的显示值，避免出现界面显示与实际下发目标不一致的情况。
+
+### 资源与打包
+
+- **合并两套图标目录，修复图标在部分打包路径下加载失败的问题**：原来 `急停`/`归零` 图标位于 `HEPiC/tab_widgets/icons/`，与新版设置菜单等功能使用的 `HEPiC/assets/icons/` 是两套并行目录；现统一迁移到 `HEPiC/assets/icons/`，`home_widget.py`、`platform_status_widget.py` 改为通过 `app_config.find_bundled_file()` 加载，行为与其他 bundled 资源一致；`release.yml`、`build_pyinstaller.bat` 中对应的 PyInstaller `--add-data` 参数一并清理，不再重复打包旧目录。
+- **--windowed 打包模式下补充文件日志**：PyInstaller `--windowed` 构建没有控制台，`sys.stdout` 为 `None`，此前的 `StreamHandler(sys.stdout)` 会静默丢失所有日志；现改为按 `sys.stdout is not None` 判断是否附加控制台 handler，并始终附加一个 `RotatingFileHandler`（写入 `~/.HEPiC/logs/hepic.log`，单文件最大 5MB，保留 3 份），保证安装版也能留存日志用于排查问题。
+- **新增源代码上传至腾讯云 COS 的 CI 工作流**（`.github/workflows/cos-source.yml`），用于内部分发/归档源码包。
+
+### 修复
+
+- **修复播放/暂停按钮切换时一闪弹出命令行窗口的问题**：`connection_tester.py` 中 ping 子进程、`video_recorder.py` 中录像子进程在 Windows 上均补充 `creationflags=subprocess.CREATE_NO_WINDOW`，避免每次触发 ping 检测或启动录像时短暂弹出控制台窗口，在 `--windowed` 打包后尤其明显。
+
+---
+
 ## v1.6.0
 
 ### 质检模式

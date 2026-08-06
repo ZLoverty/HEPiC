@@ -2,6 +2,8 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import numpy as np
+
 from PySide6.QtCore import Signal, Slot
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
@@ -14,17 +16,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .. import app_config
+
 
 class PlatformStatusWidget(QWidget):
     set_temperature = Signal(float)
     zero_sensor = Signal(str)
 
-    def __init__(self, placeholder: str = "***", icon_path: str = "icons"):
+    def __init__(self, placeholder: str = "***"):
         super().__init__()
 
-        current_file_path = Path(__file__).resolve()
-        icon_path = current_file_path.parent / icon_path
-        self.zero_icon = QIcon(str(icon_path / "toZero.png"))
+        self.zero_icon = QIcon(str(app_config.find_bundled_file(
+            "assets/icons/toZero.png", Path(app_config.__file__), "__compiled__" in globals()
+        )))
         self.placeholder = placeholder
         self._print_start_time: float | None = None
         self._status_text = ""
@@ -158,6 +162,12 @@ class PlatformStatusWidget(QWidget):
         if "measured_temperature_C" in data:
             temperature = data["measured_temperature_C"]
             self.hotend_temperature_value.setText(f"{temperature:5.1f} /")
+
+        if "temperature_C" in data and not self.hotend_temperature_input.hasFocus():
+            target_temperature = data["temperature_C"]
+            text = "" if np.isnan(target_temperature) else f"{target_temperature:.0f}"
+            if self.hotend_temperature_input.text() != text:
+                self.hotend_temperature_input.setText(text)
 
         if "measured_feedrate_mms" in data:
             measured_feedrate = data["measured_feedrate_mms"]

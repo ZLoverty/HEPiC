@@ -14,10 +14,14 @@ if __name__ == "__main__" and not __package__ and "__compiled__" not in globals(
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QStackedWidget, QLabel, QFileDialog,
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QGraphicsOpacityEffect, QMenu, QDialog,
-    QProxyStyle, QStyle, QTextBrowser,
+    QProxyStyle, QStyle, QTextBrowser, QMessageBox,
 )
-from PySide6.QtCore import Signal, Slot, QThread, QTimer, QUrl, Qt, QPropertyAnimation, QEasingCurve, QEvent
-from PySide6.QtGui import QDesktopServices, QCursor, QPixmap
+from PySide6.QtCore import (
+    Signal, Slot, QThread, QTimer, QUrl, Qt, QPropertyAnimation, QEasingCurve, QEvent,
+    QByteArray, QSize,
+)
+from PySide6.QtGui import QDesktopServices, QCursor, QPixmap, QIcon, QPainter, QTransform
+from PySide6.QtSvg import QSvgRenderer
 import pyqtgraph as pg
 from collections import deque
 from .communications import TCPClient, KlipperWorker, ConnectionTester
@@ -39,6 +43,7 @@ from qasync import asyncSlot, QEventLoop
 import numpy as np
 from datetime import datetime
 import logging
+import logging.handlers
 import argparse
 
 
@@ -115,6 +120,7 @@ class MainWindow(QMainWindow):
     sigProgress = Signal(float)
     sigFilePosition = Signal(int)
     sigEmergencyStop = Signal()
+    sigForceLimitExceeded = Signal(float)
 
     def __init__(self, test_mode=False):
         super().__init__()
@@ -168,6 +174,10 @@ class MainWindow(QMainWindow):
         self.record_timelapse = True
         self.IR_WORKER_OK = False
 
+        self._force_over_limit_streak = 0
+        self._safety_stop_latched = False
+        self.sigForceLimitExceeded.connect(self.on_force_limit_exceeded)
+
         self.frame_size = (512, 512)
     
     def load_config(self):
@@ -185,6 +195,15 @@ class MainWindow(QMainWindow):
         self.final_data_maxlen = self.config.get("final_data_maxlen", 1000000)
         self.klipper_query_delay = self.config.get("klipper_query_delay", 0.1)
         self.plot_time_window_s = self.config.get("plot_time_window_s", 60)
+
+        # 挤出力硬性安全上限：连续 N 个采样点超过该值即触发安全急停。
+        # 与质检模块的材料 force_range（软性、仅提示波动过大）是两回事，不要混用。
+        # setdefault（而非单纯 .get）确保即便是升级前缺少这两个键的旧 config.json，
+        # 这两项设置也会出现在"设置"对话框里，而不是被悄悄跳过。
+        self.config.setdefault("force_safety_limit_N", 65.0)
+        self.config.setdefault("force_safety_debounce_samples", 10)
+        self.force_safety_limit_N = self.config["force_safety_limit_N"]
+        self.force_safety_debounce_samples = self.config["force_safety_debounce_samples"]
 
         # color scheme
         self.background_color = self.config.get("background_color", "black")
@@ -216,16 +235,21 @@ class MainWindow(QMainWindow):
         self.data_processor_widget = DataProcessorWidget()
         self.quality_check_widget = QualityCheckWidget()
 
-        # 添加标签页到标签栏
+        # 添加标签页到标签栏（图标 + hover tooltip，取代原来的文字标签）
         self.stacked_widget.addWidget(self.connection_widget)
         self.stacked_widget.addWidget(self.tabs)
-        self.tabs.addTab(self.home_widget, "主页")
-        # self.tabs.addTab(self.data_widget, "数据")
-        self.tabs.addTab(self.vision_page_widget, "视觉")
-        self.tabs.addTab(self.ir_page_widget, "红外")
-        self.tabs.addTab(self.job_sequence_widget, "G-code")
-        self.tabs.addTab(self.data_processor_widget, "数据处理")
-        self.tabs.addTab(self.quality_check_widget, "质检模式")
+        self.tabs.setIconSize(QSize(28, 28))
+        tab_specs = [
+            (self.home_widget, "主页.svg", "主页"),
+            (self.vision_page_widget, "视频.svg", "视觉"),
+            (self.ir_page_widget, "红外.svg", "红外"),
+            (self.job_sequence_widget, "动作序列.svg", "G-code"),
+            (self.data_processor_widget, "数据处理.svg", "数据处理"),
+            (self.quality_check_widget, "质检模式.svg", "质检模式"),
+        ]
+        for widget, icon_file, tooltip in tab_specs:
+            index = self.tabs.addTab(widget, self._load_tab_icon(icon_file, rotate=90), "")
+            self.tabs.setTabToolTip(index, tooltip)
         self.tabs.setTabVisible(self.tabs.indexOf(self.vision_page_widget), False)
         self.tabs.setTabVisible(self.tabs.indexOf(self.ir_page_widget), False)
         self.setCentralWidget(self.stacked_widget)
@@ -434,9 +458,43 @@ class MainWindow(QMainWindow):
         if self._save_banner.isVisible():
             self._show_save_banner()
 
+    def _load_tab_icon(self, filename: str, size: int = 128, rotate: int = 0) -> QIcon:
+        """Render an assets/tab_icons/*.svg (stroke="currentColor") into a QIcon.
+
+        Qt's SVG renderer doesn't resolve currentColor the way a browser does
+        (no CSS cascade to inherit from), so the substitution happens on the
+        raw markup before rendering — recolored to match the tab bar's
+        foreground color so it stays legible across themes. Rendering at a
+        fixed high resolution rather than the on-screen icon size lets Qt
+        downscale-smooth it for HiDPI displays instead of upscaling a blurry
+        small pixmap. The pixmap background is left transparent (no fill),
+        so it blends into whatever the tab/button background is.
+
+        `rotate` (degrees, clockwise) counters QTabBar's own rotation: once a
+        stylesheet is applied to QTabBar::tab, Qt draws a West-position tab's
+        whole label — icon included — rotated so text reads bottom-to-top.
+        Baking in a +90 rotation here cancels that out so the icon still
+        reads left-to-right. Only tab icons need this; plain QPushButton
+        icons (e.g. the settings gear) are never affected, so they pass 0.
+        """
+        svg_path = find_bundled_file(
+            f"assets/tab_icons/{filename}", Path(__file__), "__compiled__" in globals()
+        )
+        svg_text = svg_path.read_text(encoding="utf-8").replace("currentColor", self.foreground_color)
+        renderer = QSvgRenderer(QByteArray(svg_text.encode("utf-8")))
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        renderer.render(painter)
+        painter.end()
+        if rotate:
+            pixmap = pixmap.transformed(QTransform().rotate(rotate), Qt.TransformationMode.SmoothTransformation)
+        return QIcon(pixmap)
+
     def _init_settings_button(self):
         """Gear icon pinned to the bottom of the vertical tab bar column, flush with the tabs above it."""
-        self.settings_button = QPushButton("⚙", self.tabs)
+        self.settings_button = QPushButton(self.tabs)
+        self.settings_button.setIcon(self._load_tab_icon("设置.svg"))
         self.settings_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.settings_button.setToolTip("设置")
         self.settings_button.setFlat(True)
@@ -457,16 +515,14 @@ class MainWindow(QMainWindow):
 
     def _style_settings_button(self):
         self.settings_button.setStyleSheet(
-            f"""
-            QPushButton {{
+            """
+            QPushButton {
                 background-color: transparent;
-                color: {self.foreground_color};
                 border: none;
-                font-size: 32pt;
-            }}
-            QPushButton:hover {{
+            }
+            QPushButton:hover {
                 background-color: #88888855;
-            }}
+            }
             """
         )
 
@@ -483,6 +539,8 @@ class MainWindow(QMainWindow):
         if side <= 0:
             return
         self.settings_button.setFixedSize(side, side)
+        icon_side = max(int(side * 0.6), 10)
+        self.settings_button.setIconSize(QSize(icon_side, icon_side))
         y = max(self.tabs.height() - side, 0)
         self.settings_button.move(0, y)
         self.settings_button.raise_()
@@ -733,6 +791,8 @@ class MainWindow(QMainWindow):
         self.home_widget.sigExtrude.connect(self.klipper_worker.send_gcode)
         self.home_widget.sigRetract.connect(self.klipper_worker.send_gcode)
         self.home_widget.klipper_status_widget.connect_worker(self.klipper_worker)
+        self.klipper_worker.sigKlipperState.connect(self.quality_check_widget.update_klipper_state)
+        self.klipper_worker.sigKlipperState.connect(self._on_klipper_state_for_safety_reset)
 
         # Let all workers run
         tcp_task = self.worker.run()
@@ -1015,6 +1075,7 @@ class MainWindow(QMainWindow):
     def _collect_data(self):
         """Called from _DataCollectorThread at the configured data_frequency."""
         self.grab_status()
+        self._check_force_safety_limit()
         for item in self.data:
             self.data[item].append(self.data_status[item])
 
@@ -1075,6 +1136,67 @@ class MainWindow(QMainWindow):
         self.home_widget.play_pause_button.setChecked(False)
         self.sigEmergencyStop.emit()
 
+    def _check_force_safety_limit(self):
+        """Runs on the background data-collector thread at data_frequency.
+
+        Requires force_safety_debounce_samples consecutive over-limit readings
+        before tripping, so a single sensor glitch doesn't e-stop the machine —
+        the debounce window is still far faster than a human could react.
+        Latched by _safety_stop_latched so it fires once per incident instead
+        of re-triggering every sample while the force stays high.
+        """
+        if self._safety_stop_latched:
+            return
+
+        value = self.data_status.get("extrusion_force_N", np.nan)
+        if not np.isfinite(value) or value <= self.force_safety_limit_N:
+            self._force_over_limit_streak = 0
+            return
+
+        self._force_over_limit_streak += 1
+        if self._force_over_limit_streak >= self.force_safety_debounce_samples:
+            self._safety_stop_latched = True
+            self.sigForceLimitExceeded.emit(value)
+
+    @Slot(float)
+    def on_force_limit_exceeded(self, value):
+        """Safety trip: extrusion force stayed above the hardware safety limit
+        for force_safety_debounce_samples consecutive readings."""
+        self.logger.warning(
+            "!!! 挤出力 %.1fN 超过安全阈值 %.1fN，触发安全急停 !!!",
+            value, self.force_safety_limit_N,
+        )
+
+        if getattr(self, "quality_check_widget", None) is not None and self.quality_check_widget.is_checking:
+            # Quality-check gcode has no cancel mechanism — this path also
+            # restarts the firmware so Klipper comes back to "ready" on its own.
+            self.quality_check_widget.on_quality_check_clicked()
+        else:
+            self.sigEmergencyStop.emit()
+
+        if self.home_widget.play_pause_button.isChecked():
+            self.home_widget.play_pause_button.setChecked(False)
+
+        self._show_force_safety_dialog(value)
+
+    def _show_force_safety_dialog(self, value):
+        QMessageBox.critical(
+            self,
+            "安全急停",
+            (
+                f"检测到挤出力持续超过安全阈值（{value:.1f} N > {self.force_safety_limit_N:.1f} N），"
+                "系统已自动急停并停止记录。\n\n"
+                "请检查设备（喷嘴堵塞、材料异常等）后，在主页点击\"固件重启\"以恢复。"
+            ),
+        )
+
+    @Slot(str, str)
+    def _on_klipper_state_for_safety_reset(self, state, message):
+        """Re-arm the force-limit trip once Klipper is manually restarted to ready."""
+        if state == "ready":
+            self._safety_stop_latched = False
+            self._force_over_limit_streak = 0
+
     def closeEvent(self, event):
         if self.worker:
             self.worker.stop()
@@ -1121,11 +1243,24 @@ def start_app():
     parser.add_argument("-t", "--test", action="store_true", help="Enable test mode")
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)] # 确保输出到 stdout
+    log_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    handlers = []
+
+    # In a --windowed PyInstaller build there is no console, so sys.stdout is
+    # None — a StreamHandler around it would silently drop every record.
+    if sys.stdout is not None:
+        handlers.append(logging.StreamHandler(sys.stdout))
+
+    log_dir = Path.home() / ".HEPiC" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    file_handler = logging.handlers.RotatingFileHandler(
+        log_dir / "hepic.log", maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
     )
+    handlers.append(file_handler)
+
+    for handler in handlers:
+        handler.setFormatter(log_formatter)
+    logging.basicConfig(level=logging.INFO, handlers=handlers)
 
     ### Debug module logging ###
     # logging.getLogger("HEPiC.communications.tcp_client").setLevel(logging.DEBUG)

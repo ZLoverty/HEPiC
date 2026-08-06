@@ -1,5 +1,6 @@
 from PySide6.QtCore import QObject, Signal, Slot
 import asyncio
+import subprocess
 from qasync import asyncSlot
 import logging
 import platform
@@ -90,10 +91,15 @@ class ConnectionTester(QObject):
         try:
             # 使用 asyncio.create_subprocess_exec 替代阻塞的 subprocess.run。
             # stdout/stderr 重定向到 DEVNULL：避免 PIPE 缓冲写满导致 wait() 死锁。
+            # Windows 上加 CREATE_NO_WINDOW，避免每次 ping 都一闪弹出控制台窗口。
+            extra_kwargs = {}
+            if system_name == "windows":
+                extra_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
             proc = await asyncio.create_subprocess_exec(
                 *command,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
+                **extra_kwargs,
             )
         except FileNotFoundError:
             self.logger.warning("未找到 ping 命令，跳过 ping，由后续端口检查判断可达性。")

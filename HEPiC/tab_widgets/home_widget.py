@@ -10,6 +10,7 @@ from .data_plot_widget import DataPlotWidget
 from .platform_status_widget import PlatformStatusWidget
 from .vision_widget import VisionWidget
 from .klipper_status_widget import KlipperStatusWidget
+from .. import app_config
 import logging
 
 class HomeWidget(QWidget):
@@ -73,8 +74,9 @@ class HomeWidget(QWidget):
         self.play_pause_button.setStyleSheet(qss_style)
 
         self.stop_button = QPushButton()
-        _icon_dir = Path(__file__).resolve().parent / "icons"
-        self.stop_icon = QIcon(str(_icon_dir / "emergency_stop.png"))
+        self.stop_icon = QIcon(str(app_config.find_bundled_file(
+            "assets/icons/emergency_stop.png", Path(app_config.__file__), "__compiled__" in globals()
+        )))
         self.stop_button.setIcon(self.stop_icon)
         self.stop_button.setFixedSize(button_size, button_size)
         self.stop_button.setIconSize(QSize(button_size, button_size))

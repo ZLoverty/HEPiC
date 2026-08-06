@@ -114,6 +114,7 @@ class QualityCheckWidget(QWidget):
         self.time_cache = deque(maxlen=300)
         self.current_time = 0
         self.is_checking = False
+        self._klipper_state = "unknown"
         self.default_stability_threshold = DEFAULT_STABILITY_THRESHOLD
         self.material_properties_initialized = False
         self.material_families = deepcopy(DEFAULT_MATERIAL_FAMILIES)
@@ -358,6 +359,7 @@ class QualityCheckWidget(QWidget):
         self.check_button = QPushButton("开始质检")
         self.check_button.clicked.connect(self.on_quality_check_clicked)
         self.check_button.setMinimumHeight(56)
+        self.check_button.setEnabled(False)
         self.force_expectation_indicator = StatusIndicator(size=64)
         self.status_indicator = StabilityBarIndicator(width=80, height=52)
         action_layout.addWidget(self.check_button)
@@ -494,6 +496,8 @@ class QualityCheckWidget(QWidget):
     @Slot()
     def on_quality_check_clicked(self):
         if not self.is_checking:
+            if self._klipper_state != "ready":
+                return
             self.is_checking = True
             self.check_button.setText("停止质检")
             self.check_button.setStyleSheet("background-color: #e74c3c; color: white;")
@@ -512,6 +516,7 @@ class QualityCheckWidget(QWidget):
                 build_quality_check_gcode(self.get_current_material_properties(pi_code))
             )
             self.data_timer.start(100)
+            self._update_check_button_enabled()
             self.logger.info(
                 "Quality check started for material: %s/%s",
                 self.get_current_family(),
@@ -531,6 +536,7 @@ class QualityCheckWidget(QWidget):
             # 质检的 gcode 是一次性发送给 Klipper 的原始脚本，没有取消/暂停机制，
             # 只有急停能立刻清空运动队列、停止执行，随后需固件重启恢复到 ready。
             self.quality_check_abort_requested.emit()
+            self._update_check_button_enabled()
             self.logger.info("Quality check stopped, requested Klipper emergency stop + firmware restart")
 
     def set_status_message(self, msg: str):
@@ -581,6 +587,14 @@ class QualityCheckWidget(QWidget):
 
         self.update_plot()
         self.update_stability_indicator()
+
+    @Slot(str, str)
+    def update_klipper_state(self, state: str, message: str):
+        self._klipper_state = state
+        self._update_check_button_enabled()
+
+    def _update_check_button_enabled(self):
+        self.check_button.setEnabled(self.is_checking or self._klipper_state == "ready")
 
     @Slot(dict)
     def update_klipper_status(self, data: dict):
