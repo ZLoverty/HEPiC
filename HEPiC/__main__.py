@@ -394,7 +394,7 @@ class MainWindow(QMainWindow):
         self._save_banner_fade_anim.finished.connect(self._on_save_banner_fade_out_finished)
 
         self._save_banner.hide()
-        self._save_banner_hide_delay_ms = 2000
+        self._save_banner_hide_delay_ms = 5000
         self._save_banner_timer = QTimer(self)
         self._save_banner_timer.setSingleShot(True)
         self._save_banner_timer.timeout.connect(self._start_save_banner_fade_out)
