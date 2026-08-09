@@ -176,6 +176,7 @@ class MainWindow(QMainWindow):
 
         self._force_over_limit_streak = 0
         self._safety_stop_latched = False
+        self._force_safety_lock = threading.Lock()
         self.sigForceLimitExceeded.connect(self.on_force_limit_exceeded)
 
         self.frame_size = (512, 512)
@@ -1031,6 +1032,12 @@ class MainWindow(QMainWindow):
         self.show_UI(1) # show main UI anyway
         self.status_timer.start(int(self.time_delay_status * 1000))
         self._display_data_timer.start(int(1000 / self.display_frequency))
+        if self._data_thread is not None:
+            # Reconnecting (e.g. after a dropped connection) re-enters this method;
+            # without stopping the old thread first, it keeps running orphaned in
+            # the background, so two threads end up racing _check_force_safety_limit().
+            self._data_thread.stop()
+            self._data_thread.join(timeout=1.0)
         self._data_thread = _DataCollectorThread(self.time_delay, self._collect_data)
         self._data_thread.start()
 
@@ -1156,18 +1163,21 @@ class MainWindow(QMainWindow):
         Latched by _safety_stop_latched so it fires once per incident instead
         of re-triggering every sample while the force stays high.
         """
-        if self._safety_stop_latched:
-            return
-
         value = self.data_status.get("extrusion_force_N", np.nan)
-        if not np.isfinite(value) or value <= self.force_safety_limit_N:
-            self._force_over_limit_streak = 0
-            return
+        with self._force_safety_lock:
+            if self._safety_stop_latched:
+                return
 
-        self._force_over_limit_streak += 1
-        if self._force_over_limit_streak >= self.force_safety_debounce_samples:
+            if not np.isfinite(value) or value <= self.force_safety_limit_N:
+                self._force_over_limit_streak = 0
+                return
+
+            self._force_over_limit_streak += 1
+            if self._force_over_limit_streak < self.force_safety_debounce_samples:
+                return
             self._safety_stop_latched = True
-            self.sigForceLimitExceeded.emit(value)
+
+        self.sigForceLimitExceeded.emit(value)
 
     @Slot(float)
     def on_force_limit_exceeded(self, value):
@@ -1205,8 +1215,9 @@ class MainWindow(QMainWindow):
     def _on_klipper_state_for_safety_reset(self, state, message):
         """Re-arm the force-limit trip once Klipper is manually restarted to ready."""
         if state == "ready":
-            self._safety_stop_latched = False
-            self._force_over_limit_streak = 0
+            with self._force_safety_lock:
+                self._safety_stop_latched = False
+                self._force_over_limit_streak = 0
 
     def closeEvent(self, event):
         if self.worker:
