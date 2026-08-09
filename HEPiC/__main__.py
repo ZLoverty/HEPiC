@@ -200,10 +200,21 @@ class MainWindow(QMainWindow):
         # 与质检模块的材料 force_range（软性、仅提示波动过大）是两回事，不要混用。
         # setdefault（而非单纯 .get）确保即便是升级前缺少这两个键的旧 config.json，
         # 这两项设置也会出现在"设置"对话框里，而不是被悄悄跳过。
+        missing_defaults = "force_safety_limit_N" not in self.config or "force_safety_debounce_samples" not in self.config
         self.config.setdefault("force_safety_limit_N", 65.0)
         self.config.setdefault("force_safety_debounce_samples", 10)
         self.force_safety_limit_N = self.config["force_safety_limit_N"]
         self.force_safety_debounce_samples = self.config["force_safety_debounce_samples"]
+
+        # 打包安装版读的是 ~/.HEPiC/config.json，仅首次安装时从安装包里拷贝，
+        # 之后升级不会再刷新；因此这里把新补的默认值写回该文件，
+        # 让老版本升级上来的用户配置也能"自愈"补全新增的键，而不是只在内存里生效一次。
+        if missing_defaults:
+            try:
+                with open(self.config_file, "w", encoding="utf-8") as f:
+                    json.dump(self.config, f, indent=4, ensure_ascii=False)
+            except OSError as exc:
+                self.logger.error(f"Failed to persist force safety defaults to config: {exc}")
 
         # color scheme
         self.background_color = self.config.get("background_color", "black")
