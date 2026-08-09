@@ -20,7 +20,7 @@ from PySide6.QtCore import (
     Signal, Slot, QThread, QTimer, QUrl, Qt, QPropertyAnimation, QEasingCurve, QEvent,
     QByteArray, QSize,
 )
-from PySide6.QtGui import QDesktopServices, QCursor, QPixmap, QIcon, QPainter, QTransform
+from PySide6.QtGui import QDesktopServices, QCursor, QPixmap, QIcon, QPainter, QTransform, QColor
 from PySide6.QtSvg import QSvgRenderer
 import pyqtgraph as pg
 from collections import deque
@@ -108,6 +108,50 @@ class _TopAlignedTabBarStyle(QProxyStyle):
         if hint == QStyle.StyleHint.SH_TabBar_Alignment:
             return int(Qt.AlignmentFlag.AlignLeft)
         return super().styleHint(hint, option, widget, returnData)
+
+    # Was previously "QTabBar::tab:selected, QTabBar::tab:hover { background-color: #88888855; }"
+    # in the QSS — moved here (see the comment on QTabBar::tab in app_config.py
+    # for why) so it can key off Qt's own State_MouseOver/State_Selected flags
+    # directly instead of QStyleSheetStyle's separate, unreliable hover tracking.
+    _TAB_HIGHLIGHT_COLOR = QColor(0x88, 0x88, 0x88, 0x55)
+
+    def drawControl(self, element, option, painter, widget=None):
+        if element == QStyle.ControlElement.CE_TabBarTabShape:
+            if option.state & (QStyle.StateFlag.State_Selected | QStyle.StateFlag.State_MouseOver):
+                painter.fillRect(option.rect, self._TAB_HIGHLIGHT_COLOR)
+            return
+        # Qt's built-in CE_TabBarTabLabel layout always reserves a
+        # icon-width-plus-gap strip for the text label next to the icon, even
+        # when the text is empty (our tabs are icon-only) — so the icon ends
+        # up flush against one edge of the tab instead of centered, leaving a
+        # visibly lopsided gap on the other side. Painting the icon ourselves,
+        # centered in the tab's actual rect, sidesteps that reserved-text gap
+        # entirely instead of trying to out-guess it via padding tweaks.
+        if element == QStyle.ControlElement.CE_TabBarTabLabel and not option.text and not option.icon.isNull():
+            icon_size = option.iconSize if option.iconSize.isValid() else QSize(
+                self.pixelMetric(QStyle.PixelMetric.PM_TabBarIconSize, option, widget),
+                self.pixelMetric(QStyle.PixelMetric.PM_TabBarIconSize, option, widget),
+            )
+            mode = QIcon.Mode.Normal if option.state & QStyle.StateFlag.State_Enabled else QIcon.Mode.Disabled
+            pixmap = option.icon.pixmap(icon_size, mode)
+
+            # option.rect for CE_TabBarTabLabel is a content rect already
+            # shrunk/offset by the QSS box model for QTabBar::tab — it does
+            # not match the tab's actual painted bounds (what CE_TabBarTabShape
+            # used for the highlight background), so centering against it
+            # still comes out visibly off. Looking up the real tab rect from
+            # the QTabBar itself sidesteps that mismatch entirely.
+            target_rect = option.rect
+            if widget is not None and hasattr(widget, "tabRect"):
+                for i in range(widget.count()):
+                    if widget.tabRect(i).contains(option.rect.center()):
+                        target_rect = widget.tabRect(i)
+                        break
+
+            target = QStyle.alignedRect(option.direction, Qt.AlignmentFlag.AlignCenter, icon_size, target_rect)
+            painter.drawPixmap(target, pixmap)
+            return
+        super().drawControl(element, option, painter, widget)
 
 
 # ====================================================================
@@ -237,6 +281,12 @@ class MainWindow(QMainWindow):
         # 强制标签栏从左上角开始排列，不受操作系统默认对齐方式影响（如 macOS 默认居中）
         self._tab_bar_style = _TopAlignedTabBarStyle(self.tabs.tabBar().style())
         self.tabs.tabBar().setStyle(self._tab_bar_style)
+        # 给已有祖先样式表的控件手动 setStyle() 是个已知的坑：QStyleSheetStyle 平时靠
+        # polish() 扫描 QSS 里的 :hover 等动态伪状态来给控件打开悬浮跟踪，但这个扫描
+        # 时机和我们手动 setStyle() 的时机一旦错位，:hover 就可能永远不会被触发（背景
+        # 高亮完全不出现，但 :selected 之类的静态状态不受影响，仍然正常）。这里显式打开
+        # WA_Hover，不依赖那次自动探测，从根上保证 hover 样式一定生效。
+        self.tabs.tabBar().setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         # 标签页们
         self.connection_widget = ConnectionWidget(host=self.host)  
         self.home_widget = HomeWidget(time_window_s=self.plot_time_window_s)
@@ -260,7 +310,7 @@ class MainWindow(QMainWindow):
             (self.quality_check_widget, "质检模式.svg", "质检模式"),
         ]
         for widget, icon_file, tooltip in tab_specs:
-            index = self.tabs.addTab(widget, self._load_tab_icon(icon_file, rotate=90), "")
+            index = self.tabs.addTab(widget, self._load_tab_icon(icon_file), "")
             self.tabs.setTabToolTip(index, tooltip)
         self.tabs.setTabVisible(self.tabs.indexOf(self.vision_page_widget), False)
         self.tabs.setTabVisible(self.tabs.indexOf(self.ir_page_widget), False)
@@ -482,12 +532,12 @@ class MainWindow(QMainWindow):
         small pixmap. The pixmap background is left transparent (no fill),
         so it blends into whatever the tab/button background is.
 
-        `rotate` (degrees, clockwise) counters QTabBar's own rotation: once a
-        stylesheet is applied to QTabBar::tab, Qt draws a West-position tab's
-        whole label — icon included — rotated so text reads bottom-to-top.
-        Baking in a +90 rotation here cancels that out so the icon still
-        reads left-to-right. Only tab icons need this; plain QPushButton
-        icons (e.g. the settings gear) are never affected, so they pass 0.
+        `rotate` (degrees, clockwise) is unused by callers today — it used to
+        counter QTabBar's own label rotation for West-position tabs, but
+        _TopAlignedTabBarStyle.drawControl() now paints tab icons itself
+        (unrotated, centered) instead of going through Qt's default
+        icon+text layout, so no counter-rotation is needed there anymore.
+        Kept as an option for any future icon that does need it.
         """
         svg_path = find_bundled_file(
             f"assets/tab_icons/{filename}", Path(__file__), "__compiled__" in globals()
