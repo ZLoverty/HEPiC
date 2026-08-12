@@ -220,6 +220,7 @@ class MainWindow(QMainWindow):
 
         self._force_over_limit_streak = 0
         self._safety_stop_latched = False
+        self._manual_recovery_pending = False
         self._force_safety_lock = threading.Lock()
         self.sigForceLimitExceeded.connect(self.on_force_limit_exceeded)
 
@@ -855,6 +856,9 @@ class MainWindow(QMainWindow):
         self.home_widget.klipper_status_widget.connect_worker(self.klipper_worker)
         self.klipper_worker.sigKlipperState.connect(self.quality_check_widget.update_klipper_state)
         self.klipper_worker.sigKlipperState.connect(self._on_klipper_state_for_safety_reset)
+        self.home_widget.klipper_status_widget.sig_manual_firmware_restart_requested.connect(
+            self._on_manual_firmware_restart_requested
+        )
 
         # Let all workers run
         tcp_task = self.worker.run()
@@ -1261,10 +1265,26 @@ class MainWindow(QMainWindow):
             ),
         )
 
+    @Slot()
+    def _on_manual_firmware_restart_requested(self):
+        """Mark that the next Klipper 'ready' transition was requested by the
+        user via the home-page '固件重启' button (i.e. after they were told to
+        check the hardware), so it's safe to re-arm the safety latch on it.
+
+        Without this gate, _on_klipper_state_for_safety_reset would also
+        re-arm on the automatic restart_firmware() inside abort_and_recover()
+        (the quality-check trip path), silently clearing the latch before the
+        user has actually cleared the over-force condition — causing the
+        dialog to reappear moments later instead of staying latched.
+        """
+        self._manual_recovery_pending = True
+
     @Slot(str, str)
     def _on_klipper_state_for_safety_reset(self, state, message):
-        """Re-arm the force-limit trip once Klipper is manually restarted to ready."""
-        if state == "ready":
+        """Re-arm the force-limit trip once Klipper reaches ready after a
+        manually requested firmware restart (see _on_manual_firmware_restart_requested)."""
+        if state == "ready" and self._manual_recovery_pending:
+            self._manual_recovery_pending = False
             with self._force_safety_lock:
                 self._safety_stop_latched = False
                 self._force_over_limit_streak = 0
