@@ -11,6 +11,7 @@ _STATE_COLORS = {
 
 class KlipperStatusWidget(QWidget):
     sig_visible_changed = Signal(bool)
+    sig_manual_firmware_restart_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -58,6 +59,7 @@ class KlipperStatusWidget(QWidget):
     def connect_worker(self, worker):
         worker.sigKlipperState.connect(self.on_state_changed)
         self._firmware_btn.clicked.connect(worker.restart_firmware)
+        self._firmware_btn.clicked.connect(self.sig_manual_firmware_restart_requested.emit)
         self._klipper_btn.clicked.connect(worker.printer_restart)
         self._firmware_btn.setEnabled(True)
         self._klipper_btn.setEnabled(True)

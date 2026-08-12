@@ -107,14 +107,17 @@ def build_main_window_stylesheet(
         QTabWidget::pane {{
             border: 1px solid {secondary_background_color};
         }}
-        QTabBar::tab {{
-            background-color: transparent;
-            padding: 6px 10px;
-            margin: 1px;
-        }}
-        QTabBar::tab:selected, QTabBar::tab:hover {{
-            background-color: #88888855;
-        }}
+        /* QTabBar::tab intentionally has no rules here at all (not even
+        background-color/:selected/:hover). Any box-model or background
+        property on this selector makes QStyleSheetStyle own the tab's
+        painting outright, bypassing _TopAlignedTabBarStyle.drawControl() in
+        __main__.py. That broke icon centering before (CE_TabBarTabLabel got
+        a lopsided icon with the padding/margin properties), and separately
+        it made the selected/hover highlight never repaint on hover — Qt's
+        own State_MouseOver tracking on the tab is fine, but QStyleSheetStyle's
+        parallel hover bookkeeping for this vertical, custom-styled QTabBar
+        never picked it up. The proxy style now paints the tab background
+        itself using option.state directly, sidestepping that entirely. */
         QProgressBar {{
             background-color: {secondary_background_color};
             color: {foreground_color};

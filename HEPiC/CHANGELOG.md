@@ -1,5 +1,18 @@
 # 更新日志
 
+## v1.6.2
+
+### 安全性
+
+- **彻底修复力值超限仍会弹出两次安全急停警告窗口的问题**：v1.6.1 里的修复解决的是"断线重连后新旧两个数据采集线程同时跑 `_check_force_safety_limit()` 互相竞态"，但质检过程中触发急停时 `abort_and_recover()` 会自动执行"急停 + 固件重启"，Klipper 一回到 `ready` 状态，解锁逻辑此前是不加区分地重新武装安全锁存——如果用户还没来得及处理堵料等实际问题、挤出力依然超限，debounce 很快重新攒够次数，同一次超限就会再弹一次警告窗。现改为新增 `KlipperStatusWidget.sig_manual_firmware_restart_requested` 信号，只有用户在主页手动点击"固件重启"按钮时才标记 `_manual_recovery_pending`；安全锁存只在该标记为真且 Klipper 回到 `ready` 时才解除，质检异常触发的自动重启不再能悄悄解锁。
+- **修复力值超限连续弹出多个安全急停警告窗口的问题（第一轮）**：`_check_force_safety_limit()` 对 `_safety_stop_latched`/`_force_over_limit_streak` 的读写补充 `_force_safety_lock` 互斥锁；`initiate_ir_imager()` 重新连接时若旧的 `_DataCollectorThread` 仍在运行，会先 `stop()` + `join()` 再启动新线程，避免断线重连后新旧两个采集线程同时判定同一次超限、各自触发一次警告。
+- **修复打包安装版下新增的挤出力安全阈值配置未真正生效的问题**：v1.6.1 中通过 `setdefault` 为旧版 `config.json` 补全 `force_safety_limit_N`/`force_safety_debounce_samples` 两个键，但只在内存里补全，从未写回配置文件；现改为检测到缺键时立即用 `json.dump` 写回 `self.config_file`（写入失败仅记日志，不阻塞启动），确保安装版升级后这两项安全阈值真正落盘、稳定生效。
+
+### 界面与交互
+
+- **保存路径提示条展示时间延长**：顶部保存路径提示横幅的自动淡出延迟从 2 秒延长到 5 秒，给用户更充足的时间看清并点击"打开文件夹"/"修改路径"。
+- **标签栏图标居中并修复悬浮高亮失效的问题**：新增 `_TopAlignedTabBarStyle.drawControl()` 直接接管标签的背景与图标绘制：图标改为按标签的真实矩形居中绘制，不再被 Qt 默认布局为纯图标标签预留的文字间隙挤偏；同时因为给 `QTabBar::tab` 的 QSS 一旦设置背景/盒模型属性，就会让 `QStyleSheetStyle` 接管绘制并导致这种自定义竖排标签栏下的悬浮高亮失效，现完全移除该选择器下的 QSS 规则，选中/悬浮高亮统一由 proxy style 依据 `option.state` 直接绘制；另外显式打开 `WA_Hover` 属性，避免手动 `setStyle()` 后 hover 动态伪状态探测时机错位导致高亮永远不触发。此前用于抵消标签旋转的 90° 反向旋转技巧也随之不再需要。
+
 ## v1.6.1
 
 ### 安全性

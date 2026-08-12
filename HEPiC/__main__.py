@@ -20,7 +20,7 @@ from PySide6.QtCore import (
     Signal, Slot, QThread, QTimer, QUrl, Qt, QPropertyAnimation, QEasingCurve, QEvent,
     QByteArray, QSize,
 )
-from PySide6.QtGui import QDesktopServices, QCursor, QPixmap, QIcon, QPainter, QTransform
+from PySide6.QtGui import QDesktopServices, QCursor, QPixmap, QIcon, QPainter, QTransform, QColor
 from PySide6.QtSvg import QSvgRenderer
 import pyqtgraph as pg
 from collections import deque
@@ -109,6 +109,50 @@ class _TopAlignedTabBarStyle(QProxyStyle):
             return int(Qt.AlignmentFlag.AlignLeft)
         return super().styleHint(hint, option, widget, returnData)
 
+    # Was previously "QTabBar::tab:selected, QTabBar::tab:hover { background-color: #88888855; }"
+    # in the QSS — moved here (see the comment on QTabBar::tab in app_config.py
+    # for why) so it can key off Qt's own State_MouseOver/State_Selected flags
+    # directly instead of QStyleSheetStyle's separate, unreliable hover tracking.
+    _TAB_HIGHLIGHT_COLOR = QColor(0x88, 0x88, 0x88, 0x55)
+
+    def drawControl(self, element, option, painter, widget=None):
+        if element == QStyle.ControlElement.CE_TabBarTabShape:
+            if option.state & (QStyle.StateFlag.State_Selected | QStyle.StateFlag.State_MouseOver):
+                painter.fillRect(option.rect, self._TAB_HIGHLIGHT_COLOR)
+            return
+        # Qt's built-in CE_TabBarTabLabel layout always reserves a
+        # icon-width-plus-gap strip for the text label next to the icon, even
+        # when the text is empty (our tabs are icon-only) — so the icon ends
+        # up flush against one edge of the tab instead of centered, leaving a
+        # visibly lopsided gap on the other side. Painting the icon ourselves,
+        # centered in the tab's actual rect, sidesteps that reserved-text gap
+        # entirely instead of trying to out-guess it via padding tweaks.
+        if element == QStyle.ControlElement.CE_TabBarTabLabel and not option.text and not option.icon.isNull():
+            icon_size = option.iconSize if option.iconSize.isValid() else QSize(
+                self.pixelMetric(QStyle.PixelMetric.PM_TabBarIconSize, option, widget),
+                self.pixelMetric(QStyle.PixelMetric.PM_TabBarIconSize, option, widget),
+            )
+            mode = QIcon.Mode.Normal if option.state & QStyle.StateFlag.State_Enabled else QIcon.Mode.Disabled
+            pixmap = option.icon.pixmap(icon_size, mode)
+
+            # option.rect for CE_TabBarTabLabel is a content rect already
+            # shrunk/offset by the QSS box model for QTabBar::tab — it does
+            # not match the tab's actual painted bounds (what CE_TabBarTabShape
+            # used for the highlight background), so centering against it
+            # still comes out visibly off. Looking up the real tab rect from
+            # the QTabBar itself sidesteps that mismatch entirely.
+            target_rect = option.rect
+            if widget is not None and hasattr(widget, "tabRect"):
+                for i in range(widget.count()):
+                    if widget.tabRect(i).contains(option.rect.center()):
+                        target_rect = widget.tabRect(i)
+                        break
+
+            target = QStyle.alignedRect(option.direction, Qt.AlignmentFlag.AlignCenter, icon_size, target_rect)
+            painter.drawPixmap(target, pixmap)
+            return
+        super().drawControl(element, option, painter, widget)
+
 
 # ====================================================================
 # 2. 创建主窗口类
@@ -176,6 +220,8 @@ class MainWindow(QMainWindow):
 
         self._force_over_limit_streak = 0
         self._safety_stop_latched = False
+        self._manual_recovery_pending = False
+        self._force_safety_lock = threading.Lock()
         self.sigForceLimitExceeded.connect(self.on_force_limit_exceeded)
 
         self.frame_size = (512, 512)
@@ -200,10 +246,21 @@ class MainWindow(QMainWindow):
         # 与质检模块的材料 force_range（软性、仅提示波动过大）是两回事，不要混用。
         # setdefault（而非单纯 .get）确保即便是升级前缺少这两个键的旧 config.json，
         # 这两项设置也会出现在"设置"对话框里，而不是被悄悄跳过。
+        missing_defaults = "force_safety_limit_N" not in self.config or "force_safety_debounce_samples" not in self.config
         self.config.setdefault("force_safety_limit_N", 65.0)
         self.config.setdefault("force_safety_debounce_samples", 10)
         self.force_safety_limit_N = self.config["force_safety_limit_N"]
         self.force_safety_debounce_samples = self.config["force_safety_debounce_samples"]
+
+        # 打包安装版读的是 ~/.HEPiC/config.json，仅首次安装时从安装包里拷贝，
+        # 之后升级不会再刷新；因此这里把新补的默认值写回该文件，
+        # 让老版本升级上来的用户配置也能"自愈"补全新增的键，而不是只在内存里生效一次。
+        if missing_defaults:
+            try:
+                with open(self.config_file, "w", encoding="utf-8") as f:
+                    json.dump(self.config, f, indent=4, ensure_ascii=False)
+            except OSError as exc:
+                self.logger.error(f"Failed to persist force safety defaults to config: {exc}")
 
         # color scheme
         self.background_color = self.config.get("background_color", "black")
@@ -225,6 +282,12 @@ class MainWindow(QMainWindow):
         # 强制标签栏从左上角开始排列，不受操作系统默认对齐方式影响（如 macOS 默认居中）
         self._tab_bar_style = _TopAlignedTabBarStyle(self.tabs.tabBar().style())
         self.tabs.tabBar().setStyle(self._tab_bar_style)
+        # 给已有祖先样式表的控件手动 setStyle() 是个已知的坑：QStyleSheetStyle 平时靠
+        # polish() 扫描 QSS 里的 :hover 等动态伪状态来给控件打开悬浮跟踪，但这个扫描
+        # 时机和我们手动 setStyle() 的时机一旦错位，:hover 就可能永远不会被触发（背景
+        # 高亮完全不出现，但 :selected 之类的静态状态不受影响，仍然正常）。这里显式打开
+        # WA_Hover，不依赖那次自动探测，从根上保证 hover 样式一定生效。
+        self.tabs.tabBar().setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         # 标签页们
         self.connection_widget = ConnectionWidget(host=self.host)  
         self.home_widget = HomeWidget(time_window_s=self.plot_time_window_s)
@@ -248,7 +311,7 @@ class MainWindow(QMainWindow):
             (self.quality_check_widget, "质检模式.svg", "质检模式"),
         ]
         for widget, icon_file, tooltip in tab_specs:
-            index = self.tabs.addTab(widget, self._load_tab_icon(icon_file, rotate=90), "")
+            index = self.tabs.addTab(widget, self._load_tab_icon(icon_file), "")
             self.tabs.setTabToolTip(index, tooltip)
         self.tabs.setTabVisible(self.tabs.indexOf(self.vision_page_widget), False)
         self.tabs.setTabVisible(self.tabs.indexOf(self.ir_page_widget), False)
@@ -383,7 +446,7 @@ class MainWindow(QMainWindow):
         self._save_banner_fade_anim.finished.connect(self._on_save_banner_fade_out_finished)
 
         self._save_banner.hide()
-        self._save_banner_hide_delay_ms = 2000
+        self._save_banner_hide_delay_ms = 5000
         self._save_banner_timer = QTimer(self)
         self._save_banner_timer.setSingleShot(True)
         self._save_banner_timer.timeout.connect(self._start_save_banner_fade_out)
@@ -470,12 +533,12 @@ class MainWindow(QMainWindow):
         small pixmap. The pixmap background is left transparent (no fill),
         so it blends into whatever the tab/button background is.
 
-        `rotate` (degrees, clockwise) counters QTabBar's own rotation: once a
-        stylesheet is applied to QTabBar::tab, Qt draws a West-position tab's
-        whole label — icon included — rotated so text reads bottom-to-top.
-        Baking in a +90 rotation here cancels that out so the icon still
-        reads left-to-right. Only tab icons need this; plain QPushButton
-        icons (e.g. the settings gear) are never affected, so they pass 0.
+        `rotate` (degrees, clockwise) is unused by callers today — it used to
+        counter QTabBar's own label rotation for West-position tabs, but
+        _TopAlignedTabBarStyle.drawControl() now paints tab icons itself
+        (unrotated, centered) instead of going through Qt's default
+        icon+text layout, so no counter-rotation is needed there anymore.
+        Kept as an option for any future icon that does need it.
         """
         svg_path = find_bundled_file(
             f"assets/tab_icons/{filename}", Path(__file__), "__compiled__" in globals()
@@ -793,6 +856,9 @@ class MainWindow(QMainWindow):
         self.home_widget.klipper_status_widget.connect_worker(self.klipper_worker)
         self.klipper_worker.sigKlipperState.connect(self.quality_check_widget.update_klipper_state)
         self.klipper_worker.sigKlipperState.connect(self._on_klipper_state_for_safety_reset)
+        self.home_widget.klipper_status_widget.sig_manual_firmware_restart_requested.connect(
+            self._on_manual_firmware_restart_requested
+        )
 
         # Let all workers run
         tcp_task = self.worker.run()
@@ -1020,6 +1086,12 @@ class MainWindow(QMainWindow):
         self.show_UI(1) # show main UI anyway
         self.status_timer.start(int(self.time_delay_status * 1000))
         self._display_data_timer.start(int(1000 / self.display_frequency))
+        if self._data_thread is not None:
+            # Reconnecting (e.g. after a dropped connection) re-enters this method;
+            # without stopping the old thread first, it keeps running orphaned in
+            # the background, so two threads end up racing _check_force_safety_limit().
+            self._data_thread.stop()
+            self._data_thread.join(timeout=1.0)
         self._data_thread = _DataCollectorThread(self.time_delay, self._collect_data)
         self._data_thread.start()
 
@@ -1145,18 +1217,21 @@ class MainWindow(QMainWindow):
         Latched by _safety_stop_latched so it fires once per incident instead
         of re-triggering every sample while the force stays high.
         """
-        if self._safety_stop_latched:
-            return
-
         value = self.data_status.get("extrusion_force_N", np.nan)
-        if not np.isfinite(value) or value <= self.force_safety_limit_N:
-            self._force_over_limit_streak = 0
-            return
+        with self._force_safety_lock:
+            if self._safety_stop_latched:
+                return
 
-        self._force_over_limit_streak += 1
-        if self._force_over_limit_streak >= self.force_safety_debounce_samples:
+            if not np.isfinite(value) or value <= self.force_safety_limit_N:
+                self._force_over_limit_streak = 0
+                return
+
+            self._force_over_limit_streak += 1
+            if self._force_over_limit_streak < self.force_safety_debounce_samples:
+                return
             self._safety_stop_latched = True
-            self.sigForceLimitExceeded.emit(value)
+
+        self.sigForceLimitExceeded.emit(value)
 
     @Slot(float)
     def on_force_limit_exceeded(self, value):
@@ -1190,12 +1265,29 @@ class MainWindow(QMainWindow):
             ),
         )
 
+    @Slot()
+    def _on_manual_firmware_restart_requested(self):
+        """Mark that the next Klipper 'ready' transition was requested by the
+        user via the home-page '固件重启' button (i.e. after they were told to
+        check the hardware), so it's safe to re-arm the safety latch on it.
+
+        Without this gate, _on_klipper_state_for_safety_reset would also
+        re-arm on the automatic restart_firmware() inside abort_and_recover()
+        (the quality-check trip path), silently clearing the latch before the
+        user has actually cleared the over-force condition — causing the
+        dialog to reappear moments later instead of staying latched.
+        """
+        self._manual_recovery_pending = True
+
     @Slot(str, str)
     def _on_klipper_state_for_safety_reset(self, state, message):
-        """Re-arm the force-limit trip once Klipper is manually restarted to ready."""
-        if state == "ready":
-            self._safety_stop_latched = False
-            self._force_over_limit_streak = 0
+        """Re-arm the force-limit trip once Klipper reaches ready after a
+        manually requested firmware restart (see _on_manual_firmware_restart_requested)."""
+        if state == "ready" and self._manual_recovery_pending:
+            self._manual_recovery_pending = False
+            with self._force_safety_lock:
+                self._safety_stop_latched = False
+                self._force_over_limit_streak = 0
 
     def closeEvent(self, event):
         if self.worker:
