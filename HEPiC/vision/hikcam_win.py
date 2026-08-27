@@ -107,15 +107,6 @@ class HikVideoCapture:
             if ret != MV_OK:
                 raise HikCameraError(f"设置触发模式为 Off 失败! ret[0x{ret:x}]")
 
-            # 5.5 (可选) 设置硬件降采样 decimation (保 FOV、降数据量与读出时间)
-            # 必须在读取 Width/Height 之前设置,之后读到的都是降采样后的分辨率
-            if decimation is not None:
-                for key in ("DecimationHorizontal", "DecimationVertical"):
-                    ret = self.cam.MV_CC_SetEnumValue(key, decimation)
-                    if ret != MV_OK:
-                        raise HikCameraError(f"设置 {key}={decimation} 失败! ret[0x{ret:x}]。请确认相机支持该降采样值。")
-                logger.info(f"Decimation 已设置为 {decimation}x{decimation}。")
-
             # ==========================================================
             # 6. 【核心】主动设置或获取相机参数
             # ==========================================================
@@ -124,6 +115,12 @@ class HikVideoCapture:
             ret = self.cam.MV_CC_SetEnumValue("PixelFormat", requested_pixel_format)
             if ret != MV_OK:
                 raise HikCameraError(f"设置像素格式失败! ret[0x{ret:x}]。 确保相机支持该格式。")
+
+            # 6.5 (可选) 设置硬件降采样 (保 FOV、降数据量与读出时间)
+            # 先设 PixelFormat 再降采样:部分相机仅在特定像素格式下开放降采样节点。
+            # 必须在读取 Width/Height 之前设置,之后读到的都是降采样后的分辨率。
+            if decimation is not None:
+                self._set_downsample(decimation)
 
             self._set_camera_props(width, height)
 
@@ -223,6 +220,31 @@ class HikVideoCapture:
         if ret != MV_OK:
             raise HikCameraError(f"获取参数 '{key}' 失败! ret[0x{ret:x}]")
         return st_param.nCurValue
+
+    def _get_enum_supported(self, key):
+        """返回枚举节点支持的取值列表;节点不存在或查询失败时返回 None。"""
+        st_param = MVCC_ENUMVALUE()
+        memset(byref(st_param), 0, sizeof(MVCC_ENUMVALUE))
+        ret = self.cam.MV_CC_GetEnumValue(key, st_param)
+        if ret != MV_OK:
+            return None
+        return [st_param.nSupportValue[i] for i in range(st_param.nSupportedNum)]
+
+    def _set_downsample(self, decimation):
+        """设置硬件降采样:优先 decimation,回退 binning;均不支持时告警并保持原分辨率。"""
+        for mode, keys in (("Decimation", ("DecimationHorizontal", "DecimationVertical")),
+                           ("Binning", ("BinningHorizontal", "BinningVertical"))):
+            if all(decimation in (self._get_enum_supported(k) or []) for k in keys):
+                for key in keys:
+                    ret = self.cam.MV_CC_SetEnumValue(key, decimation)
+                    if ret != MV_OK:
+                        raise HikCameraError(f"设置 {key}={decimation} 失败! ret[0x{ret:x}] (查询显示支持该值)。")
+                logger.info(f"{mode} 已设置为 {decimation}x{decimation}。")
+                return
+        # 记录诊断信息,方便确认相机实际支持哪种降采样
+        for key in ("DecimationHorizontal", "DecimationVertical", "BinningHorizontal", "BinningVertical"):
+            logger.info(f"节点 {key} 支持的值: {self._get_enum_supported(key)}")
+        logger.warning(f"相机不支持 {decimation} 倍 decimation 或 binning,将以原始分辨率运行。")
 
     def _set_camera_props(self, width, height):
         """主动设置或获取参数，并设置内部转换变量"""
