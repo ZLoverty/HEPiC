@@ -182,43 +182,82 @@ class ProcessingWorker(QObject):
     def process_frame(self, img):
         """Find filament in image and update the `self.die_diameter` variable with detected filament diameter."""
         gray = convert_to_grayscale(img) # only process gray images
-        gray = to8bit(gray)
         try:
-            # preprocessing: CLAHE
-            gray = self.clahe.apply(gray)
+            # ============ 粗定位:在 1/4 下采样图上找丝的位置 ============
+            # 全幅上跑 CLAHE/骨架化/距离变换极慢,先用小图定位前景区域
+            t0 = time.time()
+            coarse_scale = 0.25
+            small = cv2.resize(gray, None, fx=coarse_scale, fy=coarse_scale, interpolation=cv2.INTER_AREA)
+            binary_small = binarize(small)
+            if self.invert:
+                binary_small = cv2.bitwise_not(binary_small)
+            # connectedComponents 把 0 视为背景;若 invert 后前景变黑,需再取反保证前景为 255
+            fg = cv2.bitwise_not(binary_small) if self.invert else binary_small
+            n_labels, _, stats, _ = cv2.connectedComponentsWithStats(fg, connectivity=8)
+            if n_labels <= 1:
+                raise ValueError("No valid skeleton pixels found after refinement.")
+
+            # 保留面积不小于最大连通域 20% 的碎片(丝可能被二值化打断),取它们的并集 bbox
+            areas = stats[1:, cv2.CC_STAT_AREA]
+            keep = areas >= 0.2 * areas.max()
+            left   = stats[1:, cv2.CC_STAT_LEFT][keep].min()
+            top    = stats[1:, cv2.CC_STAT_TOP][keep].min()
+            right  = (stats[1:, cv2.CC_STAT_LEFT][keep] + stats[1:, cv2.CC_STAT_WIDTH][keep]).max()
+            bottom = (stats[1:, cv2.CC_STAT_TOP][keep] + stats[1:, cv2.CC_STAT_HEIGHT][keep]).max()
+
+            # 映射回全分辨率坐标;以丝宽作为 margin 裁剪,保证距离变换在轮廓外有足够背景像素
+            x0, x1 = int(round(left / coarse_scale)), int(round(right / coarse_scale))
+            y0, y1 = int(round(top / coarse_scale)), int(round(bottom / coarse_scale))
+            margin = max(x1 - x0, 8)
+            H, W = gray.shape[:2]
+            x0, x1 = max(0, x0 - margin), min(W, x1 + margin)
+            y0, y1 = max(0, y0 - margin), min(H, y1 + margin)
+            crop = gray[y0:y1, x0:x1]
+            t1 = time.time()
+
+            # ============ 精测量:crop 上跑原有管线(仍为全分辨率,MPP 不变) ============
+            crop = to8bit(crop)
+            crop = self.clahe.apply(crop)
 
             # preprocessing: binarization
-            binary = binarize(gray)
+            binary = binarize(crop)
             if self.invert:
                 binary = cv2.bitwise_not(binary)
 
             if binary.std() == 0:
                 raise ValueError("No valid skeleton pixels found after refinement.")
-            
+
             # measure rough filament diameter
             diameter, skeleton, dist_transform = filament_diameter(binary)
             skel_px = dist_transform[skeleton]
             skeleton_refine = skeleton.copy()
-            
+
             # filter the pixels on skeleton where dt pixel value is above average
             skeleton_refine[dist_transform < skel_px.mean()] = False
-            
+
             self.logger.debug(f"Skeleton has {skeleton_refine.astype(int).sum():d} points.")
             diameter_refine = dist_transform[skeleton_refine].mean() * 2.0
 
-            # measure the time required for visualization
-            t0 = time.time()
-            proc_frame = draw_filament_contour(gray, skeleton_refine, diameter_refine)
-            t1 = time.time()
-            self.logger.debug(f"Visualizing extrudate contour took {t1 - t0:.3f} seconds.")
+            # ============ 可视化:画在 1/4 全幅画布上 ============
+            # 显示分辨率足够,同时避免 6MP 级别的 to8bit/findContours 开销
+            t2 = time.time()
+            skel_ys, skel_xs = np.where(skeleton_refine)
+            disp_skeleton = np.zeros(small.shape, dtype=bool)
+            disp_ys = np.clip((y0 + skel_ys) * coarse_scale, 0, small.shape[0] - 1).astype(int)
+            disp_xs = np.clip((x0 + skel_xs) * coarse_scale, 0, small.shape[1] - 1).astype(int)
+            disp_skeleton[disp_ys, disp_xs] = True
+            proc_frame = draw_filament_contour(small, disp_skeleton, diameter_refine * coarse_scale)
+            t3 = time.time()
+            self.logger.debug(f"粗定位 {t1 - t0:.3f}s, 精测量 {t2 - t1:.3f}s, 可视化 {t3 - t2:.3f}s, crop {crop.shape}")
+
             self._latest_proc_frame = proc_frame
             self.proc_frame_signal.emit(proc_frame)
             self.die_diameter = diameter_refine
         except ValueError as e:
             # 已知纯色图片会导致检测失败，在此情况下可以不必报错继续运行，将出口直径记为 np.nan 即可
             self.logger.warning(f"图像无法处理: {e}")
-            self._latest_proc_frame = binary
-            self.proc_frame_signal.emit(binary)
+            self._latest_proc_frame = binary_small
+            self.proc_frame_signal.emit(binary_small)
     
     def get_latest_proc_frame(self) -> np.ndarray | None:
         return self._latest_proc_frame
