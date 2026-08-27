@@ -28,24 +28,27 @@ class VideoWorker(QObject):
     new_frame_signal = Signal(np.ndarray)
     roi_frame_signal = Signal(np.ndarray)
 
-    def __init__(self, test_mode=False, test_image_folder=""):
+    def __init__(self, test_mode=False, test_image_folder="", decimation=2):
         """
         Parameters
         ----------
         test_mode : bool
             if true, enable test mode, which utilizes a sequence of local images to simulate a video stream from a camera.
+        decimation : int
+            相机硬件降采样倍数 (1/2/4/8)。全幅采集时用于降低数据量与读出时间,不影响视场角。
         """
         super().__init__()
         self.is_running = True
         self.roi = None
         self._timer = None
         self.test_mode = test_mode
+        self.decimation = decimation
 
         if test_mode:  # 调试用图片流
             image_folder = Path(test_image_folder).expanduser().resolve()
             self.cap = ImageStreamer(str(image_folder), fps=10)
         else: # 真图片流
-            self.cap = HikVideoCapture(width=512, height=512, exposure_time=50000, center_roi=True)
+            self.cap = HikVideoCapture(decimation=self.decimation, exposure_time=50000, center_roi=True)
         
         self.fps = 10
         self.frame = None
@@ -125,7 +128,7 @@ class VideoWorker(QObject):
             self.cap.release()
             while getattr(self.cap, "is_open", False):
                 time.sleep(0.1)
-        self.cap = HikVideoCapture(width=512, height=512, exposure_time=exp_time*1000, center_roi=True)
+        self.cap = HikVideoCapture(decimation=self.decimation, exposure_time=exp_time*1000, center_roi=True)
 
 class ProcessingWorker(QObject):
     """Image processing utilities:

@@ -43,6 +43,9 @@ class HikVideoCapture:
             # 或者让它自动使用相机的默认格式 (Mono8)
             # cap = HikVideoCapture(camera_index=0)
 
+            # 大画幅实时处理时可开启硬件降采样 (保 FOV、减数据量与读出时间),常见取值 2/4
+            # cap = HikVideoCapture(camera_index=0, decimation=2)
+
             while True:
                 ret, frame = cap.read()
                 if ret:
@@ -57,7 +60,7 @@ class HikVideoCapture:
 
     def __init__(self, camera_index=0, width: int | None = None, height: int | None = None,
                  exposure_time: float | None = None, center_roi: bool = True,
-                 pixel_format: int | None = None):
+                 pixel_format: int | None = None, decimation: int | None = None):
 
         if not CAM_LIB_LOADED:
             raise HikCameraError("相机 SDK 未成功加载，无法创建相机对象。")
@@ -103,6 +106,15 @@ class HikVideoCapture:
             ret = self.cam.MV_CC_SetEnumValue("TriggerMode", MV_TRIGGER_MODE_OFF)
             if ret != MV_OK:
                 raise HikCameraError(f"设置触发模式为 Off 失败! ret[0x{ret:x}]")
+
+            # 5.5 (可选) 设置硬件降采样 decimation (保 FOV、降数据量与读出时间)
+            # 必须在读取 Width/Height 之前设置,之后读到的都是降采样后的分辨率
+            if decimation is not None:
+                for key in ("DecimationHorizontal", "DecimationVertical"):
+                    ret = self.cam.MV_CC_SetEnumValue(key, decimation)
+                    if ret != MV_OK:
+                        raise HikCameraError(f"设置 {key}={decimation} 失败! ret[0x{ret:x}]。请确认相机支持该降采样值。")
+                logger.info(f"Decimation 已设置为 {decimation}x{decimation}。")
 
             # ==========================================================
             # 6. 【核心】主动设置或获取相机参数

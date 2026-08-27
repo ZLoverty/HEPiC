@@ -986,7 +986,7 @@ class MainWindow(QMainWindow):
         Ideally, if the camera lost connect by accident, the software should attempt reconnection a few times. This should be handled in the camera class."""
         try:
             # 创建 video worker （用于接收和处理视频信号）
-            self.video_worker = VideoWorker(test_mode=self.test_mode, test_image_folder=self.config.get("test_image_folder", ""))
+            self.video_worker = VideoWorker(test_mode=self.test_mode, test_image_folder=self.config.get("test_image_folder", ""), decimation=self.config.get("decimation", 2))
             self.video_thread = QThread()
             self.video_thread.setObjectName("VideoThread")
             self.video_worker.moveToThread(self.video_thread)
