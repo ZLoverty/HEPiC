@@ -165,11 +165,18 @@ class ProcessingWorker(QObject):
 
     @asyncSlot(np.ndarray)
     async def add_frame_to_queue(self, img):
-        """Add frame to processing queue."""
-        try:
-            self.image_queue.put_nowait(img)
-        except asyncio.QueueFull:
-            self.logger.warning("Processing queue is full. Dropping frame.")
+        """Add frame to processing queue, dropping stale frames if any."""
+        # 处理速度跟不上采集时，丢弃积压的旧帧，保证处理线程总是拿到最新一帧
+        dropped = 0
+        while not self.image_queue.empty():
+            try:
+                self.image_queue.get_nowait()
+                dropped += 1
+            except asyncio.QueueEmpty:
+                break
+        if dropped:
+            self.logger.debug(f"Processing lagging behind; dropped {dropped} stale frame(s).")
+        self.image_queue.put_nowait(img)
     
     
     def process_frame(self, img):
