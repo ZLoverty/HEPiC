@@ -58,7 +58,15 @@ def filament_diameter(binary):
 
     dist_transform = cv2.distanceTransform(binary, cv2.DIST_L2, 5)
 
-    skeleton = skeletonize(binary)
+    # 骨架化是全图最重的操作(耗时 ∝ 迭代次数 × 面积,迭代次数 ∝ 前景最大厚度)。
+    # 骨架仅用作距离变换的采样掩码:在半分辨率上算骨架再最近邻上采样,
+    # 采样位置误差 ≤1px,对均值统计无实质影响,但耗时降约一个量级。
+    if binary.shape[0] * binary.shape[1] > 200_000:
+        skeleton_small = skeletonize(binary[::2, ::2].copy())
+        skeleton = np.zeros_like(binary, dtype=bool)
+        skeleton[::2, ::2] = skeleton_small
+    else:
+        skeleton = skeletonize(binary)
 
     diameter = dist_transform[skeleton].mean() * 2
 

@@ -1,5 +1,6 @@
 import pyqtgraph as pg
 import numpy as np
+import cv2
 from PySide6.QtCore import Signal, Slot, QPointF, QLineF
 import logging
 from PySide6 import QtWidgets, QtCore
@@ -56,7 +57,14 @@ class VisionWidget(pg.GraphicsLayoutWidget):
     @Slot(np.ndarray)
     def update_live_display(self, frame):
         self.frame = frame
-        self.img_item.setImage(frame, axisOrder="row-major")
+        H, W = frame.shape[:2]
+        if H * W > 2_000_000:
+            # 大画幅直接 setImage 每帧要做直方图+纹理上传,会拖慢 GUI 线程。
+            # 显示用半分辨率;rect 映射回原图坐标,ROI 框选坐标语义不变。
+            disp = cv2.resize(frame, (W // 2, H // 2), interpolation=cv2.INTER_AREA)
+            self.img_item.setImage(disp, axisOrder="row-major", rect=QtCore.QRectF(0, 0, W, H))
+        else:
+            self.img_item.setImage(frame, axisOrder="row-major")
         if hasattr(self, "roi_info"):
             x0, y0, w, h = self.roi_info
             roi_image = frame[x0:x0+w, y0:y0+h]

@@ -963,22 +963,41 @@ class MainWindow(QMainWindow):
 
     def _refresh_displays(self):
         """Poll shared frame buffers and update all video display widgets."""
+        acc = getattr(self, "_display_acc", None)
+        if acc is None:
+            acc = self._display_acc = {}
         if self.video_worker:
             frame = self.video_worker.get_latest_frame()
             if frame is not None:
+                t0 = time.time()
                 self.vision_page_widget.vision_widget.update_live_display(frame)
+                acc["live"] = acc.get("live", 0.0) + (time.time() - t0)
         if hasattr(self, "processing_worker") and self.processing_worker:
             proc_frame = self.processing_worker.get_latest_proc_frame()
             if proc_frame is not None:
+                t0 = time.time()
                 self.vision_page_widget.roi_vision_widget.update_live_display(proc_frame)
+                acc["roi"] = acc.get("roi", 0.0) + (time.time() - t0)
+                t0 = time.time()
                 self.home_widget.dieswell_widget.update_live_display(proc_frame)
+                acc["dieswell"] = acc.get("dieswell", 0.0) + (time.time() - t0)
         if self.ir_worker:
             ir_frame = self.ir_worker.get_latest_frame()
             if ir_frame is not None:
+                t0 = time.time()
                 self.ir_page_widget.image_widget.update_live_display(ir_frame)
+                acc["ir"] = acc.get("ir", 0.0) + (time.time() - t0)
             ir_roi = self.ir_worker.get_latest_roi_frame()
             if ir_roi is not None:
+                t0 = time.time()
                 self.home_widget.ir_roi_widget.update_live_display(ir_roi)
+                acc["ir_roi"] = acc.get("ir_roi", 0.0) + (time.time() - t0)
+        self._display_count = getattr(self, "_display_count", 0) + 1
+        if self._display_count >= 50:
+            parts = ", ".join(f"{k} {v/self._display_count*1000:.1f}ms" for k, v in acc.items())
+            self.logger.info(f"界面刷新耗时: {parts}")
+            self._display_acc = {}
+            self._display_count = 0
 
     @Slot()
     def initiate_camera(self):

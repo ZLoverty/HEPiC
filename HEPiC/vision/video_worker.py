@@ -56,6 +56,10 @@ class VideoWorker(QObject):
         self._latest_frame = None
         self._latest_roi_frame = None
         self.logger = logging.getLogger(__name__)
+
+        # 采集耗时统计 (INFO 日志用)
+        self._read_time_sum = 0.0
+        self._read_count = 0
             
     def run(self):
         self._timer = QTimer(self)
@@ -69,10 +73,19 @@ class VideoWorker(QObject):
     def read_one_frame(self):
         """Emit current frame and roi."""
         if not self.cap:
-            return 
+            return
+        t0 = time.time()
         ret, frame = self.cap.read()
         if ret:
             self.frame = frame
+            # 采集耗时统计:read() 阻塞等待帧,耗时反映实际帧率上限
+            self._read_time_sum += time.time() - t0
+            self._read_count += 1
+            if self._read_count >= 50:
+                avg_ms = self._read_time_sum / self._read_count * 1000.0
+                self.logger.info(f"相机读取: 平均 {avg_ms:.1f} ms/帧 (等效 {1000.0/avg_ms:.1f} fps)")
+                self._read_time_sum = 0.0
+                self._read_count = 0
 
     def get_frame(self):
         """Update shared frame buffer and emit roi frame for processing."""
@@ -150,6 +163,11 @@ class ProcessingWorker(QObject):
         self.image_queue = asyncio.Queue(maxsize=10)
         self.clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4,4))
         self._latest_proc_frame: np.ndarray | None = None
+
+        # 处理阶段耗时统计 (INFO 日志用)
+        self._stage_time_sum = np.zeros(3)
+        self._stage_count = 0
+        self._crop_area_sum = 0.0
         
     
     async def run(self):
@@ -218,7 +236,14 @@ class ProcessingWorker(QObject):
             crop = gray[y0:y1, x0:x1]
             t1 = time.time()
 
-            # ============ 精测量:crop 上跑原有管线(仍为全分辨率,MPP 不变) ============
+            # ============ 精测量:crop 上跑原有管线 ============
+            # 超大 crop 再降一次分辨率(距离变换/CLAHE/二值化都随面积缩放,耗时 ÷4);
+            # 直径最后乘回比例系数,保持 full-res 像素语义,恒定比例由 MPP 标定吸收
+            crop_area = crop.shape[0] * crop.shape[1]
+            fine_scale = 1.0
+            if crop_area > 1_500_000:
+                fine_scale = 0.5
+                crop = cv2.resize(crop, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
             crop = to8bit(crop)
             crop = self.clahe.apply(crop)
 
@@ -239,19 +264,33 @@ class ProcessingWorker(QObject):
             skeleton_refine[dist_transform < skel_px.mean()] = False
 
             self.logger.debug(f"Skeleton has {skeleton_refine.astype(int).sum():d} points.")
-            diameter_refine = dist_transform[skeleton_refine].mean() * 2.0
+            # fine_scale 下采样过则乘回比例系数,直径保持 full-res 像素语义
+            diameter_refine = dist_transform[skeleton_refine].mean() * 2.0 / fine_scale
 
             # ============ 可视化:画在 1/4 全幅画布上 ============
             # 显示分辨率足够,同时避免 6MP 级别的 to8bit/findContours 开销
             t2 = time.time()
             skel_ys, skel_xs = np.where(skeleton_refine)
             disp_skeleton = np.zeros(small.shape, dtype=bool)
-            disp_ys = np.clip((y0 + skel_ys) * coarse_scale, 0, small.shape[0] - 1).astype(int)
-            disp_xs = np.clip((x0 + skel_xs) * coarse_scale, 0, small.shape[1] - 1).astype(int)
+            # 骨架坐标:fine 局部 -> crop 局部 -> 全幅 -> 1/4 显示画布
+            disp_ys = np.clip((y0 + skel_ys / fine_scale) * coarse_scale, 0, small.shape[0] - 1).astype(int)
+            disp_xs = np.clip((x0 + skel_xs / fine_scale) * coarse_scale, 0, small.shape[1] - 1).astype(int)
             disp_skeleton[disp_ys, disp_xs] = True
             proc_frame = draw_filament_contour(small, disp_skeleton, diameter_refine * coarse_scale)
             t3 = time.time()
             self.logger.debug(f"粗定位 {t1 - t0:.3f}s, 精测量 {t2 - t1:.3f}s, 可视化 {t3 - t2:.3f}s, crop {crop.shape}")
+
+            # 阶段耗时滚动统计:每 50 帧输出一次 INFO 摘要
+            self._stage_time_sum += (t1 - t0, t2 - t1, t3 - t2)
+            self._stage_count += 1
+            self._crop_area_sum += crop_area
+            if self._stage_count >= 50:
+                avg = self._stage_time_sum / self._stage_count
+                avg_area = self._crop_area_sum / self._stage_count / 1e6
+                self.logger.info(f"处理耗时: 粗定位 {avg[0]*1000:.1f}ms, 精测量 {avg[1]*1000:.1f}ms, 可视化 {avg[2]*1000:.1f}ms, crop 平均 {avg_area:.2f}MP")
+                self._stage_time_sum[:] = 0.0
+                self._stage_count = 0
+                self._crop_area_sum = 0.0
 
             self._latest_proc_frame = proc_frame
             self.proc_frame_signal.emit(proc_frame)
