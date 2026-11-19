@@ -67,11 +67,16 @@ class TCPClient(QObject):
         port: int,
         rotary_encoder_steps_total: int = 1000,
         rotary_encoder_wheel_diameter: float = 28.6,
-        meter_count_cache_size: int = 100,
+        # The server normally sends encoder readings at about 100 Hz.  A
+        # 20-sample window is therefore roughly 0.2 s: enough smoothing to
+        # reduce encoder quantisation noise without making the displayed speed
+        # feel noticeably delayed.
+        meter_count_cache_size: int = 20,
         read_timeout: float = 3.0,
         send_timeout: float = 5.0,
         reconnect_base_delay: float = 1.0,
         reconnect_max_delay: float = 30.0,
+        velocity_ema_alpha: float = 0.35,
     ):
         super().__init__()
         self.host = host
@@ -100,6 +105,10 @@ class TCPClient(QObject):
         self.meter_count_cache = deque(maxlen=self.cache_size)
         self.time_cache = deque(maxlen=self.cache_size)
         self.filament_velocity = 0.0
+        if not 0.0 < velocity_ema_alpha <= 1.0:
+            raise ValueError("velocity_ema_alpha must be in the range (0, 1]")
+        self.velocity_ema_alpha = velocity_ema_alpha
+        self._velocity_ema = np.nan
         self.read_timeout = read_timeout
 
         self.latest_sensor_data: dict[str, float] = {}
@@ -262,6 +271,9 @@ class TCPClient(QObject):
             sensor.value = np.nan
         if self.sensor_data_map:
             self.latest_sensor_data = {name: np.nan for name in self.sensor_data_map}
+        self.meter_count_cache.clear()
+        self.time_cache.clear()
+        self._velocity_ema = np.nan
         self.filament_velocity = 0.0
 
     def _close_writer_safely(self) -> None:
@@ -409,16 +421,30 @@ class TCPClient(QObject):
             return
 
         self.meter_count_cache.append(self.meter_count)
-        self.time_cache.append(time.time())
+        # A monotonic clock is appropriate for elapsed-time calculations and
+        # is not affected by wall-clock synchronisation.
+        self.time_cache.append(time.monotonic())
 
-        if len(self.meter_count_cache) == self.cache_size:
-            delta_meter = self.meter_count_cache[self.cache_size - 1] - self.meter_count_cache[0]
-            delta_time = self.time_cache[self.cache_size - 1] - self.time_cache[0]
+        # Start reporting as soon as there are two samples.  Waiting for a
+        # completely filled cache made the speed stay at zero for the whole
+        # smoothing window after startup/reconnect.
+        if len(self.meter_count_cache) >= 2:
+            delta_meter = self.meter_count_cache[-1] - self.meter_count_cache[0]
+            delta_time = self.time_cache[-1] - self.time_cache[0]
             try:
                 if delta_time <= 0:
                     self.filament_velocity = np.nan
                 else:
-                    self.filament_velocity = delta_meter / delta_time
+                    window_velocity = delta_meter / delta_time
+                    if np.isnan(self._velocity_ema):
+                        self._velocity_ema = window_velocity
+                    else:
+                        alpha = self.velocity_ema_alpha
+                        self._velocity_ema = (
+                            alpha * window_velocity
+                            + (1.0 - alpha) * self._velocity_ema
+                        )
+                    self.filament_velocity = self._velocity_ema
             except Exception as e:
                 self.logger.error(f"Velocity compute error: {e}")
                 self.filament_velocity = np.nan
